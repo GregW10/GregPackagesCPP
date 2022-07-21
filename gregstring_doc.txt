@@ -1,0 +1,144 @@
+//
+// Created by Gregor Hartl Watters on 7/6/2022
+//
+
+Documentation on "gregstring.h" header file.
+
+The String class and all other functions are contained within the gtd namespace.
+
+Class "String" (gtd::String):
+	Description:
+		The String class that has been written can perform all of the same tasks as the standard C++ std::string (in an identical or similar fashion, so that it is as
+		familiar as possible to regular users of the std::string), but also provides a large amount of additional functionality. A key difference between the String and the
+		std::string is that String is implemented like an std::deque - i.e., when a String object is constructed, its characters sit in the centre of a char array, allowing
+		characters to be added to the front of the String as quickly as at the back. As a String grows, it will automatically double its size (starting from a default size of
+		128 bytes) when required, to reduce the number of dynamic allocations that have to occur. After resizing, the String characters are, once again, made to sit in the
+		center of the char array.
+		
+		Although the String and std::string share much functionality, the String class has been written from scratch, without inspiration from the inner workings of the 
+		std::string Class, nor ever using an std::string internally to provide this shared functionality and, therefore, performance (computation speed) cannot be guaranteed 
+		to be equal to the std::string. The String performs well, however, and has been written to optimise itself as much as possible.
+		
+		The <string> header file is included within "gregstring.h" to allow std::string objects to be passed as arguments to numerous String functions, such as its constructor,
+		the assignment operator (=), etc..., and for std::string objects to be returned from non-member functions in the "gregstring.h" header file.
+	
+	Member classes:
+		Class "Iterator" (gtd::String::Iterator):
+			Public non-static member functions:
+				Description:
+					A bidirectional iterator class used to iterate over the elements in a String object.
+				
+				Iterator(); --> Emtpy constructor for an Iterator object.
+					Constructs an empty iterator object, where the value of its internal pointer is set to nullptr. Such an emtpy Iterator object cannot be used.
+				
+				Iterator(char *pointer); --> Constructor for an Iterator object from a pointer to a char.
+					Constructs an Iterator object and points its internal pointer to the address pointed to by pointer.
+				
+			Overloaded operators:
+				char *operator->();
+					Included for completeness.
+				
+				Iterator &operator++(); --> Prefix increment operator.
+					Makes the Iterator object point to the next element in the char array, and returns a reference to itself.
+				
+				Iterator operator++(int); --> Postfix increment operator.
+					Makes the Iterator object point to the next element in the char array, but returns a copy of itself before it was incremented.
+				
+				Iterator &operator--(); --> Prefix decrement operator.
+					Makes the Iterator object point to the previous element in the char array, and returns a reference to itself.
+				
+				Iterator operator--(int); --> Postfix decrement operator.
+					Makes the Iterator object point to the previous element in the char array, but returns a copy of itself before it was decremented.
+				
+				friend bool operator==(const Iterator &A, const Iterator &B); --> Equality operator.
+					Returns true if Iterator A and Iterator B are pointing to the same element in memory, and false otherwise.
+				
+				friend bool operator!=(const Iterator &A, const Iterator &B); --> Inequality operator.
+					Returns false if Iterator A and Iterator B are pointing to the same element in memory, and true otherwise.
+				
+				friend bool operator<(const Iterator &A, const Iterator &B); --> Less than operator.
+					Returns true if Iterator A is pointing to an element whose memory address is less than that of the element pointed to by Iterator B, and false
+					otherwise.
+				
+				friend bool operator>(const Iterator &A, const Iterator &B); --> Greater than operator.
+					Returns false if Iterator A is pointing to an element whose memory address is less than that of the element pointed to by Iterator B, and true
+					otherwise.
+				
+				friend bool operator<=(const Iterator &A, const Iterator &B); --> Less than or equal to operator.
+					Returns true if Iterator A is pointing to an element whose memory address is less than or equal to that of the element pointed to by Iterator B, 
+					and false otherwise.
+				
+				friend bool operator=>(const Iterator &A, const Iterator &B); --> Greater than or equal to operator.
+					Returns false if Iterator A is pointing to an element whose memory address is less than or equal to that of the element pointed to by Iterator B, 
+					and true otherwise.
+				
+				Iterator &operator=(const Iterator &other); --> Assignment operator.
+					Makes the Iterator object point to the same char in memory as the other Iterator object, other, and returns a reference to itself. If the Iterator 
+					object already points to the same char as other, nothing occurs and a reference to itself is returned.
+				
+				Iterator &operator=(char *pointer); --> Assignment operator.
+					Makes the Iterator object point to the same char in memory as that pointed to by pointer, and then returns a reference to itself. If they both
+					point to the same memory address already, the Iterator object remains unchanged, and a reference to itself is returned.
+				
+				Iterator operator+(std::ptrdiff_t offset); --> Addition operator.
+					Allows addition between an Iterator object and a signed integer offset, returning a new Iterator object, pointing to an address in memory that is
+					offset amount greater than that pointed to by the original Iterator object.
+				
+				Iterator operator-(std::ptrdiff_t offset); --> Subtraction operator.
+					Allows subtraction between an Iterator object and a signed integer offset, returning a new Iterator object, pointing to an address in memory that is
+					offset amount less than that pointed to by the original Iterator object.
+				
+				friend std::ostream &operator<<(std::ostream &out, const Iterator &A); --> Insertion operator.
+					Allows the memory address pointed to by Iterator A to be written to the std::ostream object out.
+				
+				friend std::ptrdiff_t operator-(const Iterator &A, const Iterator &B); --> Subtraction operator.
+					Calculates the difference (or offset) between the memory addresses pointed to by Iterator A and Iterator B. Only Iterators pointing to the same char
+					array should be subtracted. If the difference between two elements exceeds PTRDIFF_MAX (i.e., in a very large char array), then the results are
+					undefined.
+				
+				~Iterator() = default; --> Default destructor.
+					Does nothing.
+				
+	Public static member variables:
+		static size_t nopos = -1;
+			Unsigned long long integer type which represents the largest possible size of the string (18446744073709551615 --> 2^64 - 1). In practice, RAM could never have
+			this much memory available to it (in bytes), so this value is used as the return value for certain member functions when the passed character or string is not 
+			found within the String object (see below).
+
+	Public static member functions:
+		None - all functions that were considered to be written as static member functions have been written completely outside of the class instead. Private static member
+		functions have been hidden from the user as they are of little to no use outside of their use within the String class.
+
+	Public non-static member variables:
+		None - all non-static member variables are private to avoid the user modifying these, which could result in undefined behaviour. Private non-static member functions
+		have been hidden from the user as they only exist to aid in the inner functioning of the String.
+	Public non-static member functions:
+		String(); --> Empty constructor for a String object.
+			This allocates the minimum size of a String object on the heap (128 bytes), and sets all characters in the char array to the null byte ('\0' - ASCII: 0). The
+			length of the String object will be zero.
+		
+		String(char ch); --> Single-character contructor for a String object.
+			Performs a similar operation as for the empty constructor, but places the single char, ch, in the middle of the char array. Its length will be 1. Implicit
+			conversion is permitted, so the String can be constructed in this fashion using the assignment operator (=).
+		
+		String(const char *str); --> String object constructor from a C-string.
+			This will construct the String object from the C-string that is passed, str, placing the characters of str in the centre of the char array, and resizing
+			beforehand if the length of str is larger than 127 (not including the null byte). Implicit conversion is permitted, so the String can be constructed in this 
+			fashion using the assignment operator (=).
+		
+		String(const std::string &str); --> String object constructor from the standard C++ std::string.
+			This works in the same way as the C-string constructor. The std::string, str, is passed as a const reference, as it is not altered within the constructor.
+			Implicit conversion is also permitted.
+		
+		String(const String &str); --> String object constructor from another String object.
+			Works in exactly the same was as the constructor from the std::string.
+			
+		size_t transform_words(std::function<const char *(char *)> func, bool check_punctuation = true);
+			The function func may internally allocate memory to a new pointer (using the C++ new keyword) pointing to the new word and return this pointer, but shall NOT
+			free the memory pointed to by the pointer passed to it, or else the results are undefined.
+			
+	
+	Overloaded operators:
+		
+
+Functions:
