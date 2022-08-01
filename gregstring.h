@@ -2103,7 +2103,7 @@ namespace gtd {
     }
 
     template<typename T>
-    void swap(T &A, T &B) {
+    inline void swap(T &A, T &B) {
         T C{A};
         A = B;
         B = C;

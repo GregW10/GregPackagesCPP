@@ -71,7 +71,16 @@ namespace gtd {
         colour green = {0, 255, 0};
         colour red = {0, 0, 255};
         size_t axes_thickness;
-        u_int tick_thickness;
+        u_int xtick_thickness;
+        u_int xtick_length;
+        u_int num_xticks = 10;
+        u_int ytick_thickness;
+        u_int ytick_length;
+        u_int num_yticks = 8;
+        u_int origin_x;
+        u_int origin_y;
+        u_int end_x;
+        u_int end_y;
         void fill_structs() {
             fileSize = BMP_INFO_SIZE + BMP_HEADER_SIZE + width*height*(BPP/8) + PADDING(width)*height;
             info = {('M' << 8) + 'B', fileSize, 0, 0, BMP_INFO_SIZE + BMP_HEADER_SIZE};
@@ -86,19 +95,17 @@ namespace gtd {
                 }
             }
         }
-        long double gradient(long double x1, long double y1, long double x2, long double y2) {
+        inline long double gradient(long double x1, long double y1, long double x2, long double y2) {
             return (y2 - y1) / (x2 - x1);
         }
-        long double intercept(long double m, long double x_point, long double y_point) {
+        inline long double intercept(long double m, long double x_point, long double y_point) {
             return y_point - m*x_point;
         }
-        long double thickness_x_bound(long double x, long double y, long double thickness) {
-            long double theta = atan(y/x);
-            return thickness / (2*cos(theta));
+        inline long double thickness_x_bound(long double x, long double y, long double thickness) {
+            return thickness / (2.0*cosl(atanl(y/x)));
         }
-        long double thickness_y_bound(long double x, long double y, long double thickness) {
-            long double theta = atan(x/y);
-            return thickness / (2*cos(theta));
+        inline long double thickness_y_bound(long double x, long double y, long double thickness) {
+            return thickness / (2.0*cosl(atanl(x/y)));
         }
         int draw_line(u_int start_x, u_int start_y, u_int end_x, u_int end_y, u_int thickness,
                       colour clr = {0, 0, 0}) {
@@ -198,10 +205,10 @@ namespace gtd {
             return retval;
         }
         inline void create_axes() {
-            u_int origin_x = width / 8;
-            u_int origin_y = height / 8;
-            u_int end_x = width - origin_x;
-            u_int end_y = height - origin_y;
+            origin_x = width / 8;
+            origin_y = height / 8;
+            end_x = width - origin_x;
+            end_y = height - origin_y;
             draw_line(origin_x, origin_y, origin_x, end_y, axes_thickness);
             draw_line(origin_x, origin_y, end_x, origin_y, axes_thickness);
             draw_square(origin_x - roundl(((long double) axes_thickness) / 2), origin_y -
@@ -209,7 +216,6 @@ namespace gtd {
         }
         void create_x_ticks() {
             u_int no_x_ticks;
-
         }
         size_t get_max_points() {
             size_t retval = 0;
@@ -290,6 +296,12 @@ namespace gtd {
                 height = MIN_HEIGHT;
             }
         }
+        inline void set_defaults() {
+            axes_thickness = width >= height ? height / 200 : width / 200;
+            axes_thickness = axes_thickness == 0 ? 1 : axes_thickness;
+            ytick_thickness = (xtick_thickness = axes_thickness / 2 == 0 ? 1 : axes_thickness / 2);
+            xtick_length;
+        }
     public:
         plot() : path(gtd::get_home_path<gtd::String>()), background{DEF_COLOUR, DEF_COLOUR, DEF_COLOUR},
                  width(DEF_WIDTH),
@@ -300,23 +312,31 @@ namespace gtd {
             path.append_back("/Figure1.bmp");
 #endif
             check_T();
+            set_defaults();
         }
 
         explicit plot(const char *path_to_fig) :
                 path(path_to_fig), background{DEF_COLOUR, DEF_COLOUR, DEF_COLOUR}, width(DEF_WIDTH),
-                height(DEF_HEIGHT) {check_T();}
+                height(DEF_HEIGHT) {check_T(); set_defaults();}
 
         plot(const char *path_to_fig, unsigned char R_background, unsigned char G_background,
              unsigned char B_background) :
                 path(path_to_fig), background{B_background, G_background, R_background}, width(DEF_WIDTH),
-                height(DEF_HEIGHT) {check_T();}
+                height(DEF_HEIGHT) {check_T(); set_defaults();}
 
         plot(const char *path_to_fig, unsigned char R_background, unsigned char G_background,
              unsigned char B_background, u_int fig_width, u_int fig_height) : path(path_to_fig),
              background{B_background, G_background, R_background}, width(fig_width), height(fig_height) {
             check_T();
             check_dim();
+            set_defaults();
         }
+
+        plot(const char *path_to_fig, colour background_colour) : path(path_to_fig), background(background_colour),
+        width(DEF_WIDTH), height(DEF_HEIGHT) {check_T(); set_defaults();}
+
+        plot(const char *path_to_fig, colour background_colour, u_int fig_width, u_int fig_height) : path(path_to_fig),
+        background(background_colour), width(fig_width), height(fig_height) {check_T(); check_dim(); set_defaults();}
 
         int add_plot(std::vector<T> x, std::vector<T> y) {
             if (x.size() == 0 || y.size() == 0) {
@@ -334,16 +354,51 @@ namespace gtd {
         }
 
         void display() const noexcept {
+            size_t num = 1;
             for (const auto &plot : plots) {
+                std::cout << "Plot " << num++ << ":\n";
                 for (const auto &pair : plot) {
-                    std::cout << pair.first << " " << pair.second << '\n';
+                    std::cout << "x: " << pair.first << ", y: " << pair.second << '\n';
                 }
-                std::cout << std::endl;
+                std::cout << "\n";
             }
+            std::cout << std::endl;
         }
 
         void clear_plots() noexcept {
             plots.clear();
+        }
+
+        int set_num_xticks(u_int number_of_xticks) {
+            if (number_of_xticks*tick_thickness >= end_x - origin_x) {
+                return -1;
+            }
+            num_xticks = number_of_xticks;
+            return 0;
+        }
+
+        int set_num_yticks(u_int number_of_yticks) {
+            if (number_of_yticks*tick_thickness >= end_y - origin_y) {
+                return -1;
+            }
+            num_yticks = number_of_yticks;
+            return 0;
+        }
+
+        int set_tick_thickness(u_int thickness) {
+            if (thickness > axes_thickness) {
+                return -1;
+            }
+            tick_thickness = thickness;
+            return 0;
+        }
+
+        int set_axes_thickness(u_int thickness) {
+            if (thickness > height/20 || thickness > width/20) {
+                return -1;
+            }
+            axes_thickness = thickness;
+            return 0;
         }
 
         int gen_plot() {
@@ -357,9 +412,6 @@ namespace gtd {
                 return -1;
             }
             check_dim();
-            axes_thickness = width >= height ? height / 200 : width / 200;
-            axes_thickness = axes_thickness == 0 ? 1 : axes_thickness;
-            tick_thickness = axes_thickness / 2 == 0 ? 1 : axes_thickness / 2;
             fill_structs();
             fill_background();
             create_axes();
@@ -398,5 +450,50 @@ namespace gtd {
         }
         out << "Blue: " << (short int) col.B << ", Green: " << (short int) col.G << ", Red: " << (short int) col.R;
         return out;
+    }
+    namespace colours {
+        colour black{0, 0, 0};
+        colour white{255, 255, 255};
+        colour blue{255, 0, 0};
+        colour green{0, 255, 0};
+        colour red{0, 0, 255};
+        colour pink{180, 105, 255};
+        colour cerise{99, 49, 222};
+        colour fuchsia{255, 0, 255};
+        colour neon_pink{240, 16, 255};
+        colour pink_orange{128, 152, 248};
+        colour purple{128, 0, 128};
+        colour salmon{114, 128, 250};
+        colour watermelon_pink{131, 115, 227};
+        colour orange{0, 165, 255};
+        colour gold{0, 215, 255};
+        colour yellow{0, 255, 255};
+        colour lavender{250, 230, 230};
+        colour indigo{130, 0, 75};
+        colour violet{238, 130, 238};
+        colour lime_green{50, 205, 50};
+        colour forest_green{34, 139, 34};
+        colour dark_green{0, 100, 0};
+        colour aqua{255, 255, 0};
+        colour sky_blue{235, 206, 135};
+        colour royal_blue{225, 105, 65};
+        colour navy{128, 0, 0};
+        colour wheat{179, 222, 245};
+        colour tan{140, 180, 210};
+        colour rosy_brown{143, 143, 188};
+        colour peru{63, 133, 205};
+        colour chocolate{30, 105, 210};
+        colour brown{42, 42, 165};
+        colour maroon{0, 0, 128};
+        colour snow{250, 250, 255};
+        colour honey_dew{240, 255, 240};
+        colour azure{255, 255, 240};
+        colour ghost_white{255, 248, 248};
+        colour beige{220, 245, 245};
+        colour ivory{240, 255, 255};
+        colour gainsboro{220, 220, 220};
+        colour silver{192, 192, 192};
+        colour gray{128, 128, 128};
+        colour slate_gray{144, 128, 112};
     }
 }
