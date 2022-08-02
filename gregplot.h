@@ -9,7 +9,7 @@
 extern int errno;
 #endif
 
-#pragma pack(1)
+#pragma pack(push, 1)
 
 #define NUM_PANES 1
 #define BPP 24
@@ -28,6 +28,32 @@ extern int errno;
 #define PADDING(w) ((3*(w)) % 4 == 0 ? 0 : 4 - (3*(w)) % 4)
 
 namespace gtd {
+    template <typename T>
+    T get_min(const std::vector<T> &vec) {
+        if (vec.empty()) {
+            return std::numeric_limits<T>::max();
+        }
+        T min = vec[0];
+        for (const T &elem : vec) {
+            if (elem < min) {
+                min = elem;
+            }
+        }
+        return min;
+    }
+    template <typename T>
+    T get_max(const std::vector<T> &vec) {
+        if (vec.empty()) {
+            return std::numeric_limits<T>::min();
+        }
+        T max = vec[0];
+        for (const T &elem : vec) {
+            if (elem > max) {
+                max = elem;
+            }
+        }
+        return max;
+    }
     typedef struct {
         unsigned char B;
         unsigned char G;
@@ -71,16 +97,30 @@ namespace gtd {
         colour green = {0, 255, 0};
         colour red = {0, 0, 255};
         size_t axes_thickness;
+        colour axes_colour = {0, 0, 0};
         u_int xtick_thickness;
         u_int xtick_length;
         u_int num_xticks = 10;
+        std::vector<T> xtick_positions;
         u_int ytick_thickness;
         u_int ytick_length;
         u_int num_yticks = 8;
+        std::vector<T> ytick_positions;
         u_int origin_x;
         u_int origin_y;
         u_int end_x;
         u_int end_y;
+        T plotmin_x;
+        T plotmin_y;
+        T plotmax_x;
+        T plotmax_y;
+        T min_x;
+        T min_y;
+        T max_x;
+        T max_y;
+        bool alloced = false;
+        bool xlim_set = false;
+        bool ylim_set = false;
         void fill_structs() {
             fileSize = BMP_INFO_SIZE + BMP_HEADER_SIZE + width*height*(BPP/8) + PADDING(width)*height;
             info = {('M' << 8) + 'B', fileSize, 0, 0, BMP_INFO_SIZE + BMP_HEADER_SIZE};
@@ -94,6 +134,7 @@ namespace gtd {
                     *(*(image + y) + x) = background;
                 }
             }
+            alloced = true;
         }
         inline long double gradient(long double x1, long double y1, long double x2, long double y2) {
             return (y2 - y1) / (x2 - x1);
@@ -107,100 +148,98 @@ namespace gtd {
         inline long double thickness_y_bound(long double x, long double y, long double thickness) {
             return thickness / (2.0*cosl(atanl(x/y)));
         }
-        int draw_line(u_int start_x, u_int start_y, u_int end_x, u_int end_y, u_int thickness,
+        int draw_line(u_int start_x, u_int start_y, u_int final_x, u_int final_y, u_int thickness,
                       colour clr = {0, 0, 0}) {
-            long int x_diff = end_x - start_x;
-            long int y_diff = end_y - start_y;
-            if (start_x > width - 1 || end_x > width - 1 || start_y > height - 1 || end_y > height - 1 ||
-                (x_diff == 0 && y_diff == 0)) {
+            long long x_diff = final_x - start_x;
+            long long y_diff = final_y - start_y;
+            if (start_x >= width || start_y >= height || (x_diff == 0 && y_diff == 0)) {
                 return -1;
+            }
+            if (final_x >= width) {
+                final_x = width - 1;
+            }
+            if (final_y >= height) {
+                final_y = height - 1;
             }
             long double m;
             long double c;
             long double thickness_bound;
             if (abs(x_diff) >= abs(y_diff)) {
-                m = gradient(start_x, start_y, end_x, end_y);
+                m = gradient(start_x, start_y, final_x, final_y);
                 c = intercept(m, start_x, start_y);
                 thickness_bound = thickness_x_bound(abs(x_diff), abs(y_diff), thickness);
                 u_int thickness_rounded = (u_int) roundl(thickness_bound);
-                if (start_x > end_x) {
-                    gtd::swap(start_x, end_x);
+                if (start_x > final_x) {
+                    gtd::swap(start_x, final_x);
                 }
                 u_int y;
                 u_int y_w_start;
                 u_int y_w_end;
-                for (size_t x = start_x; x <= end_x; ++x) {
+                for (size_t x = start_x; x <= final_x; ++x) {
                     y = (u_int) roundl(m*x + c);
-                    y_w_start = y - thickness_rounded;
+                    y_w_start = thickness_rounded > y ? 0 : y - thickness_rounded;
                     y_w_end = y + thickness_rounded;
-                    while (y_w_start < 0) {
-                        ++y_w_start;
-                    }
-                    while (y_w_start > height - 1) {
-                        --y_w_start;
-                    }
-                    while (y_w_end < 0) {
-                        ++y_w_end;
-                    }
-                    while (y_w_end > height - 1) {
-                        --y_w_end;
-                    }
-                    for (; y_w_start <= y_w_end; ++y_w_start) {
-                        image[y_w_start][x] = clr;
-                    }
+                    //while (y_w_start < 0) ++y_w_start;
+                    //while (y_w_start >= height) --y_w_start;
+                    if (y_w_start >= height) return 1;
+                    //while (y_w_end < 0) ++y_w_end;
+                    //while (y_w_end >= height) --y_w_end;
+                    if (y_w_end >= height) y_w_end = height - 1;
+                    for (; y_w_start <= y_w_end; ++y_w_start) image[y_w_start][x] = clr;
                 }
                 return 0;
             }
-            m = gradient(start_y, start_x, end_y, end_x);
+            m = gradient(start_y, start_x, final_y, final_x);
             c = intercept(m, start_y, start_x);
             thickness_bound = thickness_y_bound(abs(x_diff), abs(y_diff), thickness);
             u_int thickness_rounded = (u_int) roundl(thickness_bound);
-            if (start_y > end_y) {
-                gtd::swap(start_y, end_y);
+            if (start_y > final_y) {
+                gtd::swap(start_y, final_y);
             }
             u_int x;
             u_int x_w_start;
             u_int x_w_end;
-            for (size_t y = start_y; y <= end_y; ++y) {
+            for (size_t y = start_y; y <= final_y; ++y) {
                 x = (u_int) roundl(m*y + c);
-                x_w_start = x - thickness_rounded;
+                // x_w_start = x - thickness_rounded;
+                // x_w_end = x + thickness_rounded;
+                // while (x_w_start < 0) ++x_w_start;
+                // while (x_w_start >= width) --x_w_start;
+                // while (x_w_end < 0) ++x_w_end;
+                // while (x_w_end >= width) --x_w_end;
+                x_w_start = thickness_rounded > x ? 0 : x - thickness_rounded;
                 x_w_end = x + thickness_rounded;
-                while (x_w_start < 0) {
-                    ++x_w_start;
-                }
-                while (x_w_start > width - 1) {
-                    --x_w_start;
-                }
-                while (x_w_end < 0) {
-                    ++x_w_end;
-                }
-                while (x_w_end > width - 1) {
-                    --x_w_end;
-                }
-                for (; x_w_start <= x_w_end; ++x_w_start) {
-                    image[y][x_w_start] = clr;
-                }
+                //while (y_w_start < 0) ++y_w_start;
+                //while (y_w_start >= height) --y_w_start;
+                if (x_w_start >= width) return 1;
+                //while (y_w_end < 0) ++y_w_end;
+                //while (y_w_end >= height) --y_w_end;
+                if (x_w_end >= width) x_w_end = width - 1;
+                for (; x_w_start <= x_w_end; ++x_w_start) image[y][x_w_start] = clr;
             }
             return 0;
         }
+        //int draw_vertical_line(u_int start_x_coord, u_int start_y_coord, u_int thickness, u_int length) {
+        //    if (start_x_coord >= width || start_y_coord >= height) {
+        //        return -1;
+        //    }
+        //    if (start_x_coord + thickness >= width) {
+        //        thickness = width - start_x_coord - 1;
+        //    }
+        //    if (start_y_coord + length >= height);
+        //}
         int draw_quad(u_int btm_left_x, u_int btm_left_y, u_int w, u_int h, colour col = {0, 0, 0}) {
-            if (btm_left_x < 0 || btm_left_x > width - 1 || btm_left_y < 0 || btm_left_y > height - 1) {
+            if (btm_left_x < 0 || btm_left_x >= width || btm_left_y < 0 || btm_left_y >= height) {
                 return -1;
             }
-            if (btm_left_x + w > width - 1) {
-                w = width - btm_left_x - 1;
-            }
-            if (btm_left_y + h > height - 1) {
-                h = height - btm_left_y - 1;
-            }
+            if (btm_left_x + w >= width) w = width - btm_left_x - 1;
+            if (btm_left_y + h >= height) h = height - btm_left_y - 1;
             for (u_int y = btm_left_y; y <= btm_left_y + h; ++y) {
-                for (u_int x = btm_left_x; x <= btm_left_x + w; ++x) {
-                    image[y][x] = col;
-                }
+                for (u_int x = btm_left_x; x <= btm_left_x + w; ++x) image[y][x] = col;
             }
             return 0;
         }
-        int draw_square(u_int btm_left_x, u_int btm_left_y, u_int side_length, colour col = {0, 0, 0}) {
+        inline int draw_square(u_int btm_left_x, u_int btm_left_y, u_int side_length, colour col = {0, 0, 0}) {
             int retval = draw_quad(btm_left_x, btm_left_y, side_length, side_length, col);
             return retval;
         }
@@ -209,13 +248,15 @@ namespace gtd {
             origin_y = height / 8;
             end_x = width - origin_x;
             end_y = height - origin_y;
-            draw_line(origin_x, origin_y, origin_x, end_y, axes_thickness);
-            draw_line(origin_x, origin_y, end_x, origin_y, axes_thickness);
+            draw_line(origin_x, origin_y, origin_x, end_y, axes_thickness, axes_colour);
+            draw_line(origin_x, origin_y, end_x, origin_y, axes_thickness, axes_colour);
+            // draw_quad(origin_x, origin_y, axes_thickness, end_y - origin_y, axes_colour);
+            // draw_quad(origin_x, origin_y, end_x - origin_x, axes_thickness, axes_colour);
             draw_square(origin_x - roundl(((long double) axes_thickness) / 2), origin_y -
-            roundl(((long double) axes_thickness) / 2), axes_thickness / 2);
+            roundl(((long double) axes_thickness) / 2), axes_thickness / 2, axes_colour);
         }
         void create_x_ticks() {
-            u_int no_x_ticks;
+
         }
         size_t get_max_points() {
             size_t retval = 0;
@@ -228,41 +269,33 @@ namespace gtd {
             }
             return retval;
         }
-        T *get_mins() {
-            T x_min = plots[0][0].first;
-            T y_min = plots[0][0].second;
+        void set_mins() {
+            min_x = plots[0][0].first;
+            min_y = plots[0][0].second;
             for (const std::vector<std::pair<T, T>> &plot : plots) {
                 for (const std::pair<T, T> &pair : plot) {
-                    if (pair.first < x_min) {
-                        x_min = pair.first;
+                    if (pair.first < min_x) {
+                        min_x = pair.first;
                     }
-                    if (pair.second < y_min) {
-                        y_min = pair.second;
+                    if (pair.second < min_y) {
+                        min_y = pair.second;
                     }
                 }
             }
-            T *mins = (T *) malloc(2*sizeof(T));
-            *mins = x_min;
-            *(mins + 1) = y_min;
-            return mins;
         }
-        T *get_maxes() {
-            T x_max = plots[0][0].first;
-            T y_max = plots[0][0].second;
+        void set_maxes() {
+            max_x = plots[0][0].first;
+            max_y = plots[0][0].second;
             for (const std::vector<std::pair<T, T>> &plot : plots) {
                 for (const std::pair<T, T> &pair : plot) {
-                    if (pair.first > x_max) {
-                        x_max = pair.first;
+                    if (pair.first > max_x) {
+                        max_x = pair.first;
                     }
-                    if (pair.second > y_max) {
-                        y_max = pair.second;
+                    if (pair.second > max_y) {
+                        max_y = pair.second;
                     }
                 }
             }
-            T *maxes = (T *) malloc(2*sizeof(T));
-            *maxes = x_max;
-            *(maxes + 1) = y_max;
-            return maxes;
         }
         void write_image(FILE *fp) {
             fwrite(&info, sizeof(BMP_info), 1, fp);
@@ -275,6 +308,7 @@ namespace gtd {
                 free(*(image + i));
             }
             free(image);
+            alloced = false;
         }
         inline int check_bmp() {
             if (path.rsubstr(".bmp").empty()) {
@@ -300,7 +334,7 @@ namespace gtd {
             axes_thickness = width >= height ? height / 200 : width / 200;
             axes_thickness = axes_thickness == 0 ? 1 : axes_thickness;
             ytick_thickness = (xtick_thickness = axes_thickness / 2 == 0 ? 1 : axes_thickness / 2);
-            xtick_length;
+            ytick_length = (xtick_length = axes_thickness*2);
         }
     public:
         plot() : path(gtd::get_home_path<gtd::String>()), background{DEF_COLOUR, DEF_COLOUR, DEF_COLOUR},
@@ -370,7 +404,7 @@ namespace gtd {
         }
 
         int set_num_xticks(u_int number_of_xticks) {
-            if (number_of_xticks*tick_thickness >= end_x - origin_x) {
+            if (number_of_xticks*xtick_thickness >= end_x - origin_x) {
                 return -1;
             }
             num_xticks = number_of_xticks;
@@ -378,27 +412,105 @@ namespace gtd {
         }
 
         int set_num_yticks(u_int number_of_yticks) {
-            if (number_of_yticks*tick_thickness >= end_y - origin_y) {
+            if (number_of_yticks*ytick_thickness >= end_y - origin_y) {
                 return -1;
             }
             num_yticks = number_of_yticks;
             return 0;
         }
 
-        int set_tick_thickness(u_int thickness) {
+        int set_xtick_thickness(u_int thickness) {
             if (thickness > axes_thickness) {
                 return -1;
             }
-            tick_thickness = thickness;
+            xtick_thickness = thickness;
             return 0;
         }
 
-        int set_axes_thickness(u_int thickness) {
+        int set_ytick_thickness(u_int thickness) {
+            if (thickness > axes_thickness) {
+                return -1;
+            }
+            ytick_thickness = thickness;
+            return 0;
+        }
+
+        int set_xtick_positions(const std::vector<T> &positions) {
+            size_t size = positions.size();
+            if (size*xtick_thickness >= end_x - origin_x) {
+                return -1;
+            }
+            num_xticks = size;
+            xtick_positions = positions;
+            return 0;
+        }
+
+        int set_xtick_positions(const T *positions) { // must be terminated by the largest possible value of T
+            T max = std::numeric_limits<T>::max();
+            while (*positions < max) {
+                xtick_positions.push_back(*positions++);
+            }
+            size_t size = xtick_positions.size();
+            if (size*xtick_thickness >= end_x - origin_x) {
+                return -1;
+            }
+            num_xticks = size;
+            return 0;
+        }
+
+        int set_ytick_positions(const std::vector<T> &positions) {
+            size_t size = positions.size();
+            if (size*ytick_thickness >= end_y - origin_y) {
+                return -1;
+            }
+            num_yticks = size;
+            ytick_positions = positions;
+            return 0;
+        }
+
+        int set_ytick_positions(const T *positions) { // must be terminated by the largest possible value of T
+            T max = std::numeric_limits<T>::max();
+            while (*positions < max) {
+                ytick_positions.push_back(*positions++);
+            }
+            size_t size = ytick_positions.size();
+            if (size*ytick_thickness >= end_y - origin_y) {
+                return -1;
+            }
+            num_yticks = size;
+            return 0;
+        }
+
+        int set_xlim(T lower_bound, T upper_bound) { // in terms of T units
+            if (lower_bound >= upper_bound) {
+                return -1;
+            }
+            plotmin_x = lower_bound;
+            plotmax_x = upper_bound;
+            xlim_set = true;
+            return 0;
+        }
+
+        int set_ylim(T lower_bound, T upper_bound) { // in terms of T units
+            if (lower_bound >= upper_bound) {
+                return -1;
+            }
+            plotmin_y = lower_bound;
+            plotmax_y = upper_bound;
+            ylim_set = true;
+            return 0;
+        }
+
+        int set_axes_thickness(u_int thickness) { // in terms of pixels
             if (thickness > height/20 || thickness > width/20) {
                 return -1;
             }
             axes_thickness = thickness;
             return 0;
+        }
+
+        void set_axes_colour(colour col) {
+            axes_colour = col;
         }
 
         int gen_plot() {
@@ -416,8 +528,8 @@ namespace gtd {
             fill_background();
             create_axes();
             create_x_ticks();
-            draw_line(500, 500, 550, 550, 5, blue);
-            draw_square(100, 100.0F, 500, {50, 50, 255});
+            draw_line(500, 500, 5500, 5500, 5, blue);
+            //draw_square(100, 100.0F, 500, {50, 50, 255});
             // int retval = draw_quad(1000, 1000, 6000, 6200, green);
             write_image(fp);
             fclose(fp);
@@ -442,7 +554,15 @@ namespace gtd {
             }
             return nullptr;
         }
-        ~plot() = default;
+        ~plot() {
+            if (alloced) {
+                for (size_t i = 0; i < height; ++i) {
+                    free(*(image + i));
+                }
+                free(image);
+                alloced = false;
+            }
+        }
     };
     std::ostream &operator<<(std::ostream &out, const colour &col) {
         if (!out.good()) {
@@ -497,3 +617,4 @@ namespace gtd {
         colour slate_gray{144, 128, 112};
     }
 }
+#pragma pack(pop)
