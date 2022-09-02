@@ -2034,10 +2034,7 @@ namespace gtd {
     }
 
     template<typename PATH>
-    PATH get_home_path() {
-        PATH retval = nullptr;
-        return retval;
-    }
+    PATH get_home_path();
 
     template<> char *get_home_path<char *>() {
 #ifdef _WIN32
@@ -2100,6 +2097,14 @@ namespace gtd {
 
     void print(bool w) {
         std::cout << std::boolalpha << w << std::endl;
+    }
+
+    template <typename T, typename... types>
+    void print(T arg, types... args) {
+        print(arg);
+        if constexpr (sizeof...(args) > 0) {
+            print(args...);
+        }
     }
 
     template<typename T>
