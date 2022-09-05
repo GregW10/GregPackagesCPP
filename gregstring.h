@@ -442,8 +442,8 @@ namespace gtd {
             return append_back(str.c_str());
         }
 
-        template <typename T>
-        void process_integral_num(T value) { // make private
+        template <typename T> requires (std::is_integral<T>::value) // only here for completeness
+        unsigned char process_integral_num(T value) { // make private
             if (value < 0) {
                 this->push_back('-');
                 value = -value;
@@ -465,6 +465,7 @@ namespace gtd {
                     break;
                 }
             }
+            return n;
         }
 
         template <typename T> requires (std::is_fundamental<T>::value)
@@ -474,56 +475,128 @@ namespace gtd {
                 process_integral_num(value);
                 return *this;
             }
+            unsigned char num;
+            size_t org_dec_p = num_dec_places;
+            if (value == 0) {
+                this->push_back('0');
+                if (num_dec_places > 0) {
+                    this->push_back('.');
+                    while (num_dec_places --> 0) {
+                        this->push_back('0');
+                    }
+                }
+            }
+            bool negative = false;
             if (value < 0) {
                 value = -value;
                 this->push_back('-');
+                negative = true;
             }
-            size_t intPart = (size_t) value;
-            process_integral_num(intPart);
+            T org_org_partial_val = value - ((size_t) value);
+            size_t org_org_int_val = (size_t) value;
             T org_val = value;
             size_t n = 1;
-            bool lessThanZeroAndBigD = false;
-            if (num_dec_places > 18) {
-                if (value < 1) {
-                    lessThanZeroAndBigD = true;
-                    while (value < 1) {
-                        value *= 10;
-                        n *= 10;
-                    }
-                }
-                num_dec_places = 18;
-            }
-            value = org_val;
-            if (num_dec_places > 0) {
-                double floatPart = value - intPart;
-                if (!lessThanZeroAndBigD) {
-                    n = 1;
+            long double floatPart;
+            bool reduced = false;
+            if (value == 1) {
+                this->push_back('1');
+                if (num_dec_places > 0) {
+                    this->push_back('.');
                     while (num_dec_places --> 0) {
-                        n *= 10;
+                        this->push_back('0');
                     }
                 }
-                size_t intFloatPart = (size_t) (floatPart*(n + 1));
-                unsigned char remainder = intFloatPart % 10;
-                std::cout << "ifp: " << intFloatPart << " rem: " << (int) remainder << std::endl;
-                // if (10 - remainder > 5) {
-                //     intFloatPart -= remainder;
-                // }
-                // else {
-                //     intFloatPart += remainder;
-                // }
-                // intFloatPart /= 10;
-                std::cout << "intPart: " << intPart << ", intFloatPart: " << intFloatPart << std::endl;
-                this->push_back('.');
-                n = 10;
-                std::cout << "val: " << value << ", org val: " << org_val << std::endl;
-                value *= n;
-                while (value < 1) {
-                    this->push_back('0');
-                    n *= 10;
-                    value = org_val*n;
-                }
-                process_integral_num(intFloatPart);
+                return *this;
             }
+            if (num_dec_places == 0) {
+                floatPart = value - ((size_t) value);
+                if (value > 1) {
+                    if (floatPart > 0.5) {
+                        process_integral_num(((size_t) value) + 1);
+                    }
+                    else {
+                        process_integral_num((size_t) value);
+                    }
+                    return *this;
+                }
+                if (floatPart > 0.5) {
+                    this->push_back('1');
+                }
+                else {
+                    this->push_back('0');
+                }
+                return *this;
+            }
+            if (value > 1) {
+                num = process_integral_num((size_t) (value));
+                value -= (size_t) value;
+                org_val = value;
+                reduced = true;
+            }
+            floatPart = value;
+            if (reduced)
+                this->push_back('.');
+            else
+                this->append_back("0.");
+            unsigned char count = 0;
+            while (value < 1 && count < num_dec_places) {
+                n *= 10;
+                value = org_val*n; // done to minimise accumulation of floating-point error
+                this->push_back('0');
+                ++count;
+            }
+            floatPart = value;
+            this->pop_back();
+            num_dec_places -= count;
+            n = 1;
+            size_t max_n = 1000000000000000000;
+            max_n *= 10; // to avoid compiler warnings on too-long-to-be-signed integer literals
+            while (num_dec_places --> 0 && n < (size_t) max_n) {
+                n *= 10;
+            }
+            floatPart *= n;
+            size_t intFloatPart = (size_t) floatPart;
+            unsigned char remainder = ((size_t) (floatPart*10)) % 10;
+            if (10 - remainder > 5) {
+                process_integral_num(intFloatPart);
+                return *this;
+            }
+            if (intFloatPart == 0) {
+                this->push_back('1');
+                return *this;
+            }
+            if ((intFloatPart + 1) / (n*10) == 1) {
+                if (reduced && org_org_partial_val > 0.1) {
+                    this->pop_back();
+                    while (num --> 0) {
+                        this->pop_back();
+                    }
+                    if (negative)
+                        this->push_back('-');
+                    process_integral_num(org_org_int_val + 1);
+                    this->push_back('.');
+                    while (org_dec_p --> 0) {
+                        this->push_back('0');
+                    }
+                    return *this;
+                }
+                if (*(string + length_w_null - 2) != '.')
+                    this->pop_back();
+                else {
+                    this->pop_back();
+                    this->pop_back();
+                    while (num --> 0) {
+                        this->pop_back();
+                    }
+                    process_integral_num(org_org_int_val + 1);
+                    this->push_back('.');
+                    while (org_dec_p --> 0) {
+                        this->push_back('0');
+                    }
+                    return *this;
+                }
+            }
+            process_integral_num(intFloatPart + 1);
             return *this;
         }
 
