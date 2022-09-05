@@ -20,8 +20,9 @@ namespace gtd {
     template <isFund T>
     class vector {
     public:
-        vector(vector &other) noexcept = 0; // copy ctor - no move ctor since class only contains primitive types
+        vector(vector<T> &other) noexcept = 0; // copy ctor - no move ctor since class only contains primitive types
         virtual String to_str() const noexcept = 0;
+        virtual const char *c_str() const noexcept = 0;
         virtual T &operator[](unsigned char index) noexcept = 0;
         virtual vector &operator++() noexcept = 0; // can only declare reference-returning func. for an abstract class
         virtual vector &operator--() noexcept = 0;
@@ -39,11 +40,16 @@ namespace gtd {
     protected:
         T x = 0;
         T y = 0;
+        char c_str_buff[70]{0}; // maximum num. chars required to represent a vector3D string
     public:
+        unsigned char floating_point_decimal_places = 15; // used for determining number of dec. places in str repr.
         vector2D() = default;
         template <isConvertible<T> U>
         explicit vector2D(vector<U> &other) noexcept : x{other.x}, y{other.y} {}
-        vector2D(T x_component, T y_component) noexcept : x{x_component}, y{y_component} {}
+        vector2D(T &&x_component, T &&y_component) noexcept : x{x_component}, y{y_component} {}
+        String to_str() {
+            String result;
+        }
         T &operator[](unsigned char index) override {
             if (index > 1) {
                 throw std::invalid_argument("Only the indices '0' and '1' are possible.");

@@ -22,8 +22,6 @@
 #include <shlobj.h>
 #endif
 
-static int MIN_SIZE = 128;
-
 namespace gtd {
     unsigned char to_upper(unsigned char ch);
     unsigned char to_lower(unsigned char ch);
@@ -92,6 +90,9 @@ namespace gtd {
         }
     };
 
+    template <typename T>
+    concept charIt = requires (T val) {{*val} -> std::convertible_to<char>;};
+
     class String {
     private:
         char *data = nullptr;
@@ -103,7 +104,7 @@ namespace gtd {
         bool is_empty = true;
         bool shrunk = false; // only true after calling shrink_to_fit() and before memory is resized again
         bool start_left = false; // only true if push_left is set to true when a String object is constructed
-
+        static const size_t MIN_SIZE = 32;
         static inline bool pow_of_2(size_t num) {
             return (num != 0) && ((num & (num - 1)) == 0); // any power of two will be a 1 followed by zeros in binary,
         } // so, e.g., 10000 & 01111 = 00000 (which is zero) - bitwise AND of n and n-1 for n power of 2 is always zero
@@ -128,6 +129,7 @@ namespace gtd {
         }
 
         void constructor(const char *str, bool after_empty = false) {
+            shrunk = false;
             size = MIN_SIZE;
             length_w_null = strlen_c(str) + 1;
             set_size(false);
@@ -150,6 +152,7 @@ namespace gtd {
         }
 
         void empty_constructor() {
+            shrunk = false;
             size = MIN_SIZE;
             data = new char[size];
             memset_c(data, '\0', size);
@@ -166,8 +169,9 @@ namespace gtd {
             is_empty = true;
         }
 
-        template <typename It>
+        template <charIt It>
         void it_constructor(It beg, It ending) {
+            shrunk = false;
             length_w_null = ending - beg + 1;
             size = MIN_SIZE;
             set_size(false);
@@ -202,17 +206,12 @@ namespace gtd {
         class RevIterator;
         class Iterator {
         public:
-            using iterator_category = std::bidirectional_iterator_tag;
-            using difference_type = std::ptrdiff_t;
-            using value_type = char;
-            using pointer = char *;
-            using reference = char &;
             Iterator() : ptr(nullptr) {}
             Iterator(char *pointer) : ptr(pointer) {}
-            reference operator*() const {
+            char &operator*() const {
                 return *ptr;
             }
-            pointer operator->() const {
+            char *operator->() const {
                 return ptr;
             }
             virtual Iterator &operator++() {
@@ -261,13 +260,13 @@ namespace gtd {
                 return {ptr - offset};
             }
             friend std::ostream &operator<<(std::ostream &out, const Iterator &A);
-            friend difference_type operator-(const Iterator &A, const Iterator &B);
+            friend std::ptrdiff_t operator-(const Iterator &A, const Iterator &B);
             friend std::ptrdiff_t operator-(const String::RevIterator &A, const String::RevIterator &B);
             ~Iterator() = default;
         protected:
             char *ptr;
         };
-        class RevIterator : public Iterator {
+        class RevIterator : virtual public Iterator {
         public:
             RevIterator() = default;
             RevIterator(char *pointer) : Iterator(pointer) {}
@@ -275,7 +274,7 @@ namespace gtd {
                 --ptr;
                 return *this;
             }
-            RevIterator operator++(int) {
+            RevIterator operator++(int) { // not pretty, but necessary
                 RevIterator tmp = *this;
                 --ptr;
                 return tmp;
@@ -284,7 +283,7 @@ namespace gtd {
                 ++ptr;
                 return *this;
             }
-            RevIterator operator--(int) {
+            RevIterator operator--(int) { // same
                 RevIterator tmp = *this;
                 ++ptr;
                 return tmp;
@@ -301,38 +300,39 @@ namespace gtd {
                 return {ptr + offset};
             }
         };
-        class ConstIterator : public Iterator {
+        class ConstIterator : virtual public Iterator {
         private:
-            const char *cptr;
+            const char *cptr = nullptr;
         public:
             ConstIterator() = default;
             ConstIterator(char *pointer) : Iterator(pointer), cptr(pointer){}
-            const char *operator->() {
+            virtual const char *operator->() {
                 cptr = ptr;
                 return cptr;
             }
-            const char &operator*() {
+            virtual const char &operator*() {
                 cptr = ptr;
                 return *cptr;
             }
         };
-        class ConstRevIterator : public RevIterator {
-        private:
-            const char *cptr;
+        class ConstRevIterator : public RevIterator, public ConstIterator {
         public:
-            ConstRevIterator() : cptr(nullptr) {}
-            ConstRevIterator(char *pointer) : RevIterator(pointer), cptr(pointer){}
-            const char *operator->() {
-                cptr = ptr;
-                return cptr;
+            ConstRevIterator() = default;
+            ConstRevIterator(char *pointer) : Iterator(pointer), ConstIterator(pointer), RevIterator(pointer) {}
+            const char *operator->() override {
+                return ConstIterator::operator->();
             }
-            const char &operator*() {
-                cptr = ptr;
-                return *cptr;
+            const char &operator*() override {
+                return ConstIterator::operator*();
             }
         };
 
-        String(bool push_left = false) {
+        String() {
+            start_left = false;
+            empty_constructor();
+        }
+
+        explicit String(bool push_left) {
             start_left = push_left;
             empty_constructor();
         }
@@ -378,7 +378,11 @@ namespace gtd {
             }
         }
 
-        template <typename ForwardIterator>
+        String(String &&str) { // move constructor
+            this->operator=(std::forward<String>(str));
+        }
+
+        template <charIt ForwardIterator>
         String(ForwardIterator beg, ForwardIterator ending, bool push_left = false) {
             start_left = push_left;
             if (beg >= ending) {
@@ -388,13 +392,13 @@ namespace gtd {
             it_constructor(beg, ending);
         }
 
-        void append_back(const char *str) {
+        String &append_back(const char *str) {
             if (str == nullptr) {
                 throw NullPointerError();
             }
             if (is_empty) {
                 constructor(str, true);
-                return;
+                return *this;
             }
             size_t l = strlen_c(str);
             size_t old_l = length_w_null - 1;
@@ -402,6 +406,7 @@ namespace gtd {
             if (l > space_back) {
                 if (shrunk) {
                     set_size(false);
+                    shrunk = false;
                 }
                 else {
                     set_size();
@@ -415,32 +420,120 @@ namespace gtd {
                 delete[] old_data;
                 space_front = get_first_pos();
                 space_back = start_left ? size - length_w_null : (is_even(length_w_null) ? space_front : space_front+1);
+                strcpy_c(string + old_l, str);
+                return *this;
             }
             strcpy_c(string + old_l, str);
             space_back -= l;
+            return *this;
         }
 
-        void append_back(const std::string &str) {
+        String &append_back(const std::string &str) {
             if (str.empty()) {
-                return;
+                return *this;
             }
-            append_back(str.c_str());
+            return append_back(str.c_str());
         }
 
-        void append_back(const String &str) {
+        String &append_back(const String &str) {
             if (str.is_empty) {
-                return;
+                return *this;
             }
-            append_back(str.c_str());
+            return append_back(str.c_str());
         }
 
-        void append_front(const char *str) {
+        template <typename T>
+        void process_integral_num(T value) { // make private
+            if (value < 0) {
+                this->push_back('-');
+                value = -value;
+            }
+            size_t val = value;
+            unsigned char n = 1;
+            size_t power = 1;
+            while (val > 0) {
+                val = value;
+                power *= 10;
+                val /= power;
+                ++n;
+            }
+            while (true) {
+                power /= power == 1 ? 1 : 10;
+                this->push_back((char) ((value / power) + 48)); // 48 in ASCII = '0'
+                value = value % power;
+                if (power == 1) {
+                    break;
+                }
+            }
+        }
+
+        template <typename T> requires (std::is_fundamental<T>::value)
+        String &append_back(T value, size_t num_dec_places = 15) {
+            const char *ptr;
+            if constexpr (std::is_integral<T>::value) {
+                process_integral_num(value);
+                return *this;
+            }
+            if (value < 0) {
+                value = -value;
+                this->push_back('-');
+            }
+            size_t intPart = (size_t) value;
+            process_integral_num(intPart);
+            T org_val = value;
+            size_t n = 1;
+            bool lessThanZeroAndBigD = false;
+            if (num_dec_places > 18) {
+                if (value < 1) {
+                    lessThanZeroAndBigD = true;
+                    while (value < 1) {
+                        value *= 10;
+                        n *= 10;
+                    }
+                }
+                num_dec_places = 18;
+            }
+            value = org_val;
+            if (num_dec_places > 0) {
+                double floatPart = value - intPart;
+                if (!lessThanZeroAndBigD) {
+                    n = 1;
+                    while (num_dec_places --> 0) {
+                        n *= 10;
+                    }
+                }
+                size_t intFloatPart = (size_t) (floatPart*(n + 1));
+                unsigned char remainder = intFloatPart % 10;
+                std::cout << "ifp: " << intFloatPart << " rem: " << (int) remainder << std::endl;
+                // if (10 - remainder > 5) {
+                //     intFloatPart -= remainder;
+                // }
+                // else {
+                //     intFloatPart += remainder;
+                // }
+                // intFloatPart /= 10;
+                std::cout << "intPart: " << intPart << ", intFloatPart: " << intFloatPart << std::endl;
+                this->push_back('.');
+                n = 10;
+                std::cout << "val: " << value << ", org val: " << org_val << std::endl;
+                value *= n;
+                while (value < 1) {
+                    this->push_back('0');
+                    n *= 10;
+                    value = org_val*n;
+                }
+                process_integral_num(intFloatPart);
+            }
+            return *this;
+        }
+
+        String &append_front(const char *str) {
             if (str == nullptr) {
                 throw NullPointerError();
             }
             if (is_empty) {
                 constructor(str, true);
-                return;
+                return *this;
             }
             size_t l = strlen_c(str);
             length_w_null += l;
@@ -448,6 +541,7 @@ namespace gtd {
             if (l > space_front) {
                 if (shrunk) {
                     set_size(false);
+                    shrunk = false;
                 }
                 else {
                     set_size();
@@ -468,9 +562,10 @@ namespace gtd {
                 space_front -= l;
             }
             setchr_c(string, gone, l);
+            return *this;
         }
 
-        void print_all_chars() {
+        size_t print_all_chars() const noexcept {
             const char *ptr = data;
             const char *end = data + size;
             size_t count = 0;
@@ -485,37 +580,43 @@ namespace gtd {
                     ++count;
                 }
             }
-            printf("\nCount: %zu\n", count);
+            printf("\n");
+            return count;
         }
 
-        void append_front(const std::string &str) {
+        void both() const noexcept {
+            space();
+            print_all_chars();
+        }
+
+        String &append_front(const std::string &str) {
             if (str.empty()) {
-                return;
+                return *this;
             }
-            append_front(str.c_str());
+            return append_front(str.c_str());
         }
 
-        void append_front(const String &str) {
+        String &append_front(const String &str) {
             if (str.is_empty) {
-                return;
+                return *this;
             }
-            append_front(str.c_str());
+            return append_front(str.c_str());
         }
 
-        void push_back(char ch) {
+        String &push_back(char ch) {
             if (ch == 0) {
-                return;
+                return *this;
             }
             const char str[2] = {ch, '\0'};
-            append_back(str);
+            return append_back(str);
         }
 
-        void push_front(char ch) {
+        String &push_front(char ch) {
             if (ch == 0) {
-                return;
+                return *this;
             }
             const char str[2] = {ch, '\0'};
-            append_front(str);
+            return append_front(str);
         }
 
         bool pop_back() noexcept {
@@ -546,9 +647,9 @@ namespace gtd {
             return true;
         }
 
-        void reverse() noexcept {
+        String &reverse() noexcept {
             if (is_empty || length_w_null == 1 || length_w_null == 2) {
-                return;
+                return *this;
             }
             char *start = string;
             char *final = start + length_w_null - 2;
@@ -558,33 +659,36 @@ namespace gtd {
                 *start = *final;
                 *final = temp;
             } while (--final > ++start);
+            return *this;
         }
 
-        void fill(char ch) noexcept {
+        String &fill(char ch) noexcept {
             if (is_empty || ch == '\0') {
-                return;
+                return *this;
             }
             char *ptr = string + length_w_null - 2;
             while (ptr >= string) {
                 *ptr-- = ch;
             }
+            return *this;
         }
 
-        void fill(size_t starting_index, size_t end_index, char ch) noexcept { // including end_index
+        String &fill(size_t starting_index, size_t end_index, char ch) noexcept { // including end_index
             if (starting_index >= end_index || starting_index < 0 || end_index < 0 || ch == '\0' || is_empty ||
             starting_index >= length_w_null - 1 || end_index > length_w_null - 1) {
-                return;
+                return *this;
             }
             char *start = string + starting_index;
             const char *final = end_index > length_w_null - 1 ? string + length_w_null - 1 : string + end_index;
             while (start <= final) {
                 *start++ = ch;
             }
+            return *this;
         }
 
-        void fill_data(char ch) noexcept {
+        String &fill_data(char ch) noexcept {
             if (ch == '\0') {
-                return;
+                return *this;
             }
             char *start = data;
             const char *final = data + size;
@@ -597,15 +701,17 @@ namespace gtd {
             space_front = 0;
             space_back = 0;
             is_empty = false;
+            return *this;
         }
 
-        template <typename ForwardIterator>
-        void assign(ForwardIterator start, ForwardIterator final) {
+        template <charIt ForwardIterator>
+        String &assign(ForwardIterator start, ForwardIterator final) {
             if (start >= final) {
-                return;
+                return *this;
             }
             delete[] data;
             it_constructor(start, final);
+            return *this;
         }
 
         String substr(size_t starting_index, size_t end_index) const {
@@ -616,9 +722,10 @@ namespace gtd {
             if (end_index > length_w_null - 1) {
                 end_index = length_w_null - 1;
             }
-            Iterator start = begin() + (long int) starting_index;
-            Iterator final = begin() + (long int) end_index;
-            return {start, final};
+            // Iterator start = begin() + (long int) starting_index;
+            // Iterator final = begin() + (long int) end_index;
+            // return {start, final};
+            return {string + starting_index, string + end_index};
         }
 
         String substr(char ch) const noexcept {
@@ -759,12 +866,12 @@ namespace gtd {
                 ++length_w_null;
                 return *this;
             }
-
+            return *this;
         }
 
-        void to_upper() noexcept {
+        String &to_upper() noexcept {
             if (is_empty) {
-                return;
+                return *this;
             }
             char *ptr = string + length_w_null - 2;
             while (ptr >= string) {
@@ -773,11 +880,12 @@ namespace gtd {
                 }
                 --ptr;
             }
+            return *this;
         }
 
-        void to_lower() noexcept {
+        String &to_lower() noexcept {
             if (is_empty) {
-                return;
+                return *this;
             }
             char *ptr = string + length_w_null - 2;
             while (ptr >= string) {
@@ -786,6 +894,7 @@ namespace gtd {
                 }
                 --ptr;
             }
+            return *this;
         }
 
         bool isnumeric() const noexcept {
@@ -954,11 +1063,13 @@ namespace gtd {
                     if (length_w_null == 1) {
                         this->clear();
                     }
+                    delete[] sub;
                     return pos;
                 }
                 ++optr;
                 ++ptr;
             }
+            delete[] sub;
             return nopos;
         }
 
@@ -1034,6 +1145,7 @@ namespace gtd {
                 (fp = fopen(path, "r")) == nullptr || fgetc(fp) == EOF) {
                 return -1;
             }
+            shrunk = false;
             if (!is_empty) {
                 this->clear();
             }
@@ -1315,11 +1427,12 @@ namespace gtd {
             return retval;
         }
 
-        void space() {
-            printf("Space front: %zu, space back: %zu, string - data: %d\n", space_front, space_back, string - data);
+        void space() const noexcept {
+            printf("Length w null: %zu, size: %zu, space front: %zu, space back: %zu, string - data: %d\n",
+                   length_w_null, size, space_front, space_back, string - data);
         }
 
-        void clear() noexcept {
+        void clear() {
             delete[] data;
             empty_constructor();
         }
@@ -1454,6 +1567,9 @@ namespace gtd {
         }
 
         const char *const c_str() const noexcept {
+            if (is_empty) {
+                return nullptr; // perhaps change this
+            }
             return string;
         }
 
@@ -1559,7 +1675,7 @@ namespace gtd {
             return *this;
         }
 
-        String &operator=(const std::string &str) {
+        String &operator=(const std::string &str) noexcept { // std::string::c_str() is guaranteed to be no-throw
             this->clear();
             if (str.empty()) {
                 return *this;
@@ -1572,6 +1688,31 @@ namespace gtd {
                 return *this;
             }
             return *this = str.str();
+        }
+
+        String &operator=(String &&str) noexcept {
+            if (this == &str) {
+                return *this;
+            }
+            this->string = str.string;
+            str.string = nullptr;
+            this->data = str.data;
+            str.data = nullptr;
+            this->length_w_null = str.length_w_null;
+            str.length_w_null = 0;
+            this->is_empty = str.is_empty;
+            str.is_empty = true;
+            this->size = str.size;
+            str.size = 0;
+            this->space_front = str.space_front;
+            str.space_front = 0;
+            this->space_back = str.space_back;
+            str.space_back = 0;
+            this->start_left = str.start_left;
+            str.start_left = false;
+            this->shrunk = str.shrunk;
+            str.shrunk = false;
+            return *this;
         }
 
         String &operator++() {
@@ -1669,7 +1810,7 @@ namespace gtd {
         str.start_left = org_s_left;
         return is;
     }
-
+    // called for Iterator, RevIterator, ConstIterator and ConstRevIterator
     bool operator==(const String::Iterator &A, const String::Iterator &B) {
         if (A.ptr == nullptr || B.ptr == nullptr) {
             return false;
@@ -1683,7 +1824,7 @@ namespace gtd {
         }
         return A.ptr != B.ptr;
     }
-
+    // called for Iterator and ConstIterator
     bool operator<(const String::Iterator &A, const String::Iterator &B) {
         if (A.ptr == nullptr || B.ptr == nullptr) {
             return false;
@@ -1728,7 +1869,7 @@ namespace gtd {
         os << str.string;
         return os;
     }
-
+    // called for RevIterator and ConstRevIterator
     bool operator<(const String::RevIterator &A, const String::RevIterator &B) {
         if (A.ptr == nullptr || B.ptr == nullptr) {
             return false;
