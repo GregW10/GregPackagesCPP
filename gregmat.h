@@ -1,7 +1,713 @@
 #ifndef GREGMAT_H
 #define GREGMAT_H
 
-#include "gregvec.h"
+#include <sstream>
+#include <cmath>
 
+template <typename T>
+concept isFund = std::is_fundamental<T>::value;
 
+template <typename From, typename To>
+concept isConvertible = std::is_convertible<From, To>::value;
+
+template <typename T>
+concept isIntegral = std::is_integral<T>::value;
+
+template <typename T> // any primitive type, or any class acting as a numerical wrapper type which implements...
+concept isNumWrapper = requires (T val, std::ostream out) {
+    T{1}; // ...a constructor which accepts numerical types
+    T{T{}}; // a constructor which accepts another type T, and a default (empty) constructor (should ideally construct
+    // an object corresponding to the number zero, or else numerous methods within matrix<T> do not make sense)
+    {val*val} -> isConvertible<T>; // type must be overloaded for multiplication by itself
+    {2*val} -> isConvertible<T>; // must have been overloaded for scalar multiplication
+    {val*2} -> isConvertible<T>;
+    {val + val} -> isConvertible<T>; // must be overloaded for addition onto itself
+    {val + 2} -> isConvertible<T>; // must be overloaded for addition onto scalar
+    {2 + val} -> isConvertible<T>; // ... and vice versa
+    {val += T{}} -> isConvertible<T>;
+    {val -= T{}} -> isConvertible<T>;
+    {val - val} -> isConvertible<T>; // same for subtraction
+    {val - 2} -> isConvertible<T>;
+    {2 - val} -> isConvertible<T>;
+    {val == 2} -> std::same_as<bool>; // must have the comparison operators overloaded
+    {val != 2} -> std::same_as<bool>;
+    {val == T{}} -> std::same_as<bool>;
+    {val != T{}} -> std::same_as<bool>;
+    {out << val}; // must have the insertion operator overloaded for outputting to a std::ostream object
+};
+
+namespace gtd {
+    constexpr long double PI = 3.14159265358979323846264338327950288419716939937510582097494459230;
+    class empty_matrix_error : public std::invalid_argument {
+    public:
+        empty_matrix_error() : std::invalid_argument("A matrix cannot have a size of zero.") {}
+        explicit empty_matrix_error(const char *message) : std::invalid_argument(message) {}
+    };
+    class invalid_matrix_format : public std::invalid_argument {
+    public:
+        invalid_matrix_format() : std::invalid_argument("The requested matrix has an invalid format.") {}
+        explicit invalid_matrix_format(const char *message) : std::invalid_argument(message) {}
+    }; // the below 3 functions emulate 'zip()' from Python (I really like what I've done here if I may say so myself)
+    template <typename... pack> // first: creates copies of all the elements in the vectors passed
+    std::vector<std::tuple<pack...>> zip_cpy(const std::vector<pack>&... vectors) {
+        if constexpr (sizeof...(pack) == 0) {
+            return std::vector<std::tuple<>>();
+        }
+        else { // to reject branches at compile time
+            std::vector<std::tuple<pack...>> zipped;
+            std::vector<size_t> sizes = {(vectors.size())...};
+            size_t size = sizes[0];
+            if (!std::all_of(sizes.begin(), sizes.end(), [&size](size_t s) { return s == size; })) {
+                return zipped;
+            }
+            for (size_t i = 0; i < size; ++i) {
+                zipped.push_back(std::tuple<pack...>(vectors[i]...));
+            }
+            return zipped;
+        }
+    }
+    template <typename... pack> // second: with references
+    std::vector<std::tuple<pack&...>> zip_ref(std::vector<pack>&... vectors) {
+        if constexpr (sizeof...(pack) == 0) {
+            return std::vector<std::tuple<>>();
+        }
+        else {
+            std::vector<std::tuple<pack&...>> zipped;
+            std::vector<size_t> sizes = {(vectors.size())...};
+            size_t size = sizes[0];
+            if (!std::all_of(sizes.begin(), sizes.end(), [&size](size_t s) { return s == size; })) {
+                return zipped;
+            }
+            for (size_t i = 0; i < size; ++i) {
+                zipped.push_back(std::move(std::tie(vectors[i]...)));
+            }
+            return zipped;
+        }
+    }
+    template <typename... pack> // third: with const references
+    std::vector<std::tuple<const pack&...>> zip_cref(const std::vector<pack>&... vectors) {
+        if constexpr (sizeof...(pack) == 0) {
+            return std::vector<std::tuple<>>();
+        }
+        else {
+            std::vector<std::tuple<const pack&...>> zipped;
+            std::vector<size_t> sizes = {(vectors.size())...};
+            size_t size = sizes[0];
+            if (!std::all_of(sizes.begin(), sizes.end(), [&size](size_t s) {return s == size;})) {
+                return zipped;
+            }
+            for (size_t i = 0; i < size; ++i) {
+                zipped.push_back(std::tie(std::as_const(vectors[i])...));
+            }
+            return zipped;
+        }
+    }
+    template <isFund T, size_t rows1, size_t rows2, size_t columns1, size_t columns2> // matrix multiplication for
+    std::vector<std::vector<T>> matmul(T mat1[rows1][columns1], T mat2[rows2][columns2]) { // matrices represented as
+        std::vector<std::vector<T>> ret_matrix; //                                            2D arrays
+        if constexpr (columns1 != rows2 || rows1 == 0 || columns1 == 0 || rows2 == 0 || columns2 == 0) {
+            return ret_matrix;
+        }
+        std::vector<T> sub;
+        size_t total;
+        for (size_t i = 0; i < rows1; ++i) {
+            sub.clear();
+            for (size_t j = 0; j < columns2; ++j) {
+                total = 0;
+                for (size_t k = 0; k < columns1; ++k) {
+                    total += mat1[i][k]*mat2[k][j];
+                }
+                sub.push_back(total); // single element in final matrix
+            }
+            ret_matrix.push_back(sub); // row in final matrix
+        }
+        return ret_matrix;
+    }
+    template <isFund T, isFund U>
+    auto matmul(const std::vector<std::vector<T>> &mat1, // matrix multiplication for matrices repr. as std::vectors
+                const std::vector<std::vector<U>> &mat2) ->
+    std::vector<std::vector<decltype(std::declval<T>()*std::declval<U>())>> {
+        std::vector<std::vector<T>> ret_matrix;
+        if (mat1.empty() || mat2.empty() || mat1[0].empty() || mat2[0].empty()) {
+            return ret_matrix;
+        }
+        const size_t rows1 = mat1.size();
+        const size_t columns1 = mat1[0].size();
+        const size_t rows2 = mat2.size();
+        const size_t columns2 = mat2[0].size();
+        for (const auto &[e1, e2] : zip(mat1, mat2)) { // probing for valid matrix
+            if (e1.size() != columns1 || e1.size() != rows2 || e2.size() != columns2) {
+                return ret_matrix;
+            }
+        }
+        std::vector<T> sub;
+        size_t total;
+        for (size_t i = 0; i < rows1; ++i) {
+            sub.clear();
+            for (size_t j = 0; j < columns2; ++j) {
+                total = 0;
+                for (size_t k = 0; k < columns1; ++k) {
+                    total += mat1[i][k]*mat2[k][j];
+                }
+                sub.push_back(total);
+            }
+            ret_matrix.push_back(sub);
+        }
+        return ret_matrix;
+    }
+    template <isNumWrapper T>
+    class matrix {
+    private:
+        std::vector<std::vector<T>> mat;
+        size_t next_row = 0; // used for determining the next element at which to insert << a value
+        size_t next_col = 0;
+        bool auto_stop = true; // determines whether insertion stops once the last element has been set
+        bool stop = false; // used to signal the insertion to stop
+        inline bool is_square() const noexcept {
+            return mat.size() == mat[0].size();
+        }
+        void check_validity() const {
+            size_t column_num;
+            if (mat.empty() || (column_num = mat[0].size()) == 0) {
+                throw empty_matrix_error();
+            }
+            for (const std::vector<T> &row : mat) {
+                if (row.size() != column_num) {
+                    throw invalid_matrix_format("A matrix must have an equal number of elements in every row.");
+                }
+            }
+        }
+    public:
+        static const size_t nopos = -1;
+        matrix() { // constructs a 2x2 identity matrix
+            mat.push_back(std::vector<T>{T{1}, T{0}});
+            mat.push_back(std::vector<T>{T{0}, T{1}});
+            next_row = 0;
+            next_col = 0;
+        }
+        matrix(size_t rows, size_t columns) { // constructs a zero matrix with specified size
+            std::vector<T> row;
+            for (size_t i = 0; i < rows; ++i) {
+                row.clear();
+                for (size_t j = 0; j < columns; ++j) {
+                    row.push_back(T{});
+                }
+                mat.push_back(row);
+            }
+        }
+        matrix(const matrix<T> &other) : mat{other.mat}, next_row{other.next_row}, next_col{other.next_col},
+        auto_stop{other.auto_stop}, stop{other.stop} {}
+        matrix(matrix<T> &&other) : mat{std::move(other.mat)}, next_row{other.next_row}, next_col{other.next_col},
+        auto_stop{other.auto_stop}, stop{other.stop} {}
+        template <typename U> requires isConvertible<U, T>
+        matrix(const matrix<U> &other) : next_row{other.next_row}, next_col{other.next_col},
+                                         auto_stop{other.auto_stop}, stop{other.stop} {
+            std::vector<T> sub; // have to iterate through values in case U and T are not the same type
+            for (const std::vector<U> &row : other) {
+                sub.clear();
+                for (const U &elem : row) {
+                    sub.push_back(elem);
+                }
+                mat.push_back(sub);
+            }
+        }
+        template <typename U> requires isConvertible<U, T>
+        matrix(matrix<U> &&other) : next_row{other.next_row}, next_col{other.next_col},
+                                    auto_stop{other.auto_stop}, stop{other.stop} {
+            std::vector<T> sub;
+            for (const std::vector<U> &row : other) {
+                sub.clear();
+                for (const U &elem : row) {
+                    sub.push_back(elem);
+                }
+                mat.push_back(sub);
+            }
+        } // using the below two constructors is very easy thanks to C++'s initializer lists
+        matrix(std::vector<std::vector<T>> &&matrix_elements) : mat(std::move(matrix_elements)) {
+            check_validity();
+        }
+        matrix(const std::vector<std::vector<T>> &matrix_elements) : mat(matrix_elements) {
+            check_validity();
+        }
+        matrix<T> &set_dimensions(size_t num_rows = 2, size_t num_cols = 2) {
+            if (num_rows == 0 || num_cols == 0) {
+                throw empty_matrix_error();
+            }
+            size_t rows = mat.size();
+            size_t cols = mat[0].size(); // better than repeatedly calling the function (2 functions, actually)
+            if (rows == num_rows && cols == num_cols) {
+                return *this;
+            }
+            if (num_rows < rows) {
+                mat.erase(mat.begin() + num_rows, mat.end());
+            }
+            else {
+                size_t diff = num_rows - rows;
+                std::vector<T> sub;
+                for (size_t i = 0; i < diff; ++i) {
+                    sub.clear();
+                    for (size_t j = 0; j < cols; ++j) {
+                        sub.push_back(T{0});
+                    }
+                    mat.push_back(sub);
+                }
+            }
+            if (num_cols < cols) {
+                for (std::vector<T> &row : mat) {
+                    row.erase(row.begin() + num_cols, row.end());
+                }
+                return *this;
+            }
+            size_t diff = num_cols - cols;
+            for (std::vector<T> &row : mat) {
+                for (size_t i = 0; i < diff; ++i) {
+                    row.push_back(T{0});
+                }
+            }
+            return *this;
+        }
+        matrix<T> &transpose() {
+            std::vector<std::vector<T>> new_mat;
+            std::vector<T> new_row;
+            size_t current_rows = mat.size();
+            size_t current_cols = mat[0].size();
+            for (size_t i = 0; i < current_cols; ++i) {
+                new_row.clear();
+                for (size_t j = 0; j < current_rows; ++j) {
+                    new_row.push_back(mat[j][i]);
+                }
+                new_mat.push_back(new_row);
+            }
+            mat.assign(new_mat.begin(), new_mat.end());
+            return *this;
+        }
+        matrix<T> get_transpose() const {
+            return matrix<T>(*this).transpose();
+        }
+        matrix<T> get_sub_matrix(size_t start_row_index, size_t start_col_index,
+                                 size_t num_rows = nopos, size_t num_cols = nopos) const {
+            if ((start_row_index == nopos && mat.size() == nopos) || // would never happen anyway
+            (start_col_index == nopos && mat[0].size() == nopos) || start_row_index + 1 > mat.size() ||
+            start_col_index + 1 > mat[0].size() || num_rows == 0 || num_cols == 0) {
+                throw empty_matrix_error("The resulting matrix would have a size of zero.");
+            }
+            if (num_rows > mat.size() - start_row_index) {
+                num_rows = mat.size() - start_row_index;
+            }
+            if (num_cols > mat[0].size() - start_col_index) {
+                num_cols = mat[0].size() - start_col_index;
+            }
+            matrix<T> ret_mat(num_rows, num_cols);
+            size_t end_row = start_row_index + num_rows;
+            size_t end_col = start_col_index + num_cols;
+            for (size_t i = start_row_index, r_i = 0; i < end_row; ++i, ++r_i) {
+                for (size_t j = start_col_index, r_j = 0; j < end_col; ++j, ++r_j) {
+                    ret_mat.at(r_i, r_j) = mat[i][j];
+                }
+            }
+            return ret_mat;
+        }
+        T determinant() const {
+            if (!is_square()) {
+                throw invalid_matrix_format("Only square matrices have determinants.");
+            }
+            if (mat.size() == 1) {
+                return mat[0][0];
+            }
+            if (mat.size() == 2) { // base case
+                return mat[0][0]*mat[1][1] - mat[0][1]*mat[1][0];
+            }
+            size_t rows = mat.size();
+            size_t cols = mat[0].size();
+            T ret{0};
+            bool positive = true;
+            std::vector<matrix<T>> matrices; // used to store sub-matrices whose determinant will be calculated
+            matrix<T> sub(rows - 1, cols - 1);
+            for (size_t i = 0; i < cols; ++i) { // outer loop for elements in the first row
+                for (size_t j = 1, j_s = 0; j < rows; ++j, ++j_s) {
+                    for (size_t k = 0, k_s = 0; k < cols; ++k, ++k_s) {
+                        if (i != k) {
+                            sub.at(j_s, k_s) = mat[j][k];
+                            continue;
+                        }
+                        --k_s;
+                    }
+                }
+                ret += positive ? mat[0][i]*sub.determinant() : -mat[0][i]*sub.determinant();
+                positive = !positive;
+            }
+            return ret;
+        }
+        bool has_inverse() {
+            return this->determinant() != 0;
+        }
+        matrix<T> &invert() {
+            if (!is_square()) {
+                throw invalid_matrix_format("A non-square matrix does not have an inverse.");
+            }
+            return *this;
+        }
+        template <typename U> requires isConvertible<U, T>
+        matrix<T> &append_row(const std::vector<U> &row) {
+            if (row.size() != mat[0].size()) {
+                throw invalid_matrix_format("The row to be appended does not contain the same number of columns "
+                                            "(entries)\n as the number of columns in the matrix.");
+            }
+            std::vector<T> row_to_add;
+            for (const U &elem : row) { // since T and U might be of different types
+                row_to_add.push_back(elem);
+            }
+            mat.push_back(row_to_add);
+            return *this;
+        }
+        template <typename U> requires isConvertible<U, T>
+        matrix<T> &append_col(const std::vector<U> &col) {
+            if (col.size() != mat.size()) {
+                throw invalid_matrix_format("The row to be appended does not contain the same number of columns "
+                                            "(entries)\n as the number of columns in the matrix.");
+            }
+            std::vector<U> &col_ref = const_cast<std::vector<U>&>(col);
+            for (auto &[row, col_el] : zip_ref(mat, col_ref)) {
+                row.push_back(col_el);
+            }
+            return *this;
+        }
+        matrix<T> &pop_row() {
+            if (mat.size() == 1) {
+                return *this;
+            }
+            mat.pop_back();
+            if (next_row == mat.size() - 1) {
+                --next_row;
+            }
+            return *this;
+        }
+        matrix<T> &pop_col() {
+            if (mat[0].size() == 1) {
+                return *this;
+            }
+            for (std::vector<T> row : mat) {
+                row.pop_back();
+            }
+            if (next_col == mat[0].size() - 1) {
+                --next_col;
+            }
+            return *this;
+        }
+        size_t num_rows() {
+            return mat.size();
+        }
+        size_t num_cols() {
+            return mat[0].size();
+        }
+        matrix<T> copy() const {
+            return matrix<T>(*this);
+        }
+        T &at(size_t row_index, size_t col_index) {
+            if (row_index >= mat.size() || col_index >= mat[0].size()) {
+                throw std::invalid_argument("Index out of range.");
+            }
+            return mat[row_index][col_index];
+        }
+        const T &at(size_t row_index, size_t col_index) const {
+            if (row_index >= mat.size() || col_index >= mat[0].size()) {
+                throw std::invalid_argument("Index out of range.");
+            }
+            return mat[row_index][col_index];
+        }
+        matrix<T> &make_zero() noexcept {
+            for (std::vector<T> &row : mat) {
+                for (T &elem : row) {
+                    elem = T{0};
+                }
+            }
+            next_row = 0;
+            next_col = 0;
+            return *this;
+        }
+        matrix<T> &make_identity() noexcept {
+            if (!is_square()) {
+                throw invalid_matrix_format("Only square matrices can be identity matrices.");
+            }
+            size_t outer_count = 0;
+            size_t inner_count;
+            for (std::vector<T> &row : mat) {
+                inner_count = 0;
+                for (T &elem : row) {
+                    elem = inner_count++ == outer_count ? T{1} : T{0};
+                }
+                ++outer_count;
+            }
+            return *this;
+        }
+        bool is_zero() {
+            for (const std::vector<T> &row : mat) {
+                for (const T &elem : row) {
+                    if (elem != T{})
+                        return false;
+                }
+            }
+            return true;
+        }
+        bool is_identity() {
+            size_t rows = mat.size();
+            size_t cols = mat[0].size();
+            size_t one_index = 0;
+            for (size_t i = 0; i < rows; ++i) {
+                for (size_t j = 0; j < cols; ++j) {
+                    if (i == j) {
+                        if (mat[i][j] != T{1}) {
+                            return false;
+                        }
+                    }
+                    else {
+                        if (mat[i][j] != T{0}) {
+                            return false;
+                        }
+                    }
+                }
+                ++one_index;
+            }
+            return true;
+        }
+        auto begin() const noexcept {
+            return mat.cbegin();
+        }
+        auto end() const noexcept {
+            return mat.cend();
+        }
+        auto begin() noexcept {
+            return mat.begin();
+        }
+        auto end() noexcept {
+            return mat.end();
+        }
+        auto cbegin() const noexcept {
+            return mat.cbegin();
+        }
+        auto cend() const noexcept {
+            return mat.cend();
+        }
+        matrix<T> &transform_entries(void (*func)(T &val)) {
+            for (std::vector<T> &row : mat) {
+                for (T &elem : row) {
+                    func(elem);
+                }
+            }
+            return *this;
+        }
+        matrix<T> &discard_entries(bool (*unary_predicate)(const T &val)) {
+            for (std::vector<T> &row : mat) {
+                for (T &elem : row) {
+                    if (unary_predicate(elem)) {
+                        elem = T{0};
+                    }
+                }
+            }
+            return *this;
+        }
+        matrix<T> &keep_entries(bool (*unary_predicate)(const T &val)) {
+            for (std::vector<T> &row : mat) {
+                for (T &elem : row) {
+                    if (!unary_predicate(elem)) {
+                        elem = T{0};
+                    }
+                }
+            }
+            return *this;
+        }
+        matrix<T> &set_insertion_start(size_t row_index, size_t col_index) {
+            if (row_index >= mat.size() || col_index >= mat[0].size()) {
+                throw std::invalid_argument("Index out of range.");
+            }
+            next_row = row_index;
+            next_col = col_index;
+            stop = false;
+            return *this;
+        }
+        matrix<T> &rewind_insertion_start() noexcept {
+            next_row = 0;
+            next_col = 0;
+            stop = false;
+            return *this;
+        }
+        matrix<T> &set_auto_stop(bool auto_stop_insertion = true) noexcept {
+            auto_stop = auto_stop_insertion;
+            return *this;
+        }
+        static matrix<T> get_2D_rotate_matrix(T angle_rad = PI) requires isConvertible<T, long double> {
+            if (angle_rad == PI/2) { // returns an exact matrix (no f.p. rounding errors)
+                return matrix<T>(2, 2) << 0 << -1 << 1 << 0;
+            }
+            if (angle_rad == PI) {
+                return matrix<T>(2, 2) << -1 << 0 << 0 << -1;
+            }
+            if (angle_rad == 3*PI/4) {
+                return matrix<T>(2, 2) << 0 << 1 << -1 << 0;
+            }
+            if (angle_rad == 2*PI) {
+                return matrix<T>(2, 2).make_identity();
+            }
+            return matrix<T>(2, 2) << std::cos(angle_rad) << -std::sin(angle_rad) << std::sin(angle_rad)
+            << std::cos(angle_rad);
+        }
+        static matrix<T> get_2D_scale_matrix(T scale) requires isConvertible<T, long double> {
+            return matrix<T>(2, 2) << scale << 0 << 0 << scale;
+        }
+        std::vector<T> operator[](size_t index) const { // using [] returns copy of row, so cannot make changes to mat.
+            if (index >= mat.size()) {
+                throw std::invalid_argument("Index out of range.");
+            }
+            return {mat[index]};
+        }
+        template <typename U> requires isConvertible<U, T>
+        matrix<T> &operator<<(U value) { // inserts a single value into the first element that is zero in the matrix
+            if (auto_stop && stop) { // allows operations such as: matrix << 4 << 2 << 90 << 65 << 24;
+                return *this;
+            }
+            mat[next_row][next_col] = value;
+            next_col = next_col == mat[0].size() - 1 ? ++next_row, 0 : next_col + 1;
+            if (next_row == mat.size()) {
+                if (auto_stop) {
+                    stop = true;
+                }
+                next_row = 0;
+            }
+            return *this;
+        }
+        template <typename U> requires isConvertible<U, T>
+        matrix<T> &operator=(const matrix<U> &other) {
+            if (&other == this) {
+                return *this;
+            }
+            if constexpr (std::same_as<U, T>) {
+                this->mat = other.mat;
+            }
+            else {
+                mat.clear();
+                std::vector<T> sub;
+                for (const std::vector<U> &row : other) {
+                    sub.clear();
+                    for (const U &elem : row) {
+                        sub.push_back(elem);
+                    }
+                    mat.push_back(sub);
+                }
+            }
+            this->next_row = other.next_row;
+            this->next_col = other.next_col;
+            this->auto_stop = other.auto_stop;
+            this->stop = other.stop;
+            return *this;
+        }
+        template <typename U> requires isConvertible<U, T>
+        matrix<T> &operator=(matrix<U> &&other) {
+            if (&other == this) {
+                return *this;
+            }
+            if constexpr (std::same_as<U, T>) {
+                this->mat = std::move(other.mat);
+            }
+            else {
+                mat.clear();
+                std::vector<T> sub;
+                for (const std::vector<U> &row : other) {
+                    sub.clear();
+                    for (const U &elem : row) {
+                        sub.push_back(elem);
+                    }
+                    mat.push_back(sub);
+                }
+            }
+            this->next_row = other.next_row;
+            this->next_col = other.next_col;
+            this->auto_stop = other.auto_stop;
+            this->stop = other.stop;
+            return *this;
+        }
+        template <isNumWrapper U>
+        friend std::ostream &operator<<(std::ostream &out, const matrix<U> &mat);
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(U s, const matrix<V> &m2) -> matrix<decltype(std::declval<U>()*std::declval<V>())>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const matrix<U> &m1, const matrix<V> &m2) ->
+        matrix<decltype(std::declval<U>()*std::declval<V>() + std::declval<U>()*std::declval<V>())>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const matrix<U> &m1, const matrix<V> &m2) ->
+        matrix<decltype(std::declval<U>() + std::declval<V>())>;
+        template <isNumWrapper U>
+        friend class matrix;
+    };
+    template <isNumWrapper U>
+    std::ostream &operator<<(std::ostream &out, const matrix<U> &mat) {
+        for (const std::vector<U> &row : mat) {
+            out << '|';
+            for (const U &elem : row) {
+                out << +elem << ' ';
+            }
+            out << "\b|\n";
+        }
+        return out;
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const matrix<U> &m1, const matrix<V> &m2) ->
+    matrix<decltype(std::declval<U>()*std::declval<V>() + std::declval<U>()*std::declval<V>())> {
+        using T = decltype(std::declval<U>()*std::declval<V>() + std::declval<U>()*std::declval<V>());
+        std::vector<std::vector<T>> r;
+        const size_t rows1 = m1.mat.size();
+        const size_t columns1 = m1.mat[0].size();
+        const size_t rows2 = m2.mat.size();
+        const size_t columns2 = m2.mat[0].size();
+        for (const auto &[e1, e2] : zip_cref(m1.mat, m2.mat)) { // probing for valid matrix
+            if (e1.size() != columns1 || e1.size() != rows2 || e2.size() != columns2) {
+                throw std::invalid_argument("For matrix multiplication to be possible, the number of columns in the\n"
+                                            "first matrix must equal the number of rows in the second.");
+            }
+        }
+        std::vector<T> sub;
+        T total;
+        for (size_t i = 0; i < rows1; ++i) {
+            sub.clear();
+            for (size_t j = 0; j < columns2; ++j) {
+                total = 0;
+                for (size_t k = 0; k < columns1; ++k) {
+                    total += m1.mat[i][k]*m2.mat[k][j]; // faster than calling operator[]
+                    std::cout << total << std::endl;
+                }
+                sub.push_back(total);
+            }
+            r.push_back(sub);
+        }
+        return matrix<T>(std::move(r));
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(U s, const matrix<V> &m) -> matrix<decltype(std::declval<U>()*std::declval<V>())> {
+        size_t rows = m.mat.size();
+        size_t cols = m.mat[0].size();
+        matrix<decltype(std::declval<U>()*std::declval<V>())> ret_mat(rows, cols);
+        for (size_t i = 0; i < rows; ++i) {
+            for (size_t j = 0; j < cols; ++j) {
+                ret_mat.mat[i][j] = s*m.mat[i][j]; // faster than calling << (although it would have looked prettier)
+            }
+        }
+        return ret_mat;
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const matrix<U> &m1, const matrix<V> &m2) ->
+    matrix<decltype(std::declval<U>() + std::declval<V>())> {
+        size_t rows = m1.mat.size();
+        size_t cols = m1.mat[0].size();
+        using T = decltype(std::declval<U>() + std::declval<V>());
+        if (rows != m2.mat.size() || cols != m2.mat[0].size()) {
+            throw std::invalid_argument("Matrix dimensions must be equal for matrix addition to be possible.");
+        }
+        matrix<T> ret_mat(rows, cols);
+        for (size_t i = 0; i < rows; ++i) {
+            for (size_t j = 0; j < cols; ++j) {
+                ret_mat.mat[i][j] = m1.mat[i][j] + m2.mat[i][j];
+            }
+        }
+        return ret_mat;
+    }
+}
 #endif
