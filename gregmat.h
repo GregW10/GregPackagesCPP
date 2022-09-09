@@ -4,37 +4,57 @@
 #include <sstream>
 #include <cmath>
 
-template <typename T>
-concept isFund = std::is_fundamental<T>::value;
-
 template <typename From, typename To>
 concept isConvertible = std::is_convertible<From, To>::value;
 
 template <typename T>
 concept isIntegral = std::is_integral<T>::value;
-
+// isNumWrapper is also used for the vector, vector2D and vector3D classes
 template <typename T> // any primitive type, or any class acting as a numerical wrapper type which implements...
-concept isNumWrapper = requires (T val, std::ostream out) {
+concept isNumWrapper = requires (T val, T val2, size_t l, long double f, std::ostream out) {
     T{1}; // ...a constructor which accepts numerical types
     T{T{}}; // a constructor which accepts another type T, and a default (empty) constructor (should ideally construct
     // an object corresponding to the number zero, or else numerous methods within matrix<T> do not make sense)
-    {val*val} -> isConvertible<T>; // type must be overloaded for multiplication by itself
-    {2*val} -> isConvertible<T>; // must have been overloaded for scalar multiplication
-    {val*2} -> isConvertible<T>;
-    {val + val} -> isConvertible<T>; // must be overloaded for addition onto itself
-    {val + 2} -> isConvertible<T>; // must be overloaded for addition onto scalar
-    {2 + val} -> isConvertible<T>; // ... and vice versa
-    {val += T{}} -> isConvertible<T>;
-    {val -= T{}} -> isConvertible<T>;
-    {val - val} -> isConvertible<T>; // same for subtraction
-    {val - 2} -> isConvertible<T>;
-    {2 - val} -> isConvertible<T>;
-    {val == 2} -> std::same_as<bool>; // must have the comparison operators overloaded
-    {val != 2} -> std::same_as<bool>;
-    {val == T{}} -> std::same_as<bool>;
-    {val != T{}} -> std::same_as<bool>;
+    {val + val2} -> isConvertible<T>; // must be overloaded for addition onto itself
+    {val + l} -> isConvertible<T>; // must be overloaded for addition onto integer type
+    {l + val} -> isConvertible<T>; // ... and vice versa
+    {val += val2} -> isConvertible<T>;
+    {val += l} -> isConvertible<T>;
+    {val - val2} -> isConvertible<T>; // same for subtraction
+    {val - l} -> isConvertible<T>;
+    {l - val} -> isConvertible<T>;
+    {val -= val2} -> isConvertible<T>;
+    {val -= l} -> isConvertible<T>;
+    {val*val2} -> isConvertible<T>; // multiplication
+    {val*l} -> isConvertible<T>;
+    {l*val} -> isConvertible<T>;
+    {val *= val2} -> isConvertible<T>;
+    {val *= l} -> isConvertible<T>;
+    {val/val2} -> isConvertible<T>; // same for division
+    {val/l} -> isConvertible<T>;
+    {l/val} -> isConvertible<T>;
+    {val /= val2} -> isConvertible<T>;
+    {val /= l} -> isConvertible<T>;
+    {val == l} -> std::same_as<bool>; // must have the comparison operators overloaded
+    {val != l} -> std::same_as<bool>;
+    {val + f} -> isConvertible<T>; // must be overloaded for addition onto float type
+    {f + val} -> isConvertible<T>; // ... and vice versa
+    {val += f} -> isConvertible<T>;
+    {val - f} -> isConvertible<T>;
+    {f - val} -> isConvertible<T>;
+    {val -= f} -> isConvertible<T>;
+    {val*f} -> isConvertible<T>;
+    {f*val} -> isConvertible<T>;
+    {val *= f} -> isConvertible<T>;
+    {val/f} -> isConvertible<T>;
+    {f/val} -> isConvertible<T>;
+    {val /= f} -> isConvertible<T>;
+    {val == f} -> std::same_as<bool>; // must have the comparison operators overloaded
+    {val != f} -> std::same_as<bool>;
+    {val == val2} -> std::same_as<bool>;
+    {val != val2} -> std::same_as<bool>;
     {out << val}; // must have the insertion operator overloaded for outputting to a std::ostream object
-};
+}; // see isIntegralNumWrapper concept in gregvec.h for modulo requirements
 
 namespace gtd {
     constexpr long double PI = 3.14159265358979323846264338327950288419716939937510582097494459230;
@@ -102,7 +122,7 @@ namespace gtd {
             return zipped;
         }
     }
-    template <isFund T, size_t rows1, size_t rows2, size_t columns1, size_t columns2> // matrix multiplication for
+    template <isNumWrapper T, size_t rows1, size_t rows2, size_t columns1, size_t columns2> // matrix multiplication for
     std::vector<std::vector<T>> matmul(T mat1[rows1][columns1], T mat2[rows2][columns2]) { // matrices represented as
         std::vector<std::vector<T>> ret_matrix; //                                            2D arrays
         if constexpr (columns1 != rows2 || rows1 == 0 || columns1 == 0 || rows2 == 0 || columns2 == 0) {
@@ -123,7 +143,7 @@ namespace gtd {
         }
         return ret_matrix;
     }
-    template <isFund T, isFund U>
+    template <isNumWrapper T, isNumWrapper U>
     auto matmul(const std::vector<std::vector<T>> &mat1, // matrix multiplication for matrices repr. as std::vectors
                 const std::vector<std::vector<U>> &mat2) ->
     std::vector<std::vector<decltype(std::declval<T>()*std::declval<U>())>> {
@@ -135,7 +155,7 @@ namespace gtd {
         const size_t columns1 = mat1[0].size();
         const size_t rows2 = mat2.size();
         const size_t columns2 = mat2[0].size();
-        for (const auto &[e1, e2] : zip(mat1, mat2)) { // probing for valid matrix
+        for (const auto &[e1, e2] : zip_cref(mat1, mat2)) { // probing for valid matrix
             if (e1.size() != columns1 || e1.size() != rows2 || e2.size() != columns2) {
                 return ret_matrix;
             }
@@ -155,6 +175,12 @@ namespace gtd {
         }
         return ret_matrix;
     }
+    template <isNumWrapper U>
+    class vector;
+    template <isNumWrapper U>
+    class vector2D;
+    template <isNumWrapper U>
+    class vector3D;
     template <isNumWrapper T>
     class matrix {
     private:
@@ -535,8 +561,41 @@ namespace gtd {
             auto_stop = auto_stop_insertion;
             return *this;
         }
+        String str() const { // returns a String representation of the matrix
+            std::ostringstream out;
+            std::streampos before;
+            std::streamoff chars_written;
+            std::streamoff max_chars_written = 0;
+            size_t diff;
+            for (const std::vector<T> &row : mat) {
+                for (const T &elem : row) {
+                    before = out.tellp();
+                    out << +elem << ' ';
+                    chars_written = out.tellp() - before;
+                    if (chars_written > max_chars_written) {
+                        max_chars_written = chars_written;
+                    }
+                }
+            }
+            out.str("");
+            out.clear();
+            for (const std::vector<T> &row : mat) {
+                out << "| ";
+                for (const T &elem : row) {
+                    before = out.tellp();
+                    out << +elem << ' ';
+                    chars_written = out.tellp() - before;
+                    diff = (size_t) (max_chars_written - chars_written);
+                    for (size_t i = 0; i < diff; ++i) {
+                        out << ' ';
+                    }
+                }
+                out << "|\n";
+            }
+            return {out.str().c_str()};
+        }
         static matrix<T> get_2D_rotate_matrix(T angle_rad = PI) requires isConvertible<T, long double> {
-            if (angle_rad == PI/2) { // returns an exact matrix (no f.p. rounding errors)
+            if (angle_rad == PI/2) { // returns an exact matrix for the following 4 cases (no f.p. rounding errors)
                 return matrix<T>(2, 2) << 0 << -1 << 1 << 0;
             }
             if (angle_rad == PI) {
@@ -635,19 +694,22 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator+(const matrix<U> &m1, const matrix<V> &m2) ->
         matrix<decltype(std::declval<U>() + std::declval<V>())>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator==(const matrix<U> &m1, const matrix<V> &m2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator!=(const matrix<U> &m1, const matrix<V> &m2);
         template <isNumWrapper U>
         friend class matrix;
+        template <isNumWrapper U>
+        friend class vector;
+        template <isNumWrapper U>
+        friend class vector2D;
+        template <isNumWrapper U>
+        friend class vector3D;
     };
     template <isNumWrapper U>
     std::ostream &operator<<(std::ostream &out, const matrix<U> &mat) {
-        for (const std::vector<U> &row : mat) {
-            out << '|';
-            for (const U &elem : row) {
-                out << +elem << ' ';
-            }
-            out << "\b|\n";
-        }
-        return out;
+        return out << mat.str();
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator*(const matrix<U> &m1, const matrix<V> &m2) ->
@@ -672,7 +734,6 @@ namespace gtd {
                 total = 0;
                 for (size_t k = 0; k < columns1; ++k) {
                     total += m1.mat[i][k]*m2.mat[k][j]; // faster than calling operator[]
-                    std::cout << total << std::endl;
                 }
                 sub.push_back(total);
             }
@@ -708,6 +769,24 @@ namespace gtd {
             }
         }
         return ret_mat;
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    bool operator==(const matrix<U> &m1, const matrix<V> &m2) {
+        if (m1.mat.size() != m2.mat.size() || m1.mat[0].size() != m2.mat[0].size()) {
+            return false;
+        }
+        for (const auto &[v1, v2] : zip_cref(m1.mat, m2.mat)) {
+            for (const auto &[el1, el2] : zip_cref(v1, v2)) {
+                if (el1 != el2) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    bool operator!=(const matrix<U> &m1, const matrix<V> &m2) {
+        return !(m1 == m2);
     }
 }
 #endif
