@@ -63,6 +63,11 @@ namespace gtd {
         empty_matrix_error() : std::invalid_argument("A matrix cannot have a size of zero.") {}
         explicit empty_matrix_error(const char *message) : std::invalid_argument(message) {}
     };
+    class invalid_axis_error : public std::invalid_argument {
+    public:
+        invalid_axis_error() : std::invalid_argument("Invalid axis.") {}
+        explicit invalid_axis_error(const char *message) : std::invalid_argument(message) {}
+    };
     class invalid_matrix_format : public std::invalid_argument {
     public:
         invalid_matrix_format() : std::invalid_argument("The requested matrix has an invalid format.") {}
@@ -364,14 +369,8 @@ namespace gtd {
             }
             return ret;
         }
-        bool has_inverse() {
+        inline bool has_inverse() {
             return this->determinant() != 0;
-        }
-        matrix<T> &invert() {
-            if (!is_square()) {
-                throw invalid_matrix_format("A non-square matrix does not have an inverse.");
-            }
-            return *this;
         }
         template <typename U> requires isConvertible<U, T>
         matrix<T> &append_row(const std::vector<U> &row) {
@@ -469,7 +468,7 @@ namespace gtd {
         bool is_zero() {
             for (const std::vector<T> &row : mat) {
                 for (const T &elem : row) {
-                    if (elem != T{})
+                    if (elem != T{0})
                         return false;
                 }
             }
@@ -594,24 +593,110 @@ namespace gtd {
             }
             return {out.str().c_str()};
         }
-        static matrix<T> get_2D_rotate_matrix(T angle_rad = PI) requires isConvertible<T, long double> {
+        static inline matrix<long double> get_2D_rotation_matrix(const long double &&angle_rad =
+                static_cast<const long double&&>(PI)) {
             if (angle_rad == PI/2) { // returns an exact matrix for the following 4 cases (no f.p. rounding errors)
-                return matrix<T>(2, 2) << 0 << -1 << 1 << 0;
+                return matrix<long double>(2, 2) << 0 << -1 << 1 << 0;
             }
             if (angle_rad == PI) {
-                return matrix<T>(2, 2) << -1 << 0 << 0 << -1;
+                return matrix<long double>(2, 2) << -1 << 0 << 0 << -1;
             }
             if (angle_rad == 3*PI/4) {
-                return matrix<T>(2, 2) << 0 << 1 << -1 << 0;
+                return matrix<long double>(2, 2) << 0 << 1 << -1 << 0;
             }
             if (angle_rad == 2*PI) {
-                return matrix<T>(2, 2).make_identity();
+                return matrix<long double>(2, 2).make_identity();
             }
-            return matrix<T>(2, 2) << std::cos(angle_rad) << -std::sin(angle_rad) << std::sin(angle_rad)
+            return matrix<long double>(2, 2) << std::cos(angle_rad) << -std::sin(angle_rad) << std::sin(angle_rad)
             << std::cos(angle_rad);
         }
-        static matrix<T> get_2D_scale_matrix(T scale) requires isConvertible<T, long double> {
-            return matrix<T>(2, 2) << scale << 0 << 0 << scale;
+        static inline matrix<long double> get_2D_rotation_matrix(const long double &angle_rad = PI) {
+            return get_2D_rotation_matrix(angle_rad);
+        }
+        static inline matrix<long double> get_2D_scale_matrix(const long double &&scale) {
+            return matrix<long double>(2, 2) << scale << 0 << 0 << scale;
+        }
+        static inline matrix<long double> get_2D_scale_matrix(const long double &scale) {
+            return matrix<long double>(2, 2) << scale << 0 << 0 << scale;
+        }
+        static inline matrix<long double> get_3D_rotation_matrix(const long double &&angle_rad =
+                static_cast<const long double&&>(PI), char about = 'z') {
+            if (!(about >= 'x' && about <= 'z') && !(about >= 'X' && about <= 'Z')) {
+                throw invalid_axis_error("Invalid axis specified. Axes are: 'x', 'y' and 'z'.");
+            }
+            if (about < 91) { // make 'about' lower-case in case the char is upper-case
+                about += 32;
+            }
+            if (about == 'x') {
+                if (angle_rad == PI/2) { // again, returns an exact matrix for the following 4 cases (no rounding error)
+                    return matrix<long double>(3, 3) << 1 << 0 <<  0
+                                                     << 0 << 0 << -1
+                                                     << 0 << 1 <<  0;
+                }
+                if (angle_rad == PI) {
+                    return matrix<long double>(3, 3) << 1 <<  0 <<  0
+                                                     << 0 << -1 <<  0
+                                                     << 0 <<  0 << -1;
+                }
+                if (angle_rad == 3*PI/4) {
+                    return matrix<long double>(3, 3) << 1 <<  0 << 0
+                                                     << 0 <<  0 << 1
+                                                     << 0 << -1 << 0;
+                }
+                if (angle_rad == 2*PI) {
+                    return matrix<long double>(3, 3).make_identity();
+                }
+                return matrix<long double>(3, 3) << 1 << 0                   << 0
+                                                 << 0 << std::cos(angle_rad) << -std::sin(angle_rad)
+                                                 << 0 << std::sin(angle_rad) << std::cos(angle_rad);
+            }
+            else if (about == 'y') {
+                if (angle_rad == PI/2) {
+                    return matrix<long double>(3, 3) <<  0 << 0 << 1
+                                                     <<  0 << 1 << 0
+                                                     << -1 << 0 << 0;
+                }
+                if (angle_rad == PI) {
+                    return matrix<long double>(3, 3) << -1 << 0 <<  0
+                                                     <<  0 << 1 <<  0
+                                                     <<  0 << 0 << -1;
+                }
+                if (angle_rad == 3*PI/4) {
+                    return matrix<long double>(3, 3) << 0 << 0 << -1
+                                                     << 0 << 1 <<  0
+                                                     << 1 << 0 <<  0;
+                }
+                if (angle_rad == 2*PI) {
+                    return matrix<long double>(3, 3).make_identity();
+                }
+                return matrix<long double>(3, 3) <<  std::cos(angle_rad) << 0 << std::sin(angle_rad)
+                                                 <<  0                   << 1 << 0
+                                                 << -std::sin(angle_rad) << 0 << std::cos(angle_rad);
+            }
+            if (angle_rad == PI/2) { // returns an exact matrix for the following 4 cases (no f.p. rounding errors)
+                return matrix<long double>(3, 3) << 0 << -1 << 0
+                                                 << 1 <<  0 << 0
+                                                 << 0 <<  0 << 1;
+            }
+            if (angle_rad == PI) {
+                return matrix<long double>(3, 3) << -1 <<  0 << 0
+                                                 <<  0 << -1 << 0
+                                                 <<  0 <<  0 << 1;
+            }
+            if (angle_rad == 3*PI/4) {
+                return matrix<long double>(3, 3) <<  0 << 1 << 0
+                                                 << -1 << 0 << 0
+                                                 <<  0 << 0 << 1;
+            }
+            if (angle_rad == 2*PI) {
+                return matrix<long double>(3, 3).make_identity();
+            }
+            return matrix<long double>(3, 3) << std::cos(angle_rad) << -std::sin(angle_rad) << 0
+                                             << std::sin(angle_rad) <<  std::cos(angle_rad) << 0
+                                             << 0                   <<  0                   << 1;
+        }
+        static inline matrix<T> get_3D_rotation_matrix(const T &angle_rad = PI, char about = 'z') requires isConvertible<T, long double> {
+            return get_3D_rotation_matrix(angle_rad, about);
         }
         std::vector<T> operator[](size_t index) const { // using [] returns copy of row, so cannot make changes to mat.
             if (index >= mat.size()) {
