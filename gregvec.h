@@ -57,7 +57,13 @@ namespace gtd {
     template <isNumWrapper T>
     class vector {
     public:
-        vector() = default;
+        vector() noexcept = default;
+        vector(const vector<T> &other) noexcept {}
+        vector(const vector<T> &&other) noexcept {}
+        template <typename U> requires isNumWrapper<U>
+        vector(const vector<U> &other) noexcept {}
+        template <typename U> requires isNumWrapper<U>
+        vector(const vector<U> &&other) noexcept {}
         virtual String str(unsigned char f_p_dec_places = 5) const = 0;
         virtual long double magnitude() const noexcept = 0;
         virtual T &operator[](unsigned char index) = 0;
@@ -65,6 +71,7 @@ namespace gtd {
         virtual vector<T> &operator++() noexcept = 0; //can only declare reference-returning func. for an abstract class
         virtual vector<T> &operator--() noexcept = 0;
         virtual vector<T> &operator=(const vector<T> &other) noexcept = 0; // copies other
+        virtual vector<T> &operator=(const vector<T> &&other) noexcept = 0; // copies other
         template <isNumWrapper U>
         friend class vector;
     };
@@ -76,13 +83,15 @@ namespace gtd {
         T x{0};
         T y{0};
     public:
-        vector2D() = default;
+        vector2D() noexcept = default;
+        vector2D(const vector2D<T> &other) : x{x}, y{y} {}
+        vector2D(const vector2D<T> &&other) : x{x}, y{y} {}
         template <typename U> requires isConvertible<U, T>
         vector2D(const vector2D<U> &other) noexcept : x{other.x}, y{other.y} {}
         template <typename U> requires isConvertible<U, T>
-        vector2D(vector2D<U> &&other) noexcept : x{other.x}, y{other.y} {}
-        vector2D(T &&x_component, T &&y_component) noexcept : x{x_component}, y{y_component} {}
-        vector2D(T &x_component, T &y_component) noexcept : x{x_component}, y{y_component} {}
+        vector2D(const vector2D<U> &&other) noexcept : x{other.x}, y{other.y} {}
+        vector2D(const T &x_component, const T &y_component) noexcept : x{x_component}, y{y_component} {}
+        vector2D(const T &&x_component, const T &&y_component) noexcept : x{x_component}, y{y_component} {}
         String str(unsigned char f_p_dec_places = 5) const override {
             String s;
             s.append_back(x, f_p_dec_places);
@@ -145,17 +154,17 @@ namespace gtd {
         const T &operator[](unsigned char index) const noexcept override {
             return this->operator[](index);
         }
-        virtual vector2D<T> &operator+=(const vector2D<T> &other) { // cannot requires-constrain virtual functions
+        virtual vector2D<T> &operator+=(const vector2D<T> &other)noexcept {//cannot requires-constrain virtual functions
             this->x += other.x;
             this->y += other.y;
             return *this;
         }
-        virtual vector2D<T> &operator-=(const vector2D<T> &other) {
+        virtual vector2D<T> &operator-=(const vector2D<T> &other) noexcept {
             this->x -= other.x;
             this->y -= other.y;
             return *this;
         }
-        virtual vector2D<T> &operator*=(const vector2D<T> &other) {
+        virtual vector2D<T> &operator*=(const vector2D<T> &other) noexcept {
             this->x *= other.x;
             this->y *= other.y;
             return *this;
@@ -168,17 +177,25 @@ namespace gtd {
             this->y /= other.y;
             return *this;
         }
-        virtual vector2D<T> &operator+=(const vector2D<T> &&other) {
+        vector2D<T> &operator%=(const vector2D<T> &other) requires isIntegralNumWrapper<T> { // cannot be virtual
+            if (this->x == T{0} || this->y == T{0}) {
+                throw division_by_zero();
+            }
+            this->x %= other.x;
+            this->y %= other.y;
+            return *this;
+        }
+        virtual vector2D<T> &operator+=(const vector2D<T> &&other) noexcept {
             this->x += other.x;
             this->y += other.y;
             return *this;
         }
-        virtual vector2D<T> &operator-=(const vector2D<T> &&other) {
+        virtual vector2D<T> &operator-=(const vector2D<T> &&other) noexcept {
             this->x -= other.x;
             this->y -= other.y;
             return *this;
         }
-        virtual vector2D<T> &operator*=(const vector2D<T> &&other) {
+        virtual vector2D<T> &operator*=(const vector2D<T> &&other) noexcept {
             this->x *= other.x;
             this->y *= other.y;
             return *this;
@@ -191,20 +208,28 @@ namespace gtd {
             this->y /= other.y;
             return *this;
         }
+        vector2D<T> &operator%=(const vector2D<T> &&other) requires isIntegralNumWrapper<T> {
+            if (this->x == T{0} || this->y == T{0}) {
+                throw division_by_zero();
+            }
+            this->x %= other.x;
+            this->y %= other.y;
+            return *this;
+        }
         template <typename U> requires (isConvertible<U, T>)
-        vector2D<T> &operator+=(const vector2D<U> &other) {
+        vector2D<T> &operator+=(const vector2D<U> &other) noexcept {
             this->x += other.x;
             this->y += other.y;
             return *this;
         }
         template <typename U> requires (isConvertible<U, T>)
-        vector2D<T> &operator-=(const vector2D<U> &other) {
+        vector2D<T> &operator-=(const vector2D<U> &other) noexcept {
             this->x -= other.x;
             this->y -= other.y;
             return *this;
         }
         template <typename U> requires (isConvertible<U, T>)
-        vector2D<T> &operator*=(const vector2D<U> &other) {
+        vector2D<T> &operator*=(const vector2D<U> &other) noexcept {
             this->x *= other.x;
             this->y *= other.y;
             return *this;
@@ -228,49 +253,49 @@ namespace gtd {
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator<<=(const vector2D<U> &other) {
+        vector2D<T> &operator<<=(const vector2D<U> &other) noexcept {
             this->x <<= other.x;
             this->y <<= other.y;
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator>>=(const vector2D<U> &other) {
+        vector2D<T> &operator>>=(const vector2D<U> &other) noexcept {
             this->x >>= other.x;
             this->y >>= other.y;
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator|=(const vector2D<U> &other) {
+        vector2D<T> &operator|=(const vector2D<U> &other) noexcept {
             this->x |= other.x;
             this->y |= other.y;
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator&=(const vector2D<U> &other) {
+        vector2D<T> &operator&=(const vector2D<U> &other) noexcept {
             this->x &= other.x;
             this->y &= other.y;
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator^=(const vector2D<U> &other) {
+        vector2D<T> &operator^=(const vector2D<U> &other) noexcept {
             this->x ^= other.x;
             this->y ^= other.y;
             return *this;
         }
         template <typename U> requires (isConvertible<U, T>)
-        vector2D<T> &operator+=(const vector2D<U> &&other) {
+        vector2D<T> &operator+=(const vector2D<U> &&other) noexcept {
             this->x += other.x;
             this->y += other.y;
             return *this;
         }
         template <typename U> requires (isConvertible<U, T>)
-        vector2D<T> &operator-=(const vector2D<U> &&other) {
+        vector2D<T> &operator-=(const vector2D<U> &&other) noexcept {
             this->x -= other.x;
             this->y -= other.y;
             return *this;
         }
         template <typename U> requires (isConvertible<U, T>)
-        vector2D<T> &operator*=(const vector2D<U> &&other) {
+        vector2D<T> &operator*=(const vector2D<U> &&other) noexcept {
             this->x *= other.x;
             this->y *= other.y;
             return *this;
@@ -294,56 +319,59 @@ namespace gtd {
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator<<=(const vector2D<U> &&other) {
+        vector2D<T> &operator<<=(const vector2D<U> &&other) noexcept {
             this->x <<= other.x;
             this->y <<= other.y;
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator>>=(const vector2D<U> &&other) {
+        vector2D<T> &operator>>=(const vector2D<U> &&other) noexcept {
             this->x >>= other.x;
             this->y >>= other.y;
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator|=(const vector2D<U> &&other) {
+        vector2D<T> &operator|=(const vector2D<U> &&other) noexcept {
             this->x |= other.x;
             this->y |= other.y;
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator&=(const vector2D<U> &&other) {
+        vector2D<T> &operator&=(const vector2D<U> &&other) noexcept {
             this->x &= other.x;
             this->y &= other.y;
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator^=(const vector2D<U> &&other) {
+        vector2D<T> &operator^=(const vector2D<U> &&other) noexcept {
             this->x ^= other.x;
             this->y ^= other.y;
             return *this;
         }
-        virtual vector2D<T> operator++(int) noexcept {
+        vector2D<T> operator++(int) noexcept { // cannot make virtual due to differing return types
             vector2D<T> retvec{this->x, this->y};
             ++this->x;
             ++this->y;
             return retvec;
         }
-        virtual vector2D<T> &operator++() noexcept override {
+        vector2D<T> &operator++() noexcept override {
             ++this->x;
             ++this->y;
             return *this;
         }
-        virtual vector2D<T> operator--(int) noexcept {
+        vector2D<T> operator--(int) noexcept { // cannot make virtual due to differing return types
             vector2D<T> retvec{this->x, this->y};
             --this->x;
             --this->y;
             return retvec;
         }
-        virtual vector2D<T> &operator--() noexcept override {
+        vector2D<T> &operator--() noexcept override {
             --this->x;
             --this->y;
             return *this;
+        }
+        vector2D<T> operator~() requires requires (T val) {~val;}{
+            return vector2D<T>(~this->x, ~this->y);
         }
         virtual vector2D<T> &operator=(const vector<T> &other) noexcept override {
             if (&other == this) {
@@ -357,10 +385,13 @@ namespace gtd {
             return *this;
         }
         template <typename U> requires (isConvertible<U, T>)
-        vector2D<T> &operator=(const vector2D<U> &other) {
+        vector2D<T> &operator=(const vector2D<U> &other) noexcept {
             this->x = other.x;
             this->y = other.y;
             return *this;
+        }
+        vector2D<T> &operator=(const vector<T> &&other) noexcept override {
+            return *this = other;
         }
         template <isNumWrapper U>
         friend std::ostream &operator<<(std::ostream &out, const vector2D<U> &vec);
@@ -402,6 +433,8 @@ namespace gtd {
         friend auto operator|(const vector2D<U> &vec1, const V &value) -> vector2D<decltype(vec1.x | value)>;
         template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator&(const vector2D<U> &vec1, const V &value) -> vector2D<decltype(vec1.x & value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector2D<U> &vec1, const V &value) -> vector2D<decltype(vec1.x ^ value)>;
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator+(const V &value, const vector2D<U> &vec1) -> vector2D<decltype(value + vec1.x)>;
         template <isNumWrapper U, isNumWrapper V>
@@ -412,14 +445,16 @@ namespace gtd {
         friend auto operator/(const V &value, const vector2D<U> &vec1) -> vector2D<decltype(value / vec1.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
         friend auto operator%(const V &value, const vector2D<U> &vec1) -> vector2D<decltype(value % vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator<<(const V &value, const vector2D<U> &vec1) -> vector2D<decltype(value << vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator>>(const V &value, const vector2D<U> &vec1) -> vector2D<decltype(value >> vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator|(const V &value, const vector2D<U> &vec1) -> vector2D<decltype(value | vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator&(const V &value, const vector2D<U> &vec1) -> vector2D<decltype(value & vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const V &value, const vector2D<U> &vec1) -> vector2D<decltype(value ^ vec1.x)>;
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator*(const matrix<U> &m, const vector2D<V> &v)
         -> vector2D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y)>
@@ -462,6 +497,8 @@ namespace gtd {
         friend auto operator|(const vector2D<U> &vec1, const V &&value) -> vector2D<decltype(vec1.x | value)>;
         template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator&(const vector2D<U> &vec1, const V &&value) -> vector2D<decltype(vec1.x & value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector2D<U> &vec1, const V &&value) -> vector2D<decltype(vec1.x ^ value)>;
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator+(const V &value, const vector2D<U> &&vec1) -> vector2D<decltype(value + vec1.x)>;
         template <isNumWrapper U, isNumWrapper V>
@@ -472,14 +509,16 @@ namespace gtd {
         friend auto operator/(const V &value, const vector2D<U> &&vec1) -> vector2D<decltype(value / vec1.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
         friend auto operator%(const V &value, const vector2D<U> &&vec1) -> vector2D<decltype(value % vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator<<(const V &value, const vector2D<U> &&vec1) -> vector2D<decltype(value << vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator>>(const V &value, const vector2D<U> &&vec1) -> vector2D<decltype(value >> vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator|(const V &value, const vector2D<U> &&vec1) -> vector2D<decltype(value | vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator&(const V &value, const vector2D<U> &&vec1) -> vector2D<decltype(value & vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const V &value, const vector2D<U> &&vec1) -> vector2D<decltype(value ^ vec1.x)>;
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator*(const matrix<U> &m, const vector2D<V> &&v)
         -> vector2D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y)>
@@ -522,6 +561,8 @@ namespace gtd {
         friend auto operator|(const vector2D<U> &&vec1, const V &value) -> vector2D<decltype(vec1.x | value)>;
         template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator&(const vector2D<U> &&vec1, const V &value) -> vector2D<decltype(vec1.x & value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector2D<U> &&vec1, const V &value) -> vector2D<decltype(vec1.x ^ value)>;
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator+(const V &&value, const vector2D<U> &vec1) -> vector2D<decltype(value + vec1.x)>;
         template <isNumWrapper U, isNumWrapper V>
@@ -532,14 +573,16 @@ namespace gtd {
         friend auto operator/(const V &&value, const vector2D<U> &vec1) -> vector2D<decltype(value / vec1.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
         friend auto operator%(const V &&value, const vector2D<U> &vec1) -> vector2D<decltype(value % vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator<<(const V &&value, const vector2D<U> &vec1) -> vector2D<decltype(value << vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator>>(const V &&value, const vector2D<U> &vec1) -> vector2D<decltype(value >> vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator|(const V &&value, const vector2D<U> &vec1) -> vector2D<decltype(value | vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator&(const V &&value, const vector2D<U> &vec1) -> vector2D<decltype(value & vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const V &&value, const vector2D<U> &vec1) -> vector2D<decltype(value ^ vec1.x)>;
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator*(const matrix<U> &&m, const vector2D<V> &v)
         -> vector2D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y)>
@@ -584,6 +627,8 @@ namespace gtd {
         friend auto operator|(const vector2D<U> &&vec1, const V &&value) -> vector2D<decltype(vec1.x | value)>;
         template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator&(const vector2D<U> &&vec1, const V &&value) -> vector2D<decltype(vec1.x & value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector2D<U> &&vec1, const V &&value) -> vector2D<decltype(vec1.x ^ value)>;
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator+(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value + vec1.x)>;
         template <isNumWrapper U, isNumWrapper V>
@@ -594,18 +639,244 @@ namespace gtd {
         friend auto operator/(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value / vec1.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
         friend auto operator%(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value % vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator<<(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value << vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator>>(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value >> vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator|(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value | vec1.x)>;
-        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator&(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value & vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value ^ vec1.x)>;
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator*(const matrix<U> &&m, const vector2D<V> &&v)
         -> vector2D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y)>
         requires isConvertible<U, decltype(std::declval<U>()*v.x + std::declval<U>()*v.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &&vec2);
         template <isNumWrapper U>
         friend class vector2D;
         template <isNumWrapper U>
@@ -706,6 +977,10 @@ namespace gtd {
     auto operator&(const vector2D<U> &vec1, const V &value) -> vector2D<decltype(vec1.x & value)> {
         return vector2D<decltype(vec1.x & value)>(vec1.x & value, vec1.y & value);
     }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector2D<U> &vec1, const V &value) -> vector2D<decltype(vec1.x ^ value)> {
+        return vector2D<decltype(vec1.x ^ value)>(vec1.x ^ value, vec1.y ^ value);
+    }
     template <isNumWrapper U, isNumWrapper V>
     auto operator+(const V &value, const vector2D<U> &vec1) -> vector2D<decltype(value + vec1.x)> { // could just return vec op value,
         return vector2D<decltype(value + vec1.x)>(value + vec1.x, value + vec1.y); // but would be an extra func. call
@@ -732,21 +1007,25 @@ namespace gtd {
         }
         return vector2D<decltype(value % vec1.x)>(value % vec1.x, value % vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V> // again, no physical sense, just here for completeness
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator<<(const V &value, const vector2D<U> &vec1) -> vector2D<decltype(value << vec1.x)> {
         return vector2D<decltype(value << vec1.x)>(value << vec1.x, value << vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V> // same as above
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator>>(const V &value, const vector2D<U> &vec1) -> vector2D<decltype(value >> vec1.x)> {
         return vector2D<decltype(value >> vec1.x)>(value >> vec1.x, value >> vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator|(const V &value, const vector2D<U> &vec1) -> vector2D<decltype(value | vec1.x)> {
         return vector2D<decltype(value | vec1.x)>(value | vec1.x, value | vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator&(const V &value, const vector2D<U> &vec1) -> vector2D<decltype(value & vec1.x)> {
         return vector2D<decltype(value & vec1.x)>(value & vec1.x, value & vec1.y);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const V &value, const vector2D<U> &vec1) -> vector2D<decltype(value ^ vec1.x)> {
+        return vector2D<decltype(value ^ vec1.x)>(value ^ vec1.x, value ^ vec1.y);
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator*(const matrix<U> &m, const vector2D<V> &v)
@@ -849,6 +1128,10 @@ namespace gtd {
     auto operator&(const vector2D<U> &vec1, const V &&value) -> vector2D<decltype(vec1.x & value)> {
         return vector2D<decltype(vec1.x & value)>(vec1.x & value, vec1.y & value);
     }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector2D<U> &vec1, const V &&value) -> vector2D<decltype(vec1.x ^ value)> {
+        return vector2D<decltype(vec1.x ^ value)>(vec1.x ^ value, vec1.y ^ value);
+    }
     template <isNumWrapper U, isNumWrapper V>
     auto operator+(const V &value, const vector2D<U> &&vec1) -> vector2D<decltype(value + vec1.x)> { // could just return vec op value,
         return vector2D<decltype(value + vec1.x)>(value + vec1.x, value + vec1.y); // but would be an extra func. call
@@ -875,21 +1158,25 @@ namespace gtd {
         }
         return vector2D<decltype(value % vec1.x)>(value % vec1.x, value % vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V> // again, no physical sense, just here for completeness
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator<<(const V &value, const vector2D<U> &&vec1) -> vector2D<decltype(value << vec1.x)> {
         return vector2D<decltype(value << vec1.x)>(value << vec1.x, value << vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V> // same as above
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator>>(const V &value, const vector2D<U> &&vec1) -> vector2D<decltype(value >> vec1.x)> {
         return vector2D<decltype(value >> vec1.x)>(value >> vec1.x, value >> vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator|(const V &value, const vector2D<U> &&vec1) -> vector2D<decltype(value | vec1.x)> {
         return vector2D<decltype(value | vec1.x)>(value | vec1.x, value | vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator&(const V &value, const vector2D<U> &&vec1) -> vector2D<decltype(value & vec1.x)> {
         return vector2D<decltype(value & vec1.x)>(value & vec1.x, value & vec1.y);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const V &value, const vector2D<U> &&vec1) -> vector2D<decltype(value ^ vec1.x)> {
+        return vector2D<decltype(value ^ vec1.x)>(value ^ vec1.x, value ^ vec1.y);
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator*(const matrix<U> &m, const vector2D<V> &&v)
@@ -985,6 +1272,10 @@ namespace gtd {
     auto operator&(const vector2D<U> &&vec1, const V &value) -> vector2D<decltype(vec1.x & value)> {
         return vector2D<decltype(vec1.x & value)>(vec1.x & value, vec1.y & value);
     }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector2D<U> &&vec1, const V &value) -> vector2D<decltype(vec1.x ^ value)> {
+        return vector2D<decltype(vec1.x ^ value)>(vec1.x ^ value, vec1.y ^ value);
+    }
     template <isNumWrapper U, isNumWrapper V>
     auto operator+(const V &&value, const vector2D<U> &vec1) -> vector2D<decltype(value + vec1.x)> {
         return vector2D<decltype(value + vec1.x)>(value + vec1.x, value + vec1.y);
@@ -1011,21 +1302,25 @@ namespace gtd {
         }
         return vector2D<decltype(value % vec1.x)>(value % vec1.x, value % vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V> // again, no physical sense, just here for completeness
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator<<(const V &&value, const vector2D<U> &vec1) -> vector2D<decltype(value << vec1.x)> {
         return vector2D<decltype(value << vec1.x)>(value << vec1.x, value << vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V> // same as above
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator>>(const V &&value, const vector2D<U> &vec1) -> vector2D<decltype(value >> vec1.x)> {
         return vector2D<decltype(value >> vec1.x)>(value >> vec1.x, value >> vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator|(const V &&value, const vector2D<U> &vec1) -> vector2D<decltype(value | vec1.x)> {
         return vector2D<decltype(value | vec1.x)>(value | vec1.x, value | vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator&(const V &&value, const vector2D<U> &vec1) -> vector2D<decltype(value & vec1.x)> {
         return vector2D<decltype(value & vec1.x)>(value & vec1.x, value & vec1.y);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const V &&value, const vector2D<U> &vec1) -> vector2D<decltype(value ^ vec1.x)> {
+        return vector2D<decltype(value ^ vec1.x)>(value ^ vec1.x, value ^ vec1.y);
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator*(const matrix<U> &&m, const vector2D<V> &v)
@@ -1121,9 +1416,13 @@ namespace gtd {
     auto operator&(const vector2D<U> &&vec1, const V &&value) -> vector2D<decltype(vec1.x & value)> {
         return vector2D<decltype(vec1.x & value)>(vec1.x & value, vec1.y & value);
     }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector2D<U> &&vec1, const V &&value) -> vector2D<decltype(vec1.x ^ value)> {
+        return vector2D<decltype(vec1.x ^ value)>(vec1.x ^ value, vec1.y ^ value);
+    }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator+(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value + vec1.x)> { // could just return vec op value,
-        return vector2D<decltype(value + vec1.x)>(value + vec1.x, value + vec1.y); // but would be an extra func. call
+    auto operator+(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value + vec1.x)> {
+        return vector2D<decltype(value + vec1.x)>(value + vec1.x, value + vec1.y);
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator-(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value - vec1.x)> {
@@ -1147,21 +1446,25 @@ namespace gtd {
         }
         return vector2D<decltype(value % vec1.x)>(value % vec1.x, value % vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V> // again, no physical sense, just here for completeness
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator<<(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value << vec1.x)> {
         return vector2D<decltype(value << vec1.x)>(value << vec1.x, value << vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V> // same as above
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator>>(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value >> vec1.x)> {
         return vector2D<decltype(value >> vec1.x)>(value >> vec1.x, value >> vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator|(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value | vec1.x)> {
         return vector2D<decltype(value | vec1.x)>(value | vec1.x, value | vec1.y);
     }
-    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    template <typename U, typename V> requires bitwiseOperands<U, V>
     auto operator&(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value & vec1.x)> {
         return vector2D<decltype(value & vec1.x)>(value & vec1.x, value & vec1.y);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const V &&value, const vector2D<U> &&vec1) -> vector2D<decltype(value ^ vec1.x)> {
+        return vector2D<decltype(value ^ vec1.x)>(value ^ vec1.x, value ^ vec1.y);
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator*(const matrix<U> &&m, const vector2D<V> &&v)
@@ -1175,20 +1478,28 @@ namespace gtd {
         T z{0};
     public:
         vector3D() noexcept = default;
+        vector3D(const vector2D<T> &other) noexcept : vector2D<T>(other) {}
+        vector3D(const vector2D<T> &&other) noexcept : vector2D<T>(other) {}
+        vector3D(const vector3D<T> &other) noexcept : vector2D<T>(other), z{other.z} {}
+        vector3D(const vector3D<T> &&other) noexcept : vector2D<T>(other), z{other.z} {}
         template <typename U> requires isConvertible<U, T>
         vector3D(const vector2D<U> &other) noexcept : vector2D<T>(other) {}
         template <typename U> requires isConvertible<U, T>
-        vector3D(vector2D<U> &&other) noexcept : vector2D<T>(other) {}
+        vector3D(const vector2D<U> &&other) noexcept : vector2D<T>(other) {}
         template <typename U> requires isConvertible<U, T>
         vector3D(const vector3D<U> &other) noexcept : vector2D<T>(other), z{other.z} {}
         template <typename U> requires isConvertible<U, T>
-        vector3D(vector3D<U> &&other) noexcept : vector2D<T>(other), z{other.z} {}
-        vector3D(T x_component, T y_component, T z_component) noexcept : vector2D<T>{x_component, y_component},
-        z{z_component} {}
+        vector3D(const vector3D<U> &&other) noexcept : vector2D<T>(other), z{other.z} {}
+        vector3D(const T &x_component, const T &y_component, const T &z_component) noexcept :
+        vector2D<T>{x_component, y_component}, z{z_component} {}
+        vector3D(const T &&x_component, const T &&y_component, const T &&z_component) noexcept :
+        vector2D<T>{x_component, y_component}, z{z_component} {}
+        vector3D(const T &x_component, const T &y_component) noexcept : vector2D<T>{x_component, y_component} {}
+        vector3D(const T &&x_component, const T &&y_component) noexcept : vector2D<T>{x_component, y_component} {}
         String str(unsigned char f_p_dec_places = 5) const override {
             String s;
             s.append_back(this->x, f_p_dec_places);
-            if (vector2D<T>::y < 0) {
+            if (this->y < 0) {
                 s.append_back("i - ").append_back(-this->y, f_p_dec_places).append_back("j");
             }
             else {
@@ -1210,7 +1521,7 @@ namespace gtd {
             this->y = value;
             return *this;
         }
-        inline vector3D<T> &set_z(T value) noexcept override {
+        inline vector3D<T> &set_z(T value) noexcept {
             this->z = value;
             return *this;
         }
@@ -1253,25 +1564,36 @@ namespace gtd {
         const T &operator[](unsigned char index) const noexcept override {
             return this->operator[](index);
         }
-        vector3D<T> &operator+=(const vector2D<T> &other) override {
+        vector3D<T> &operator+=(const vector2D<T> &other) noexcept override {
             this->x += other.x;
             this->y += other.y;
             return *this;
         }
-        vector3D<T> &operator-=(const vector2D<T> &other) override {
+        vector3D<T> &operator-=(const vector2D<T> &other) noexcept override {
             this->x -= other.x;
             this->y -= other.y;
             return *this;
         }
-        vector3D<T> &operator*=(const vector2D<T> &other) override {
+        vector3D<T> &operator*=(const vector2D<T> &other) noexcept override {
             this->x *= other.x;
             this->y *= other.y;
-            this->z = T{0}; // since this is a scalar product (z component in 2D vector is implicitly zero)
-            return *this;
+            this->z = T{0}; // given this is the scalar product, mul. of a 3D vec. by a 2D vec. yields a 2D vec (or a 3D
+            return *this; // vec. with a zero z-component)
         }
-        vector3D<T> &operator/=(const vector2D<T> &other) noexcept override {
-            this->x /= other.x; // again, vector division makes no physical sense
-            this->y /= other.y; // these non-physical methods are only here for programming convenience
+        vector3D<T> &operator/=(const vector2D<T> &other) override {
+            if (this->x == T{0} || this->y == T{0}) {
+                throw division_by_zero();
+            }
+            this->x /= other.x; // division between vectors makes no physical sense anyway, so there is no reason to
+            this->y /= other.y; // 'divide' by the zero z-component of the 2D vector
+            return *this; // these 'non-physical' methods are only here for programming convenience... it should be
+        }                 // remembered that they do not represent valid mathematical operations
+        vector3D<T> &operator%=(const vector2D<T> &other) requires isIntegralNumWrapper<T> { // hides the parent method,
+            if (this->x == T{0} || this->y == T{0}) { // but nothing can be done, since virtual functions cannot have
+                throw division_by_zero();             // requires clauses
+            }
+            this->x %= other.x;
+            this->y %= other.y;
             return *this;
         }
         vector3D<T> &operator+=(const vector2D<T> &&other) noexcept override {
@@ -1290,129 +1612,385 @@ namespace gtd {
             this->z = T{0};
             return *this;
         }
-        vector3D<T> &operator/=(const vector2D<T> &&other) noexcept override {
+        vector3D<T> &operator/=(const vector2D<T> &&other) override {
+            if (this->x == T{0} || this->y == T{0}) {
+                throw division_by_zero();
+            }
             this->x /= other.x;
             this->y /= other.y;
             return *this;
         }
+        vector3D<T> &operator%=(const vector2D<T> &&other) requires isIntegralNumWrapper<T> {
+            if (this->x == T{0} || this->y == T{0}) {
+                throw division_by_zero();
+            }
+            this->x %= other.x;
+            this->y %= other.y;
+            return *this;
+        }
         template <typename U> requires (isConvertible<U, T>)
-        vector2D<T> &operator+=(const vector2D<U> &other) {
+        vector3D<T> &operator+=(const vector2D<U> &other) noexcept {
             this->x += other.x;
             this->y += other.y;
             return *this;
         }
         template <typename U> requires (isConvertible<U, T>)
-        vector2D<T> &operator-=(const vector2D<U> &other) {
+        vector3D<T> &operator-=(const vector2D<U> &other) noexcept {
             this->x -= other.x;
             this->y -= other.y;
             return *this;
         }
         template <typename U> requires (isConvertible<U, T>)
-        vector2D<T> &operator*=(const vector2D<U> &other) {
+        vector3D<T> &operator*=(const vector2D<U> &other) noexcept {
             this->x *= other.x;
             this->y *= other.y;
+            this->z = T{0};
             return *this;
         }
         template <typename U> requires (isConvertible<U, T>)
-        vector2D<T> &operator/=(const vector2D<U> &other) {
+        vector3D<T> &operator/=(const vector2D<U> &other) {
+            if (this->x == T{0} || this->y == T{0}) {
+                throw division_by_zero();
+            }
             this->x /= other.x;
             this->y /= other.y;
             return *this;
         }
         template <typename U> requires (isConvertible<U, T> && isIntegralNumWrapper<T>)
-        vector2D<T> &operator%=(const vector2D<U> &other) {
+        vector3D<T> &operator%=(const vector2D<U> &other) {
+            if (this->x == T{0} || this->y == T{0}) {
+                throw division_by_zero();
+            }
             this->x %= other.x;
             this->y %= other.y;
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator<<=(const vector2D<U> &other) {
+        vector3D<T> &operator<<=(const vector2D<U> &other) noexcept {
             this->x <<= other.x;
-            this->y <<= other.y;
+            this->y <<= other.y; // z << 0 would just equal z, so not included
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator>>=(const vector2D<U> &other) {
+        vector3D<T> &operator>>=(const vector2D<U> &other) noexcept {
             this->x >>= other.x;
-            this->y >>= other.y;
+            this->y >>= other.y; // z >> 0 would just equal z, so not included
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator|=(const vector2D<U> &other) {
+        vector3D<T> &operator|=(const vector2D<U> &other) noexcept {
             this->x |= other.x;
-            this->y |= other.y;
+            this->y |= other.y; // z | 0 would equal z, so not included
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator&=(const vector2D<U> &other) {
+        vector3D<T> &operator&=(const vector2D<U> &other) noexcept {
             this->x &= other.x;
             this->y &= other.y;
+            this->z = T{0}; // bitwise AND with zero will always equal zero
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator^=(const vector2D<U> &other) {
+        vector3D<T> &operator^=(const vector2D<U> &other) noexcept {
             this->x ^= other.x;
-            this->y ^= other.y;
+            this->y ^= other.y; // z ^ 0 would equal zero, so left unchanged
             return *this;
         }
         template <typename U> requires (isConvertible<U, T>)
-        vector2D<T> &operator+=(const vector2D<U> &&other) {
+        vector3D<T> &operator+=(const vector2D<U> &&other) noexcept {
             this->x += other.x;
             this->y += other.y;
             return *this;
         }
         template <typename U> requires (isConvertible<U, T>)
-        vector2D<T> &operator-=(const vector2D<U> &&other) {
+        vector3D<T> &operator-=(const vector2D<U> &&other) noexcept {
             this->x -= other.x;
             this->y -= other.y;
             return *this;
         }
         template <typename U> requires (isConvertible<U, T>)
-        vector2D<T> &operator*=(const vector2D<U> &&other) {
+        vector3D<T> &operator*=(const vector2D<U> &&other) noexcept {
             this->x *= other.x;
             this->y *= other.y;
+            this->z = T{0};
             return *this;
         }
         template <typename U> requires (isConvertible<U, T>)
-        vector2D<T> &operator/=(const vector2D<U> &&other) {
+        vector3D<T> &operator/=(const vector2D<U> &&other) {
+            if (this->x == T{0} || this->y == T{0}) {
+                throw division_by_zero();
+            }
             this->x /= other.x;
             this->y /= other.y;
             return *this;
         }
         template <typename U> requires (isConvertible<U, T> && isIntegralNumWrapper<T>)
-        vector2D<T> &operator%=(const vector2D<U> &&other) {
+        vector3D<T> &operator%=(const vector2D<U> &&other) {
+            if (this->x == T{0} || this->y == T{0}) {
+                throw division_by_zero();
+            }
             this->x %= other.x;
             this->y %= other.y;
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator<<=(const vector2D<U> &&other) {
+        vector3D<T> &operator<<=(const vector2D<U> &&other) noexcept {
             this->x <<= other.x;
             this->y <<= other.y;
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator>>=(const vector2D<U> &&other) {
+        vector3D<T> &operator>>=(const vector2D<U> &&other) noexcept {
             this->x >>= other.x;
             this->y >>= other.y;
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator|=(const vector2D<U> &&other) {
+        vector3D<T> &operator|=(const vector2D<U> &&other) noexcept {
             this->x |= other.x;
             this->y |= other.y;
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator&=(const vector2D<U> &&other) {
+        vector3D<T> &operator&=(const vector2D<U> &&other) noexcept {
             this->x &= other.x;
             this->y &= other.y;
+            this->z = T{0};
             return *this;
         }
         template <typename U> requires (bitwiseOperands<T, U>)
-        vector2D<T> &operator^=(const vector2D<U> &&other) {
+        vector3D<T> &operator^=(const vector2D<U> &&other) noexcept {
             this->x ^= other.x;
             this->y ^= other.y;
+            return *this;
+        }
+
+
+
+
+
+        vector3D<T> &operator+=(const vector3D<T> &other) noexcept {
+            this->x += other.x;
+            this->y += other.y;
+            this->z += other.z;
+            return *this;
+        }
+        vector3D<T> &operator-=(const vector3D<T> &other) noexcept {
+            this->x -= other.x;
+            this->y -= other.y;
+            this->z -= other.z;
+            return *this;
+        }
+        vector3D<T> &operator*=(const vector3D<T> &other) noexcept {
+            this->x *= other.x;
+            this->y *= other.y;
+            this->z *= other.z;
+            return *this;
+        }
+        vector3D<T> &operator/=(const vector3D<T> &other) {
+            if (this->x == T{0} || this->y == T{0} || this->z == T{0}) {
+                throw division_by_zero();
+            }
+            this->x /= other.x;
+            this->y /= other.y;
+            this->z /= other.z;
+            return *this;
+        }
+        vector3D<T> &operator%=(const vector3D<T> &other) requires isIntegralNumWrapper<T> {
+            if (this->x == T{0} || this->y == T{0} || this->z == T{0}) {
+                throw division_by_zero();
+            }
+            this->x %= other.x;
+            this->y %= other.y;
+            this->z %= other.z;
+            return *this;
+        }
+        vector3D<T> &operator+=(const vector3D<T> &&other) noexcept {
+            this->x += other.x;
+            this->y += other.y;
+            this->z += other.z;
+            return *this;
+        }
+        vector3D<T> &operator-=(const vector3D<T> &&other) noexcept {
+            this->x -= other.x;
+            this->y -= other.y;
+            this->z -= other.z;
+            return *this;
+        }
+        vector3D<T> &operator*=(const vector3D<T> &&other) noexcept {
+            this->x *= other.x;
+            this->y *= other.y;
+            this->z *= other.z;
+            return *this;
+        }
+        vector3D<T> &operator/=(const vector3D<T> &&other) {
+            if (this->x == T{0} || this->y == T{0} || this->z == T{0}) {
+                throw division_by_zero();
+            }
+            this->x /= other.x;
+            this->y /= other.y;
+            this->z /= other.z;
+            return *this;
+        }
+        vector3D<T> &operator%=(const vector3D<T> &&other) requires isIntegralNumWrapper<T> {
+            if (this->x == T{0} || this->y == T{0} || this->z == T{0}) {
+                throw division_by_zero();
+            }
+            this->x %= other.x;
+            this->y %= other.y;
+            this->z %= other.z;
+            return *this;
+        }
+        template <typename U> requires (isConvertible<U, T>)
+        vector3D<T> &operator+=(const vector3D<U> &other) noexcept {
+            this->x += other.x;
+            this->y += other.y;
+            this->z += other.z;
+            return *this;
+        }
+        template <typename U> requires (isConvertible<U, T>)
+        vector3D<T> &operator-=(const vector3D<U> &other) noexcept {
+            this->x -= other.x;
+            this->y -= other.y;
+            this->z -= other.z;
+            return *this;
+        }
+        template <typename U> requires (isConvertible<U, T>)
+        vector3D<T> &operator*=(const vector3D<U> &other) noexcept {
+            this->x *= other.x;
+            this->y *= other.y;
+            this->z *= other.z;
+            return *this;
+        }
+        template <typename U> requires (isConvertible<U, T>)
+        vector3D<T> &operator/=(const vector3D<U> &other) {
+            if (this->x == T{0} || this->y == T{0} || this->z == T{0}) {
+                throw division_by_zero();
+            }
+            this->x /= other.x;
+            this->y /= other.y;
+            this->z /= other.z;
+            return *this;
+        }
+        template <typename U> requires (isConvertible<U, T> && isIntegralNumWrapper<T>)
+        vector3D<T> &operator%=(const vector3D<U> &other) {
+            if (this->x == T{0} || this->y == T{0} || this->z == T{0}) {
+                throw division_by_zero();
+            }
+            this->x %= other.x;
+            this->y %= other.y;
+            this->z %= other.z;
+            return *this;
+        }
+        template <typename U> requires (bitwiseOperands<T, U>)
+        vector3D<T> &operator<<=(const vector3D<U> &other) noexcept {
+            this->x <<= other.x;
+            this->y <<= other.y;
+            this->z <<= other.z;
+            return *this;
+        }
+        template <typename U> requires (bitwiseOperands<T, U>)
+        vector3D<T> &operator>>=(const vector3D<U> &other) noexcept {
+            this->x >>= other.x;
+            this->y >>= other.y;
+            this->z >>= other.z;
+            return *this;
+        }
+        template <typename U> requires (bitwiseOperands<T, U>)
+        vector3D<T> &operator|=(const vector3D<U> &other) noexcept {
+            this->x |= other.x;
+            this->y |= other.y;
+            this->z |= other.z;
+            return *this;
+        }
+        template <typename U> requires (bitwiseOperands<T, U>)
+        vector3D<T> &operator&=(const vector3D<U> &other) noexcept {
+            this->x &= other.x;
+            this->y &= other.y;
+            this->z &= other.z;
+            return *this;
+        }
+        template <typename U> requires (bitwiseOperands<T, U>)
+        vector3D<T> &operator^=(const vector3D<U> &other) noexcept {
+            this->x ^= other.x;
+            this->y ^= other.y;
+            this->z ^= other.z;
+            return *this;
+        }
+        template <typename U> requires (isConvertible<U, T>)
+        vector3D<T> &operator+=(const vector3D<U> &&other) noexcept {
+            this->x += other.x;
+            this->y += other.y;
+            this->z += other.z;
+            return *this;
+        }
+        template <typename U> requires (isConvertible<U, T>)
+        vector3D<T> &operator-=(const vector3D<U> &&other) noexcept {
+            this->x -= other.x;
+            this->y -= other.y;
+            this->z -= other.z;
+            return *this;
+        }
+        template <typename U> requires (isConvertible<U, T>)
+        vector3D<T> &operator*=(const vector3D<U> &&other) noexcept {
+            this->x *= other.x;
+            this->y *= other.y;
+            this->z *= other.z;
+            return *this;
+        }
+        template <typename U> requires (isConvertible<U, T>)
+        vector3D<T> &operator/=(const vector3D<U> &&other) {
+            if (this->x == T{0} || this->y == T{0} || this->z == T{0}) {
+                throw division_by_zero();
+            }
+            this->x /= other.x;
+            this->y /= other.y;
+            this->z /= other.z;
+            return *this;
+        }
+        template <typename U> requires (isConvertible<U, T> && isIntegralNumWrapper<T>)
+        vector3D<T> &operator%=(const vector3D<U> &&other) {
+            if (this->x == T{0} || this->y == T{0} || this->z == T{0}) {
+                throw division_by_zero();
+            }
+            this->x %= other.x;
+            this->y %= other.y;
+            this->z %= other.z;
+            return *this;
+        }
+        template <typename U> requires (bitwiseOperands<T, U>)
+        vector3D<T> &operator<<=(const vector3D<U> &&other) noexcept {
+            this->x <<= other.x;
+            this->y <<= other.y;
+            this->z <<= other.z;
+            return *this;
+        }
+        template <typename U> requires (bitwiseOperands<T, U>)
+        vector3D<T> &operator>>=(const vector3D<U> &&other) noexcept {
+            this->x >>= other.x;
+            this->y >>= other.y;
+            this->z >>= other.z;
+            return *this;
+        }
+        template <typename U> requires (bitwiseOperands<T, U>)
+        vector3D<T> &operator|=(const vector3D<U> &&other) noexcept {
+            this->x |= other.x;
+            this->y |= other.y;
+            this->z |= other.z;
+            return *this;
+        }
+        template <typename U> requires (bitwiseOperands<T, U>)
+        vector3D<T> &operator&=(const vector3D<U> &&other) noexcept {
+            this->x &= other.x;
+            this->y &= other.y;
+            this->z &= other.z;
+            return *this;
+        }
+        template <typename U> requires (bitwiseOperands<T, U>)
+        vector3D<T> &operator^=(const vector3D<U> &&other) noexcept {
+            this->x ^= other.x;
+            this->y ^= other.y;
+            this->z ^= other.z;
             return *this;
         }
         vector3D<T> operator++(int) noexcept {
@@ -1455,7 +2033,7 @@ namespace gtd {
                     const vector2D<T> &oth_v2 = dynamic_cast<const vector2D<T>&>(other);
                     this->x = oth_v2.x;
                     this->y = oth_v2.y;
-                } catch (std::bad_cast &bc2) {}
+                } catch (std::bad_cast &bc2) {} // this would only occur if a user has created a subclass of vector<T>
             }
             return *this;
         }
@@ -1469,16 +2047,1649 @@ namespace gtd {
             return *this;
         }
         template <typename U> requires (isConvertible<U, T>)
-        vector3D<T> &operator=(const vector3D<U> &other) {
+        vector3D<T> &operator=(const vector3D<U> &other) noexcept {
             this->x = other.x;
             this->y = other.y;
             this->z = other.z;
             return *this;
         }
+        vector3D<T> &operator=(const vector<T> &&other) noexcept override {
+            return *this = other;
+        }
+        vector3D<T> &operator=(const vector3D<T> &&other) noexcept {
+            return *this = other;
+        }
+        template <typename U> requires (isConvertible<U, T>)
+        vector3D<T> &operator=(const vector3D<U> &&other) noexcept {
+            return *this = other;
+        }
+        template <isNumWrapper U>
+        friend std::ostream &operator<<(std::ostream &out, const vector3D<U> &vec);
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x + value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x - value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x * value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x / value)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x % value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x << value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x >> value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x | value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x & value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x ^ value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value + vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value - vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value * vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value / vec1.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value % vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value << vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value >> vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value | vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value & vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value ^ vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const matrix<U> &m, const vector3D<V> &v)
+        -> vector3D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>
+        requires isConvertible<U, decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x + value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x - value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x * value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x / value)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x % value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x << value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x >> value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x | value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x & value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x ^ value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value + vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value - vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value * vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value / vec1.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value % vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value << vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value >> vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value | vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value & vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value ^ vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const matrix<U> &m, const vector3D<V> &&v)
+        -> vector3D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>
+        requires isConvertible<U, decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x + value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x - value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x * value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x / value)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x % value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x << value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x >> value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x | value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x & value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x ^ value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value + vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value - vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value * vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value / vec1.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value % vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value << vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value >> vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value | vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value & vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value ^ vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const matrix<U> &&m, const vector3D<V> &v)
+        -> vector3D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>
+        requires isConvertible<U, decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>;
+        template <isNumWrapper U>
+        friend std::ostream &operator<<(std::ostream &out, const vector3D<U> &&vec);
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x + value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x - value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x * value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x / value)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x % value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x << value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x >> value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x | value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x & value)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x ^ value)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value + vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value - vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value * vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value / vec1.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value % vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value << vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value >> vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value | vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value & vec1.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value ^ vec1.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const matrix<U> &&m, const vector3D<V> &&v)
+        -> vector3D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>
+        requires isConvertible<U, decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator+(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator-(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator*(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto operator/(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
+        template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+        friend auto operator%(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator<<(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator>>(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator|(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator&(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)>;
+        template <typename U, typename V> requires bitwiseOperands<U, V>
+        friend auto operator^(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto cross(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+        friend long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &&vec2);
         template <isNumWrapper U>
         friend class vector2D;
         template <isNumWrapper U>
         friend class vector3D;
     };
+    template <isNumWrapper U>
+    std::ostream &operator<<(std::ostream &out, const vector3D<U> &vec) {
+        out << vec.x << "i ";
+        if (vec.y < 0) {
+            out << "- " << +(-vec.y) << "j ";
+        }
+        else {
+            out << "+ " << +vec.y << "j ";
+        }
+        if (vec.z < 0) {
+            out << "- " << +(-vec.z) << "k ";
+        }
+        else {
+            out << "+ " << +vec.z << "k ";
+        }
+        return out;
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)> {
+        return vector3D<decltype(vec1.x + vec2.x)>(vec1.x + vec2.x, vec1.y + vec2.y, vec1.z + vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)> {
+        return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z - vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
+        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, vec1.z * vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0} || vec2.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / vec2.x)>(vec1.x / vec2.x, vec1.y / vec2.y, vec1.z / vec2.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0} || vec2.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % vec2.x)>(vec1.x % vec2.x, vec1.y % vec2.y, vec1.z % vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)> {
+        return vector3D<decltype(vec1.x << vec2.x)>(vec1.x << vec2.x, vec1.y << vec2.y, vec1.z << vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)> {
+        return vector3D<decltype(vec1.x >> vec2.x)>(vec1.x >> vec2.x, vec1.y >> vec2.y, vec1.z >> vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)> {
+        return vector3D<decltype(vec1.x | vec2.x)>(vec1.x | vec2.x, vec1.y | vec2.y, vec1.z | vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)> {
+        return vector3D<decltype(vec1.x & vec2.x)>(vec1.x & vec2.x, vec1.y & vec2.y, vec1.z & vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)> {
+        return vector3D<decltype(vec1.x ^ vec2.x)>(vec1.x ^ vec2.x, vec1.y ^ vec2.y, vec1.z ^ vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x + value)> {
+        return vector3D<decltype(vec1.x + value)>(vec1.x + value, vec1.y + value, vec1.z + value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x - value)> {
+        return vector3D<decltype(vec1.x - value)>(vec1.x - value, vec1.y - value, vec1.z - value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x * value)> {
+        return vector3D<decltype(vec1.x * value)>(vec1.x * value, vec1.y * value, vec1.z * value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x / value)> {
+        if (value == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / value)>(vec1.x / value, vec1.y / value, vec1.z / value);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x % value)> {
+        if (value == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % value)>(vec1.x % value, vec1.y % value, vec1.z % value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x << value)> {
+        return vector3D<decltype(vec1.x << value)>(vec1.x << value, vec1.y << value, vec1.z << value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x >> value)> {
+        return vector3D<decltype(vec1.x >> value)>(vec1.x >> value, vec1.y >> value, vec1.z >> value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x | value)> {
+        return vector3D<decltype(vec1.x | value)>(vec1.x | value, vec1.y | value, vec1.z | value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x & value)> {
+        return vector3D<decltype(vec1.x & value)>(vec1.x & value, vec1.y & value, vec1.z & value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector3D<U> &vec1, const V &value) -> vector3D<decltype(vec1.x ^ value)> {
+        return vector3D<decltype(vec1.x ^ value)>(vec1.x ^ value, vec1.y ^ value, vec1.z ^ value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value + vec1.x)> { // could just return vec op value,
+        return vector3D<decltype(value + vec1.x)>(value + vec1.x, value + vec1.y, value + vec1.z); // but would be an extra func. call
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value - vec1.x)> {
+        return vector3D<decltype(value - vec1.x)>(value - vec1.x, value - vec1.y, value - vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value * vec1.x)> {
+        return vector3D<decltype(value * vec1.x)>(value * vec1.x, value * vec1.y, value * vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value / vec1.x)> {
+        if (vec1.x == V{0} || vec1.y == V{0} || vec1.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(value / vec1.x)>(value / vec1.x, value / vec1.y, value / vec1.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value % vec1.x)> {
+        if (vec1.x == V{0} || vec1.y == V{0} || vec1.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(value % vec1.x)>(value % vec1.x, value % vec1.y, value % vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value << vec1.x)> {
+        return vector3D<decltype(value << vec1.x)>(value << vec1.x, value << vec1.y, value << vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value >> vec1.x)> {
+        return vector3D<decltype(value >> vec1.x)>(value >> vec1.x, value >> vec1.y, value >> vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value | vec1.x)> {
+        return vector3D<decltype(value | vec1.x)>(value | vec1.x, value | vec1.y, value | vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value & vec1.x)> {
+        return vector3D<decltype(value & vec1.x)>(value & vec1.x, value & vec1.y, value & vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const V &value, const vector3D<U> &vec1) -> vector3D<decltype(value ^ vec1.x)> {
+        return vector3D<decltype(value ^ vec1.x)>(value ^ vec1.x, value ^ vec1.y, value ^ vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const matrix<U> &m, const vector3D<V> &v)
+    -> vector3D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>
+    requires isConvertible<U, decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)> {
+        return vector3D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>(v).apply(m);
+    }
+    template <isNumWrapper U>
+    std::ostream &operator<<(std::ostream &out, const vector3D<U> &&vec) {
+        return out << vec;
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)> {
+        return vector3D<decltype(vec1.x + vec2.x)>(vec1.x + vec2.x, vec1.y + vec2.y, vec1.z + vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)> {
+        return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z - vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
+        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, vec1.z * vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0} || vec2.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / vec2.x)>(vec1.x / vec2.x, vec1.y / vec2.y, vec1.z / vec2.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0} || vec2.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % vec2.x)>(vec1.x % vec2.x, vec1.y % vec2.y, vec1.z % vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)> {
+        return vector3D<decltype(vec1.x << vec2.x)>(vec1.x << vec2.x, vec1.y << vec2.y, vec1.z << vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)> {
+        return vector3D<decltype(vec1.x >> vec2.x)>(vec1.x >> vec2.x, vec1.y >> vec2.y, vec1.z >> vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)> {
+        return vector3D<decltype(vec1.x | vec2.x)>(vec1.x | vec2.x, vec1.y | vec2.y, vec1.z | vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)> {
+        return vector3D<decltype(vec1.x & vec2.x)>(vec1.x & vec2.x, vec1.y & vec2.y, vec1.z & vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)> {
+        return vector3D<decltype(vec1.x ^ vec2.x)>(vec1.x ^ vec2.x, vec1.y ^ vec2.y, vec1.z ^ vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x + value)> {
+        return vector3D<decltype(vec1.x + value)>(vec1.x + value, vec1.y + value, vec1.z + value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x - value)> {
+        return vector3D<decltype(vec1.x - value)>(vec1.x - value, vec1.y - value, vec1.z - value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x * value)> {
+        return vector3D<decltype(vec1.x * value)>(vec1.x * value, vec1.y * value, vec1.z * value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x / value)> {
+        if (value == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / value)>(vec1.x / value, vec1.y / value, vec1.z / value);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x % value)> {
+        if (value == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % value)>(vec1.x % value, vec1.y % value, vec1.z % value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x << value)> {
+        return vector3D<decltype(vec1.x << value)>(vec1.x << value, vec1.y << value, vec1.z << value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x >> value)> {
+        return vector3D<decltype(vec1.x >> value)>(vec1.x >> value, vec1.y >> value, vec1.z >> value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x | value)> {
+        return vector3D<decltype(vec1.x | value)>(vec1.x | value, vec1.y | value, vec1.z | value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x & value)> {
+        return vector3D<decltype(vec1.x & value)>(vec1.x & value, vec1.y & value, vec1.z & value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector3D<U> &vec1, const V &&value) -> vector3D<decltype(vec1.x ^ value)> {
+        return vector3D<decltype(vec1.x ^ value)>(vec1.x ^ value, vec1.y ^ value, vec1.z ^ value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value + vec1.x)> { // could just return vec op value,
+        return vector3D<decltype(value + vec1.x)>(value + vec1.x, value + vec1.y, value + vec1.z); // but would be an extra func. call
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value - vec1.x)> {
+        return vector3D<decltype(value - vec1.x)>(value - vec1.x, value - vec1.y, value - vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value * vec1.x)> {
+        return vector3D<decltype(value * vec1.x)>(value * vec1.x, value * vec1.y, value * vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value / vec1.x)> {
+        if (vec1.x == V{0} || vec1.y == V{0} || vec1.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(value / vec1.x)>(value / vec1.x, value / vec1.y, value / vec1.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value % vec1.x)> {
+        if (vec1.x == V{0} || vec1.y == V{0} || vec1.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(value % vec1.x)>(value % vec1.x, value % vec1.y, value % vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value << vec1.x)> {
+        return vector3D<decltype(value << vec1.x)>(value << vec1.x, value << vec1.y, value << vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value >> vec1.x)> {
+        return vector3D<decltype(value >> vec1.x)>(value >> vec1.x, value >> vec1.y, value >> vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value | vec1.x)> {
+        return vector3D<decltype(value | vec1.x)>(value | vec1.x, value | vec1.y, value | vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value & vec1.x)> {
+        return vector3D<decltype(value & vec1.x)>(value & vec1.x, value & vec1.y, value & vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const V &value, const vector3D<U> &&vec1) -> vector3D<decltype(value ^ vec1.x)> {
+        return vector3D<decltype(value ^ vec1.x)>(value ^ vec1.x, value ^ vec1.y, value ^ vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const matrix<U> &m, const vector3D<V> &&v)
+    -> vector3D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>
+    requires isConvertible<U, decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)> {
+        return vector3D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>(v).apply(m);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)> {
+        return vector3D<decltype(vec1.x + vec2.x)>(vec1.x + vec2.x, vec1.y + vec2.y, vec1.z + vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)> {
+        return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z - vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
+        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, vec1.z * vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0} || vec2.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / vec2.x)>(vec1.x / vec2.x, vec1.y / vec2.y, vec1.z / vec2.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0} || vec2.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % vec2.x)>(vec1.x % vec2.x, vec1.y % vec2.y, vec1.z % vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)> {
+        return vector3D<decltype(vec1.x << vec2.x)>(vec1.x << vec2.x, vec1.y << vec2.y, vec1.z << vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)> {
+        return vector3D<decltype(vec1.x >> vec2.x)>(vec1.x >> vec2.x, vec1.y >> vec2.y, vec1.z >> vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)> {
+        return vector3D<decltype(vec1.x | vec2.x)>(vec1.x | vec2.x, vec1.y | vec2.y, vec1.z | vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)> {
+        return vector3D<decltype(vec1.x & vec2.x)>(vec1.x & vec2.x, vec1.y & vec2.y, vec1.z & vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)> {
+        return vector3D<decltype(vec1.x ^ vec2.x)>(vec1.x ^ vec2.x, vec1.y ^ vec2.y, vec1.z ^ vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x + value)> {
+        return vector3D<decltype(vec1.x + value)>(vec1.x + value, vec1.y + value, vec1.z + value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x - value)> {
+        return vector3D<decltype(vec1.x - value)>(vec1.x - value, vec1.y - value, vec1.z - value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x * value)> {
+        return vector3D<decltype(vec1.x * value)>(vec1.x * value, vec1.y * value, vec1.z * value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x / value)> {
+        if (value == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / value)>(vec1.x / value, vec1.y / value, vec1.z / value);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x % value)> {
+        if (value == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % value)>(vec1.x % value, vec1.y % value, vec1.z % value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x << value)> {
+        return vector3D<decltype(vec1.x << value)>(vec1.x << value, vec1.y << value, vec1.z << value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x >> value)> {
+        return vector3D<decltype(vec1.x >> value)>(vec1.x >> value, vec1.y >> value, vec1.z >> value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x | value)> {
+        return vector3D<decltype(vec1.x | value)>(vec1.x | value, vec1.y | value, vec1.z | value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x & value)> {
+        return vector3D<decltype(vec1.x & value)>(vec1.x & value, vec1.y & value, vec1.z & value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector3D<U> &&vec1, const V &value) -> vector3D<decltype(vec1.x ^ value)> {
+        return vector3D<decltype(vec1.x ^ value)>(vec1.x ^ value, vec1.y ^ value, vec1.z ^ value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value + vec1.x)> {
+        return vector3D<decltype(value + vec1.x)>(value + vec1.x, value + vec1.y, value + vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value - vec1.x)> {
+        return vector3D<decltype(value - vec1.x)>(value - vec1.x, value - vec1.y, value - vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value * vec1.x)> {
+        return vector3D<decltype(value * vec1.x)>(value * vec1.x, value * vec1.y, value * vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value / vec1.x)> {
+        if (vec1.x == V{0} || vec1.y == V{0} || vec1.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(value / vec1.x)>(value / vec1.x, value / vec1.y, value / vec1.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value % vec1.x)> {
+        if (vec1.x == V{0} || vec1.y == V{0} || vec1.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(value % vec1.x)>(value % vec1.x, value % vec1.y, value % vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value << vec1.x)> {
+        return vector3D<decltype(value << vec1.x)>(value << vec1.x, value << vec1.y, value << vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value >> vec1.x)> {
+        return vector3D<decltype(value >> vec1.x)>(value >> vec1.x, value >> vec1.y, value >> vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value | vec1.x)> {
+        return vector3D<decltype(value | vec1.x)>(value | vec1.x, value | vec1.y, value | vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value & vec1.x)> {
+        return vector3D<decltype(value & vec1.x)>(value & vec1.x, value & vec1.y, value & vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const V &&value, const vector3D<U> &vec1) -> vector3D<decltype(value ^ vec1.x)> {
+        return vector3D<decltype(value ^ vec1.x)>(value ^ vec1.x, value ^ vec1.y, value ^ vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const matrix<U> &&m, const vector3D<V> &v)
+    -> vector3D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>
+    requires isConvertible<U, decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)> {
+        return vector3D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>(v).apply(m);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)> {
+        return vector3D<decltype(vec1.x + vec2.x)>(vec1.x + vec2.x, vec1.y + vec2.y, vec1.z + vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)> {
+        return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z - vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
+        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, vec1.z * vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0} || vec2.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / vec2.x)>(vec1.x / vec2.x, vec1.y / vec2.y, vec1.z / vec2.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0} || vec2.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % vec2.x)>(vec1.x % vec2.x, vec1.y % vec2.y, vec1.z % vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)> {
+        return vector3D<decltype(vec1.x << vec2.x)>(vec1.x << vec2.x, vec1.y << vec2.y, vec1.z << vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)> {
+        return vector3D<decltype(vec1.x >> vec2.x)>(vec1.x >> vec2.x, vec1.y >> vec2.y, vec1.z >> vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)> {
+        return vector3D<decltype(vec1.x | vec2.x)>(vec1.x | vec2.x, vec1.y | vec2.y, vec1.z | vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)> {
+        return vector3D<decltype(vec1.x & vec2.x)>(vec1.x & vec2.x, vec1.y & vec2.y, vec1.z & vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)> {
+        return vector3D<decltype(vec1.x ^ vec2.x)>(vec1.x ^ vec2.x, vec1.y ^ vec2.y, vec1.z ^ vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x + value)> {
+        return vector3D<decltype(vec1.x + value)>(vec1.x + value, vec1.y + value, vec1.z + value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x - value)> {
+        return vector3D<decltype(vec1.x - value)>(vec1.x - value, vec1.y - value, vec1.z - value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x * value)> {
+        return vector3D<decltype(vec1.x * value)>(vec1.x * value, vec1.y * value, vec1.z * value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x / value)> {
+        if (value == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / value)>(vec1.x / value, vec1.y / value, vec1.z / value);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x % value)> {
+        if (value == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % value)>(vec1.x % value, vec1.y % value, vec1.z % value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x << value)> {
+        return vector3D<decltype(vec1.x << value)>(vec1.x << value, vec1.y << value, vec1.z << value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x >> value)> {
+        return vector3D<decltype(vec1.x >> value)>(vec1.x >> value, vec1.y >> value, vec1.z >> value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x | value)> {
+        return vector3D<decltype(vec1.x | value)>(vec1.x | value, vec1.y | value, vec1.z | value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x & value)> {
+        return vector3D<decltype(vec1.x & value)>(vec1.x & value, vec1.y & value, vec1.z & value);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector3D<U> &&vec1, const V &&value) -> vector3D<decltype(vec1.x ^ value)> {
+        return vector3D<decltype(vec1.x ^ value)>(vec1.x ^ value, vec1.y ^ value, vec1.z ^ value);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value + vec1.x)> {
+        return vector3D<decltype(value + vec1.x)>(value + vec1.x, value + vec1.y, value + vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value - vec1.x)> {
+        return vector3D<decltype(value - vec1.x)>(value - vec1.x, value - vec1.y, value - vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value * vec1.x)> {
+        return vector3D<decltype(value * vec1.x)>(value * vec1.x, value * vec1.y, value * vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value / vec1.x)> {
+        if (vec1.x == V{0} || vec1.y == V{0} || vec1.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(value / vec1.x)>(value / vec1.x, value / vec1.y, value / vec1.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value % vec1.x)> {
+        if (vec1.x == V{0} || vec1.y == V{0} || vec1.z == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(value % vec1.x)>(value % vec1.x, value % vec1.y, value % vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value << vec1.x)> {
+        return vector3D<decltype(value << vec1.x)>(value << vec1.x, value << vec1.y, value << vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value >> vec1.x)> {
+        return vector3D<decltype(value >> vec1.x)>(value >> vec1.x, value >> vec1.y, value >> vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value | vec1.x)> {
+        return vector3D<decltype(value | vec1.x)>(value | vec1.x, value | vec1.y, value | vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value & vec1.x)> {
+        return vector3D<decltype(value & vec1.x)>(value & vec1.x, value & vec1.y, value & vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const V &&value, const vector3D<U> &&vec1) -> vector3D<decltype(value ^ vec1.x)> {
+        return vector3D<decltype(value ^ vec1.x)>(value ^ vec1.x, value ^ vec1.y, value ^ vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const matrix<U> &&m, const vector3D<V> &&v)
+    -> vector3D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>
+    requires isConvertible<U, decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)> {
+        return vector3D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>(v).apply(m);
+    }
+
+
+
+
+
+
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)> {
+        return vector3D<decltype(vec1.x + vec2.x)>(vec1.x + vec2.x, vec1.y + vec2.y, vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)> {
+        return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
+        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / vec2.x)>(vec1.x / vec2.x, vec1.y / vec2.y, vec1.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % vec2.x)>(vec1.x % vec2.x, vec1.y % vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)> {
+        return vector3D<decltype(vec1.x << vec2.x)>(vec1.x << vec2.x, vec1.y << vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)> {
+        return vector3D<decltype(vec1.x >> vec2.x)>(vec1.x >> vec2.x, vec1.y >> vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)> {
+        return vector3D<decltype(vec1.x | vec2.x)>(vec1.x | vec2.x, vec1.y | vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)> {
+        return vector3D<decltype(vec1.x & vec2.x)>(vec1.x & vec2.x, vec1.y & vec2.y, 0);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)> {
+        return vector3D<decltype(vec1.x ^ vec2.x)>(vec1.x ^ vec2.x, vec1.y ^ vec2.y, vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)> {
+        return vector3D<decltype(vec1.x + vec2.x)>(vec1.x + vec2.x, vec1.y + vec2.y, vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)> {
+        return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
+        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / vec2.x)>(vec1.x / vec2.x, vec1.y / vec2.y, vec1.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % vec2.x)>(vec1.x % vec2.x, vec1.y % vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)> {
+        return vector3D<decltype(vec1.x << vec2.x)>(vec1.x << vec2.x, vec1.y << vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)> {
+        return vector3D<decltype(vec1.x >> vec2.x)>(vec1.x >> vec2.x, vec1.y >> vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)> {
+        return vector3D<decltype(vec1.x | vec2.x)>(vec1.x | vec2.x, vec1.y | vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)> {
+        return vector3D<decltype(vec1.x & vec2.x)>(vec1.x & vec2.x, vec1.y & vec2.y, 0);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)> {
+        return vector3D<decltype(vec1.x ^ vec2.x)>(vec1.x ^ vec2.x, vec1.y ^ vec2.y, vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)> {
+        return vector3D<decltype(vec1.x + vec2.x)>(vec1.x + vec2.x, vec1.y + vec2.y, vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)> {
+        return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
+        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / vec2.x)>(vec1.x / vec2.x, vec1.y / vec2.y, vec1.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % vec2.x)>(vec1.x % vec2.x, vec1.y % vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)> {
+        return vector3D<decltype(vec1.x << vec2.x)>(vec1.x << vec2.x, vec1.y << vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)> {
+        return vector3D<decltype(vec1.x >> vec2.x)>(vec1.x >> vec2.x, vec1.y >> vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)> {
+        return vector3D<decltype(vec1.x | vec2.x)>(vec1.x | vec2.x, vec1.y | vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)> {
+        return vector3D<decltype(vec1.x & vec2.x)>(vec1.x & vec2.x, vec1.y & vec2.y, 0);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)> {
+        return vector3D<decltype(vec1.x ^ vec2.x)>(vec1.x ^ vec2.x, vec1.y ^ vec2.y, vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)> {
+        return vector3D<decltype(vec1.x + vec2.x)>(vec1.x + vec2.x, vec1.y + vec2.y, vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)> {
+        return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
+        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / vec2.x)>(vec1.x / vec2.x, vec1.y / vec2.y, vec1.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % vec2.x)>(vec1.x % vec2.x, vec1.y % vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)> {
+        return vector3D<decltype(vec1.x << vec2.x)>(vec1.x << vec2.x, vec1.y << vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)> {
+        return vector3D<decltype(vec1.x >> vec2.x)>(vec1.x >> vec2.x, vec1.y >> vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)> {
+        return vector3D<decltype(vec1.x | vec2.x)>(vec1.x | vec2.x, vec1.y | vec2.y, vec1.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)> {
+        return vector3D<decltype(vec1.x & vec2.x)>(vec1.x & vec2.x, vec1.y & vec2.y, 0);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)> {
+        return vector3D<decltype(vec1.x ^ vec2.x)>(vec1.x ^ vec2.x, vec1.y ^ vec2.y, vec1.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)> {
+        return vector3D<decltype(vec1.x + vec2.x)>(vec1.x + vec2.x, vec1.y + vec2.y, vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)> {
+        return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
+        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / vec2.x)>(vec1.x / vec2.x, vec1.y / vec2.y, vec2.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % vec2.x)>(vec1.x % vec2.x, vec1.y % vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)> {
+        return vector3D<decltype(vec1.x << vec2.x)>(vec1.x << vec2.x, vec1.y << vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)> {
+        return vector3D<decltype(vec1.x >> vec2.x)>(vec1.x >> vec2.x, vec1.y >> vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)> {
+        return vector3D<decltype(vec1.x | vec2.x)>(vec1.x | vec2.x, vec1.y | vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)> {
+        return vector3D<decltype(vec1.x & vec2.x)>(vec1.x & vec2.x, vec1.y & vec2.y, 0);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)> {
+        return vector3D<decltype(vec1.x ^ vec2.x)>(vec1.x ^ vec2.x, vec1.y ^ vec2.y, vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)> {
+        return vector3D<decltype(vec1.x + vec2.x)>(vec1.x + vec2.x, vec1.y + vec2.y, vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)> {
+        return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
+        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / vec2.x)>(vec1.x / vec2.x, vec1.y / vec2.y, vec2.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % vec2.x)>(vec1.x % vec2.x, vec1.y % vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)> {
+        return vector3D<decltype(vec1.x << vec2.x)>(vec1.x << vec2.x, vec1.y << vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)> {
+        return vector3D<decltype(vec1.x >> vec2.x)>(vec1.x >> vec2.x, vec1.y >> vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)> {
+        return vector3D<decltype(vec1.x | vec2.x)>(vec1.x | vec2.x, vec1.y | vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)> {
+        return vector3D<decltype(vec1.x & vec2.x)>(vec1.x & vec2.x, vec1.y & vec2.y, 0);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)> {
+        return vector3D<decltype(vec1.x ^ vec2.x)>(vec1.x ^ vec2.x, vec1.y ^ vec2.y, vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)> {
+        return vector3D<decltype(vec1.x + vec2.x)>(vec1.x + vec2.x, vec1.y + vec2.y, vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)> {
+        return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
+        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / vec2.x)>(vec1.x / vec2.x, vec1.y / vec2.y, vec2.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x % vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % vec2.x)>(vec1.x % vec2.x, vec1.y % vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x << vec2.x)> {
+        return vector3D<decltype(vec1.x << vec2.x)>(vec1.x << vec2.x, vec1.y << vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x >> vec2.x)> {
+        return vector3D<decltype(vec1.x >> vec2.x)>(vec1.x >> vec2.x, vec1.y >> vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x | vec2.x)> {
+        return vector3D<decltype(vec1.x | vec2.x)>(vec1.x | vec2.x, vec1.y | vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x & vec2.x)> {
+        return vector3D<decltype(vec1.x & vec2.x)>(vec1.x & vec2.x, vec1.y & vec2.y, 0);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x ^ vec2.x)> {
+        return vector3D<decltype(vec1.x ^ vec2.x)>(vec1.x ^ vec2.x, vec1.y ^ vec2.y, vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator+(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x + vec2.x)> {
+        return vector3D<decltype(vec1.x + vec2.x)>(vec1.x + vec2.x, vec1.y + vec2.y, vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator-(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)> {
+        return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator*(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
+        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto operator/(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x / vec2.x)>(vec1.x / vec2.x, vec1.y / vec2.y, vec2.z);
+    }
+    template <isIntegralNumWrapper U, isIntegralNumWrapper V>
+    auto operator%(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x % vec2.x)> {
+        if (vec2.x == V{0} || vec2.y == V{0}) {
+            throw division_by_zero();
+        }
+        return vector3D<decltype(vec1.x % vec2.x)>(vec1.x % vec2.x, vec1.y % vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator<<(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x << vec2.x)> {
+        return vector3D<decltype(vec1.x << vec2.x)>(vec1.x << vec2.x, vec1.y << vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator>>(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x >> vec2.x)> {
+        return vector3D<decltype(vec1.x >> vec2.x)>(vec1.x >> vec2.x, vec1.y >> vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator|(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x | vec2.x)> {
+        return vector3D<decltype(vec1.x | vec2.x)>(vec1.x | vec2.x, vec1.y | vec2.y, vec2.z);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator&(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x & vec2.x)> {
+        return vector3D<decltype(vec1.x & vec2.x)>(vec1.x & vec2.x, vec1.y & vec2.y, 0);
+    }
+    template <typename U, typename V> requires bitwiseOperands<U, V>
+    auto operator^(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)> {
+        return vector3D<decltype(vec1.x ^ vec2.x)>(vec1.x ^ vec2.x, vec1.y ^ vec2.y, vec2.z);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(0, 0, vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(0, 0, vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(0, 0, vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(0, 0, vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(-vec1.z*vec2.y, // vec2.z is zero
+                                                   vec1.z*vec2.x,
+                                                   vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(-vec1.z*vec2.y,
+                                                   vec1.z*vec2.x,
+                                                   vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(-vec1.z*vec2.y,
+                                                   vec1.z*vec2.x,
+                                                   vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(-vec1.z*vec2.y,
+                                                   vec1.z*vec2.x,
+                                                   vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z, // vec1.z is zero
+                                                   -vec1.x*vec2.z,
+                                                   vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z,
+                                                   -vec1.x*vec2.z,
+                                                   vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z,
+                                                   -vec1.x*vec2.z,
+                                                   vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z,
+                                                   -vec1.x*vec2.z,
+                                                   vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z - vec1.z*vec2.y,
+                                                   vec1.z*vec2.x - vec1.x*vec2.z,
+                                                   vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z - vec1.z*vec2.y,
+                                                   vec1.z*vec2.x - vec1.x*vec2.z,
+                                                   vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z - vec1.z*vec2.y,
+                                                   vec1.z*vec2.x - vec1.x*vec2.z,
+                                                   vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V>
+    auto cross(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z - vec1.z*vec2.y,
+                                                   vec1.z*vec2.x - vec1.x*vec2.z,
+                                                   vec1.x*vec2.y - vec1.y*vec2.x);
+    }
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector2D<U> &vec1, const vector2D<V> &vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    } // have to check for less than -1 or greater than 1 because of f. p. rounding errors
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector2D<U> &vec1, const vector2D<V> &&vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    }
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    }
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &&vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    }
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector3D<U> &vec1, const vector2D<V> &vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    }
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector3D<U> &vec1, const vector2D<V> &&vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    }
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    }
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &&vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    }
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector2D<U> &vec1, const vector3D<V> &vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    }
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector2D<U> &vec1, const vector3D<V> &&vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    }
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    }
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &&vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    }
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector3D<U> &vec1, const vector3D<V> &vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    }
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector3D<U> &vec1, const vector3D<V> &&vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    }
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    }
+    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
+    long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &&vec2) {
+        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
+    }
 }
 #endif
