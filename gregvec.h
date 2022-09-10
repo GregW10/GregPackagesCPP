@@ -400,7 +400,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector2D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector2D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector2D<U> &vec1, const vector2D<V> &vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector2D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -464,7 +464,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> vector2D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> vector2D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> vector2D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -528,7 +528,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> vector2D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> vector2D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> vector2D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -594,7 +594,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> vector2D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> vector2D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> vector2D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -658,7 +658,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector3D<U> &vec1, const vector2D<V> &vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -678,7 +678,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -698,7 +698,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -718,7 +718,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -738,7 +738,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector2D<U> &vec1, const vector3D<V> &vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -758,7 +758,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -778,7 +778,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -798,7 +798,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -898,8 +898,8 @@ namespace gtd {
         return vector2D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector2D<decltype(vec1.x * vec2.x)> {
-        return vector2D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y);
+    auto operator*(const vector2D<U> &vec1, const vector2D<V> &vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector2D<decltype(vec1.x / vec2.x)> {
@@ -1049,8 +1049,8 @@ namespace gtd {
         return vector2D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> vector2D<decltype(vec1.x * vec2.x)> {
-        return vector2D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y);
+    auto operator*(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> vector2D<decltype(vec1.x / vec2.x)> {
@@ -1193,8 +1193,8 @@ namespace gtd {
         return vector2D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> vector2D<decltype(vec1.x * vec2.x)> {
-        return vector2D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y);
+    auto operator*(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> vector2D<decltype(vec1.x / vec2.x)> {
@@ -1337,8 +1337,8 @@ namespace gtd {
         return vector2D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> vector2D<decltype(vec1.x * vec2.x)> {
-        return vector2D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y);
+    auto operator*(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> vector2D<decltype(vec1.x / vec2.x)> {
@@ -2070,7 +2070,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector3D<U> &vec1, const vector3D<V> &vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -2134,7 +2134,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -2198,7 +2198,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -2264,7 +2264,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -2328,7 +2328,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector3D<U> &vec1, const vector2D<V> &vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -2348,7 +2348,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -2368,7 +2368,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -2388,7 +2388,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -2408,7 +2408,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector2D<U> &vec1, const vector3D<V> &vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -2428,7 +2428,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -2448,7 +2448,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -2468,7 +2468,7 @@ namespace gtd {
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator-(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x - vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto operator*(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)>;
+        friend auto operator*(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> decltype(vec1.x * vec2.x);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator/(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)>;
         template <isIntegralNumWrapper U, isIntegralNumWrapper V>
@@ -2578,8 +2578,8 @@ namespace gtd {
         return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z - vec2.z);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
-        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, vec1.z * vec2.z);
+    auto operator*(const vector3D<U> &vec1, const vector3D<V> &vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y + vec1.z*vec2.z;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
@@ -2726,8 +2726,8 @@ namespace gtd {
         return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z - vec2.z);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
-        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, vec1.z * vec2.z);
+    auto operator*(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y + vec1.z*vec2.z;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
@@ -2870,8 +2870,8 @@ namespace gtd {
         return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z - vec2.z);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
-        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, vec1.z * vec2.z);
+    auto operator*(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y + vec1.z*vec2.z;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
@@ -3014,8 +3014,8 @@ namespace gtd {
         return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z - vec2.z);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
-        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, vec1.z * vec2.z);
+    auto operator*(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y + vec1.z*vec2.z;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
@@ -3164,8 +3164,8 @@ namespace gtd {
         return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
-        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    auto operator*(const vector3D<U> &vec1, const vector2D<V> &vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
@@ -3210,8 +3210,8 @@ namespace gtd {
         return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
-        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    auto operator*(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
@@ -3256,8 +3256,8 @@ namespace gtd {
         return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
-        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    auto operator*(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
@@ -3302,8 +3302,8 @@ namespace gtd {
         return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec1.z);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
-        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    auto operator*(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
@@ -3348,8 +3348,8 @@ namespace gtd {
         return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec2.z);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
-        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    auto operator*(const vector2D<U> &vec1, const vector3D<V> &vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
@@ -3394,8 +3394,8 @@ namespace gtd {
         return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec2.z);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
-        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    auto operator*(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
@@ -3440,8 +3440,8 @@ namespace gtd {
         return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec2.z);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
-        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    auto operator*(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
@@ -3486,8 +3486,8 @@ namespace gtd {
         return vector3D<decltype(vec1.x - vec2.x)>(vec1.x - vec2.x, vec1.y - vec2.y, vec2.z);
     }
     template <isNumWrapper U, isNumWrapper V>
-    auto operator*(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.x)> {
-        return vector3D<decltype(vec1.x * vec2.x)>(vec1.x * vec2.x, vec1.y * vec2.y, 0);
+    auto operator*(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> decltype(vec1.x * vec2.x) {
+		return vec1.x*vec2.x + vec1.y*vec2.y;
     }
     template <isNumWrapper U, isNumWrapper V>
     auto operator/(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x / vec2.x)> {
