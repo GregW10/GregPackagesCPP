@@ -692,32 +692,32 @@ namespace gtd {
             return append_front(str);
         }
 
-        bool pop_back() noexcept {
+        String &pop_back() noexcept {
             if (is_empty) {
-                return false;
+                return *this;
             }
             if (length_w_null == 2 || length_w_null == 1) {
                 this->clear();
-                return true;
+                return *this;
             }
             *(string + length_w_null - 2) = '\0';
             --length_w_null;
             ++space_back;
-            return true;
+            return *this;
         }
 
-        bool pop_front() noexcept {
+        String &pop_front() noexcept {
             if (is_empty) {
-                return false;
+                return *this;
             }
             if (length_w_null == 2 || length_w_null == 1) {
                 this->clear();
-                return true;
+                return *this;
             }
             *string++ = '\0';
             --length_w_null;
             ++space_front;
-            return true;
+            return *this;
         }
 
         String &reverse() noexcept {
@@ -1510,22 +1510,22 @@ namespace gtd {
             empty_constructor();
         }
         // erase_chars() shifts the string in whichever direction saves computation
-        String &erase_chars(size_t start_pos = 0, size_t end_pos = nopos) noexcept { // erases including end_pos
-            if (is_empty || start_pos >= length_w_null - 1 || start_pos > end_pos) {
+        String &erase_chars(size_t start_pos = 0, size_t end_pos = nopos) noexcept { // erases excluding end_pos
+            if (is_empty || start_pos >= length_w_null - 1 || start_pos >= end_pos) {
                 return *this;
             }
-            if (end_pos > length_w_null - 2) {
-                end_pos = length_w_null - 2;
+            if (end_pos > length_w_null - 1) {
+                end_pos = length_w_null - 1;
             }
             char *str = string + start_pos;
-            char *end = string + end_pos;
+            char *end = string + end_pos - 1;
             char *end_end = string + length_w_null - 1;
-            size_t diff = end_pos - start_pos + 1;
+            size_t diff = end_pos - start_pos;
             if (start_pos == 0) { // case for entire beginning-of-string being erased
                 while (string <= end) {
                     *string++ = 0;
                 }
-                if (end_pos == length_w_null - 2) { // case for entire string being erased
+                if (end_pos == length_w_null - 1) { // case for entire string being erased
                     is_empty = true;
                     string = nullptr;
                     if (start_left) {
@@ -1541,7 +1541,7 @@ namespace gtd {
                 length_w_null -= diff;
                 return *this;
             }
-            if (end_pos == length_w_null - 2) { // case for entire end-of-string being erased
+            if (end_pos == length_w_null - 1) { // case for entire end-of-string being erased
                 while (end >= str) {
                     *end-- = 0;
                 }
@@ -1572,7 +1572,36 @@ namespace gtd {
             space_front += diff;
             return *this;
         }
-
+        size_t find(char c) {
+            if (is_empty) {
+                return nopos;
+            }
+            const char *str = string;
+            const char *end = string + length_w_null - 1;
+            size_t count = 0;
+            while (str < end) {
+                if (*str++ == c) {
+                    return count;
+                }
+                ++count;
+            }
+            return nopos;
+        }
+        size_t r_find(char c) {
+            if (is_empty) {
+                return nopos;
+            }
+            const char *str = string + length_w_null - 2;
+            const char *end = string;
+            size_t count = length_w_null - 2;
+            while (str >= end) {
+                if (*str-- == c) {
+                    return count;
+                }
+                --count;
+            }
+            return nopos;
+        }
         Iterator begin() const noexcept {
             if (is_empty) { return {}; }
             return {string};
