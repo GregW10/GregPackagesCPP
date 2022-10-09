@@ -60,17 +60,17 @@ namespace gtd {
     constexpr long double PI = 3.14159265358979323846264338327950288419716939937510582097494459230;
     class empty_matrix_error : public std::invalid_argument {
     public:
-        empty_matrix_error() : std::invalid_argument("A matrix cannot have a size of zero.") {}
+        empty_matrix_error() : std::invalid_argument("A matrix cannot have a size of zero.\n") {}
         explicit empty_matrix_error(const char *message) : std::invalid_argument(message) {}
     };
     class invalid_axis_error : public std::invalid_argument {
     public:
-        invalid_axis_error() : std::invalid_argument("Invalid axis.") {}
+        invalid_axis_error() : std::invalid_argument("Invalid axis.\n") {}
         explicit invalid_axis_error(const char *message) : std::invalid_argument(message) {}
     };
     class invalid_matrix_format : public std::invalid_argument {
     public:
-        invalid_matrix_format() : std::invalid_argument("The requested matrix has an invalid format.") {}
+        invalid_matrix_format() : std::invalid_argument("The requested matrix has an invalid format.\n") {}
         explicit invalid_matrix_format(const char *message) : std::invalid_argument(message) {}
     }; // the below 3 functions emulate 'zip()' from Python (I really like what I've done here if I may say so myself)
     template <typename... pack> // first: creates copies of all the elements in the vectors passed

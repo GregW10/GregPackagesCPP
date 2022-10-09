@@ -14,6 +14,7 @@
 #include <vector>
 #include <sys/stat.h>
 #include <functional>
+#include <ctime>
 
 #ifndef _WIN32
 #include <unistd.h>
@@ -1885,9 +1886,9 @@ namespace gtd {
         if (!str.is_empty) {
             str.clear();
         }
-        char c;
-        while (is.good() && (c = is.get()) != 32 && c != '\n') {
-            str.push_back(c);
+        int c;
+        while ((c = is.get()) != 32 && c != '\n' && is.good()) {
+            str.push_back((char) c);
         }
         is.clear();
         str.start_left = org_s_left;
@@ -1905,9 +1906,9 @@ namespace gtd {
         if (!str.is_empty) {
             str.clear();
         }
-        char ch;
-        while (is.good() && (ch = is.get()) != delim) {
-            str.push_back(ch);
+        int ch;
+        while ((ch = is.get()) != delim && is.good()) {
+            str.push_back((char) ch);
         }
         str.start_left = org_s_left;
         return is;
@@ -2331,6 +2332,32 @@ namespace gtd {
         char *home_path_c = pwd->pw_dir;
 #endif
         return {home_path_c};
+    }
+
+    consteval char file_sep() {
+#ifdef _WIN32
+        return '\\';
+#else
+        return '/';
+#endif
+    }
+
+    const char *get_date_and_time() { // returns date & time with '-' instead of spaces and 'h', 'm', 's' inst. of colon
+        time_t t = time(nullptr);
+        char *ptr = ctime(&t);
+        char *end = ptr + 24; // ctime() always returns a string with 26 chars (including '\0'), end points to '\n'
+        for (unsigned char i = 0; i < 4; ++i) {
+            *end = *(end - 1);
+            --end;
+        }
+        *end-- = '_';
+        *end = 's';
+        *(end -= 3) = 'm'; // easy to avoid a loop here
+        *(end -= 3) = 'h';
+        *(end -= 3) = '_';
+        *(end -= 3) = '_';
+        *(end - 4) = '_';
+        return ptr;
     }
 
     template<typename whatever>
