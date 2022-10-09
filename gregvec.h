@@ -148,8 +148,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         T y{0};
     public:
         vector2D() noexcept = default;
-        vector2D(const vector2D<T> &other) : x{x}, y{y} {}
-        vector2D(const vector2D<T> &&other) : x{x}, y{y} {}
+        vector2D(const vector2D<T> &other) : x{other.x}, y{other.y} {}
+        vector2D(const vector2D<T> &&other) : x{other.x}, y{other.y} {}
         template <typename U> requires isConvertible<U, T>
         vector2D(const vector2D<U> &other) noexcept : x{other.x}, y{other.y} {}
         template <typename U> requires isConvertible<U, T>
@@ -972,6 +972,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend class vector2D;
         template <isNumWrapper U>
         friend class vector3D;
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper U>
+        friend class body;
     };
     template <isNumWrapper U>
     std::ostream &operator<<(std::ostream &out, const vector2D<U> &vec) {
@@ -1925,11 +1927,6 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->y ^= other.y;
             return *this;
         }
-
-
-
-
-
         vector3D<T> &operator+=(const vector3D<T> &other) noexcept {
             this->x += other.x;
             this->y += other.y;
@@ -2712,6 +2709,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend class vector2D;
         template <isNumWrapper U>
         friend class vector3D;
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper U>
+        friend class body;
     };
     template <isNumWrapper U>
     std::ostream &operator<<(std::ostream &out, const vector3D<U> &vec) {
