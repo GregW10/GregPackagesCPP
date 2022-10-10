@@ -9,6 +9,7 @@
 #include <set>
 #include <fstream>
 #include <map>
+#include <regex>
 
 namespace gtd {
     class overlapping_bodies_error : public std::exception {
@@ -151,6 +152,15 @@ namespace gtd {
             check_radius();}
         body(const M &body_mass, const R &body_radius, const vector3D<T> &pos, const vector3D<T> &vel) :
         mass{body_mass}, radius{body_radius}, curr_pos{}, curr_vel{} {add_pos_vel_ke(); check_mass(); check_radius();}
+        template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t>
+        body(const body<m, r, t> &other) : mass{other.mass}, radius{other.radius}, curr_pos{other.curr_pos},
+        curr_vel{other.curr_vel}, curr_ke{other.curr_ke} {add_pos_vel();}
+        body(const body<M, R, T> &other) : mass{other.mass}, radius{other.radius}, curr_pos{other.curr_pos},
+        curr_vel{other.curr_vel}, curr_ke{other.curr_ke} {add_pos_vel();}
+        body(body<M, R, T> &&other) : body_counter{std::move(other)}, mass{other.mass}, radius{other.radius},
+        curr_pos{other.curr_pos}, curr_vel{other.curr_vel}, curr_ke{other.curr_ke},
+        positions{std::move(other.positions)}, velocities{std::move(other.velocities)},
+        energies{std::move(other.energies)}, cref{std::move(other.cref)} {}
         const M &get_mass() const noexcept {
             return mass;
         }
@@ -166,19 +176,19 @@ namespace gtd {
         const K &get_ke() const noexcept {
             return curr_ke;
         }
-        const vector3D<T> &pos_at(unsigned long long index) const {
+        const vector3D<T> &pos_at(std::vector<body<M, R, T>>::size_type index) const {
             if (index >= positions.size()) {
                 throw std::out_of_range("Requested position does not exist (index out of range).\n");
             }
             return positions[index];
         }
-        const vector3D<T> &vel_at(unsigned long long index) const {
+        const vector3D<T> &vel_at(std::vector<body<M, R, T>>::size_type index) const {
             if (index >= velocities.size()) {
                 throw std::out_of_range("Requested velocity does not exist (index out of range).\n");
             }
             return velocities[index];
         }
-        const K &ke_at(unsigned long long index) const {
+        const K &ke_at(std::vector<body<M, R, T>>::size_type index) const {
             if (index >= energies.size()) {
                 throw std::out_of_range("Requested kinetic energy does not exist (index out of range).\n");
             }
@@ -192,10 +202,10 @@ namespace gtd {
             radius = new_radius;
             check_radius();
         }
-        void set_mass(M &&new_mass) {
+        void set_mass(const M &&new_mass) {
             set_mass(new_mass);
         }
-        void set_radius(R &&new_radius) {
+        void set_radius(const R &&new_radius) {
             set_radius(new_radius);
         }
         void update(const vector3D<T> &new_position, const vector3D<T> &new_velocity) noexcept {
@@ -296,12 +306,6 @@ namespace gtd {
         auto crend() const {
             return rend();
         }
-        vector3D<T> operator[](unsigned long long index) const { // returns a copy
-            if (index >= positions.size()) {
-                throw std::out_of_range("The specified position index is out of range.\n");
-            }
-            return positions[index];
-        }
         bool write_trajectory_to_txt(String path = get_home_path<String>() + file_sep() + "Body_Trajectory_At_" +
                 get_date_and_time() + ".txt", bool truncate = false, bool full_csv_style = false) const {
             if (!path.contains('.'))
@@ -336,6 +340,40 @@ namespace gtd {
             out << '\n';
             out.close();
             return true;
+        }
+        template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t>
+        body<M, R, T> &operator=(const body<m, r, t> &other) {
+            if (&other == this) {
+                return *this;
+            }
+            this->mass = other.mass;
+            this->radius = other.radius;
+            this->curr_pos = other.curr_pos;
+            this->curr_vel = other.curr_vel;
+            this ->curr_ke = other.curr_ke;
+            clear();
+            return *this;
+        }
+        body<M, R, T> &operator=(body<M, R, T> &&other) {
+            if (&other == this) {
+                return *this;
+            }
+            this->mass = other.mass;
+            this->radius = other.radius;
+            this->curr_pos = other.curr_pos;
+            this->curr_vel = other.curr_vel;
+            this ->curr_ke = other.curr_ke;
+            this->positions = std::move(other.positions);
+            this->velocities = std::move(other.velocities);
+            this->energies = std::move(other.energies);
+            this->cref = std::move(other.cref);
+            return *this;
+        }
+        vector3D<T> operator[](std::vector<body<M, R, T>>::size_type index) const { // returns a copy
+            if (index >= positions.size()) {
+                throw std::out_of_range("The specified position index is out of range.\n");
+            }
+            return positions[index];
         }
         template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
         friend std::ostream &operator<<(std::ostream &os, const body<m, r, t> &bod);
@@ -373,19 +411,97 @@ namespace gtd {
         return b1 + b2;
     }
     template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
-    class system {
-        constexpr long double G = 0.0000000000667430; // Newtonian constant of Gravitation (m^3 kg^-1 s^-2)
-        static const int two_body = 0; // static constants to determine which integration method to perform
-        static const int euler = 1;
-        static const int modified_euler = 2;
-        static const int rk4 = 4;
-        std::vector<body<M, R, T>> bodies;
-        long double timestep = 1;
-        unsigned long long iterations = 10000;
+    class system { // G, below, has not been made static as it varies between objects, depending on units passed
+        long double G = 66743; // Newtonian constant of Gravitation (* 10^15 m^3 kg^-1 s^-2)
+        static constexpr int two_body = 0; // static constants to determine which integration method to perform
+        static constexpr int euler = 1;
+        static constexpr int modified_euler = 2;
+        static constexpr int rk4 = 4;
+        std::vector<body<M, R, T>> bods;
+        long double dt;
+        unsigned long long iterations;
         using P = decltype((G*std::declval<M>()*std::declval<M>())/std::declval<T>()); // will be long double
         std::map<unsigned long long, std::vector<P>> pe; // map to store potential energies of bodies ({id, pe})
+        bool prog; // whether to show the progress of the evolution of the system
+        static inline unsigned long long to_ull(String &&str) {
+            if (!str.isnumeric()) {
+                return -1;
+            }
+            // str.strip();
+            unsigned long long total = 0;
+            for (const char &c : str) {
+                total *= 10;
+                total += c - 48;
+            }
+            return total;
+        }
+        void parse_units_format(String &&str) {
+            if (!std::regex_match(str.c_str(), std::regex(R"(^\s*(m|M)\s*\d{1,18}\s*:\s*\d{1,18}\s*,\s*(d|D)\s*\d{1,18}\s*:\s*\d{1,18}\s*,\s*(t|T)\s*\d{1,18}\s*:\s*\d{1,18}\s*$)"))) {
+                str.append_front("The units_format string passed, \"").append_back("\", does not match the format "
+                                                                                   "required:\n\"Ma:b,Dc:x,Ty:z\", "
+                                                                                   "where 'a', 'b', 'c', 'x', 'y', and "
+                                                                                   "'z' represent any integer number of"
+                                                                                   " 1-18 characters.");
+                throw std::invalid_argument(str.c_str());
+            }
+            str.strip("MmDdTt ");
+            size_t colon_index = str.find(':');
+            size_t comma_index = str.find(',');
+            unsigned long long m_denom = to_ull(str.substr(0, colon_index)); // denominator
+            unsigned long long m_num = to_ull(str.substr(colon_index + 1, comma_index)); // numerator
+            str.erase_chars(0, comma_index + 1);
+            colon_index = str.find(':');
+            comma_index = str.find(',');
+            unsigned long long d_num = to_ull(str.substr(0, colon_index));
+            unsigned long long d_denom = to_ull(str.substr(colon_index + 1, comma_index));
+            str.erase_chars(0, comma_index + 1);
+            colon_index = str.find(':');
+            comma_index = str.find(',');
+            unsigned long long t_denom = to_ull(str.substr(0, colon_index));
+            unsigned long long t_num = to_ull(str.substr(colon_index + 1, comma_index));
+            G *= m_num*d_num*d_num*d_num*t_num*t_num;
+            G /= m_denom*d_denom*d_denom*d_denom*t_denom*t_denom;
+            G /= 1000000000000000; // correcting for the original G being *10^(15) times larger than it should be
+        }
+        void clear_bodies() {
+            for (auto &bod : bods) {
+                bod.clear();
+            }
+        }
+    public:
+        system(const std::vector<body<M, R, T>> &bodies, long double timestep = 1,
+               unsigned long long num_iterations = 1000, bool show_progress = true,
+               const char *units_format = "M1:1,D1:1,T1:1") :
+               bods{bodies}, dt{timestep}, iterations{num_iterations}, prog{show_progress} {
+            /* units_format is a string with 3 ratios: it specifies the ratio of the units used for mass, distance and
+             * time to kg, metres and seconds (SI units), respectively. This means any units can be used. */
+            parse_units_format(units_format);
+            clear_bodies();
+        }
+        system(std::vector<body<M, R, T>> &&bodies, long double timestep = 1,
+               unsigned long long num_iterations = 1000, bool show_progress = true,
+               const char *units_format = "M1:1,D1:1,T1:1") :
+               bods{std::move(bodies)}, dt{timestep}, iterations{num_iterations}, prog{show_progress} {
+            parse_units_format(units_format);
+            clear_bodies();
+        }
+        void add_body(const body<M, R, T> &bod) {
+            bods.push_back(bod);
+            bods.back().clear(); // all bodies within a system object must start out without an evolution
+        }
+        void add_body(body<M, R, T> &&bod) {
+            bods.push_back(std::move(bod));
+            bods.back().clear(); // all bodies within a system object must start out without an evolution
+        }
+        const body<M, R, T> &operator[](std::vector<body<M, R, T>>::size_type index) {
+            if (index >= bods.size()) {
+                throw std::out_of_range("The requested body does not exist (index out of range).\n");
+            }
+            return bods[index];
+        }
     };
     std::set<unsigned long long> body_counter::ids;
     unsigned long long body_counter::count = 0;
+    //template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
 }
 #endif

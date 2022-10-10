@@ -1027,14 +1027,14 @@ namespace gtd {
             return false;
         }
 
-        size_t strip(char ch) noexcept { // returns the number of characters removed
+        size_t strip(char ch = ' ') noexcept { // returns the number of characters removed
             if (is_empty || !contains(ch) || ch == '\0') {
                 return 0;
             }
             char *start = string;
             size_t temp_len = length_w_null - 1;
             size_t count = 0;
-            while (*start != '\0') {
+            while (*start) {
                 if (*start == ch) {
                     for (int i = 0; i < temp_len; ++i) {
                         *(start + i) = *(start + i + 1);
@@ -1059,18 +1059,8 @@ namespace gtd {
             if (is_empty) {
                 return 0;
             }
-            size_t len_char = strlen_c(characters);
-            size_t not_count = 0;
-            for (const char &ch : *this) {
-                if (!contains(ch)) {
-                    ++not_count;
-                }
-            }
-            if (len_char == not_count) {
-                return 0;
-            }
             size_t count = 0;
-            for (size_t i = 0; i < len_char; ++i) {
+            while (*characters) {
                 count += strip(*characters++);
             }
             return count;
