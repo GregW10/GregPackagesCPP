@@ -50,6 +50,8 @@ namespace gtd {
             return message;
         }
     };
+    template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
+    class system;
     /* body_counter was created because each instantiation of the body subclass with different template parameters is
      * actually a different class, so the count of bodies for each different class template instantiation would be
      * different */
@@ -104,6 +106,8 @@ namespace gtd {
             --count;
             ids.erase(id);
         }
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
+        friend class system;
     };
     template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
     class body : public body_counter {
@@ -141,8 +145,7 @@ namespace gtd {
             }
         }
     public:
-        body() : mass{1}, radius{1}, curr_ke{0}, curr_pos{}, curr_vel{} {add_pos_vel_ke(); check_mass();
-            check_radius();}
+        body() : mass{1}, radius{1}, curr_ke{0}, curr_pos{}, curr_vel{} {add_pos_vel_ke(); check_mass();check_radius();}
         body(M &&body_mass, R &&body_radius) : mass{body_mass}, radius{body_radius}, curr_ke{0}, curr_pos{},
                                                curr_vel{} {add_pos_vel(); check_mass(); check_radius();}
         body(const M &body_mass, const R &body_radius) : mass{body_mass}, radius{body_radius}, curr_ke{0}, curr_pos{},
@@ -354,6 +357,18 @@ namespace gtd {
             clear();
             return *this;
         }
+        body<M, R, T> &operator=(const body<M, R, T> &other) {
+            if (&other == this) {
+                return *this;
+            }
+            this->mass = other.mass;
+            this->radius = other.radius;
+            this->curr_pos = other.curr_pos;
+            this->curr_vel = other.curr_vel;
+            this ->curr_ke = other.curr_ke;
+            clear();
+            return *this;
+        }
         body<M, R, T> &operator=(body<M, R, T> &&other) {
             if (&other == this) {
                 return *this;
@@ -385,6 +400,10 @@ namespace gtd {
         friend auto operator+(const body<m1, r1, t1> &&b1, const body<m2, r2, t2> &b2);
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
         friend auto operator+(const body<m1, r1, t1> &&b1, const body<m2, r2, t2> &&b2);
+        template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
+        friend system<m, r, t> operator+(const system<m, r, t> &sys1, const system<m, r, t> &sys2);
+        template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
+        friend class system;
     };
     template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
     std::ostream &operator<<(std::ostream &os, const body<m, r, t> &bod) {
@@ -417,6 +436,7 @@ namespace gtd {
         static constexpr int euler = 1;
         static constexpr int modified_euler = 2;
         static constexpr int rk4 = 4;
+        using vec_size_t = typename std::vector<body<M, R, T>>::size_type;
         std::vector<body<M, R, T>> bods;
         long double dt;
         unsigned long long iterations;
@@ -463,9 +483,32 @@ namespace gtd {
             G /= m_denom*d_denom*d_denom*d_denom*t_denom*t_denom;
             G /= 1000000000000000; // correcting for the original G being *10^(15) times larger than it should be
         }
-        void clear_bodies() {
+        void clear_bodies() { // makes sure the trajectories of all bodies are deleted
             for (auto &bod : bods) {
                 bod.clear();
+            }
+        }
+        void clear_bodies(vec_size_t &as_of) {
+            vec_size_t size = bods.size();
+            while (as_of < size) {
+                bods[as_of++].clear();
+            }
+        }
+        void check_overlap() {
+            vec_size_t size = bods.size();
+            const body<M, R, T> *outer;
+            const body<M, R, T> *inner;
+            for (vec_size_t i = 0; i < size; ++i) {
+                outer = &bods[i];
+                for (vec_size_t j = i + 1; j < size; ++j) {
+                    inner = &bods[j];
+                    if ((outer->curr_pos - inner->curr_pos).magnitude() < outer->radius + inner->radius) {
+                        String str = "The bodies with id=";
+                        str.append_back(outer->id).append_back(" and id=").append_back(inner->id);
+                        str.append_back(" that were added to this system object overlap.\n");
+                        throw overlapping_bodies_error(str.c_str());
+                    }
+                }
             }
         }
     public:
@@ -477,6 +520,7 @@ namespace gtd {
              * time to kg, metres and seconds (SI units), respectively. This means any units can be used. */
             parse_units_format(units_format);
             clear_bodies();
+            check_overlap();
         }
         system(std::vector<body<M, R, T>> &&bodies, long double timestep = 1,
                unsigned long long num_iterations = 1000, bool show_progress = true,
@@ -484,14 +528,95 @@ namespace gtd {
                bods{std::move(bodies)}, dt{timestep}, iterations{num_iterations}, prog{show_progress} {
             parse_units_format(units_format);
             clear_bodies();
+            check_overlap();
         }
-        void add_body(const body<M, R, T> &bod) {
+        system(const system<M, R, T> &other) :
+        bods{other.bods}, dt{other.dt}, iterations{other.iterations}, prog{other.prog}, pe{other.pe}, G{other.G} {
+            clear_bodies();
+            check_overlap();
+        }
+        system(system<M, R, T> &&other) : bods{std::move(other.bods)}, dt{other.dt}, iterations{other.iterations},
+        prog{other.prog}, pe{std::move(other.pe)}, G{other.G} {
+            clear_bodies();
+            check_overlap();
+        }
+        vec_size_t num_bodies() {
+            return bods.size();
+        }
+        system<M, R, T> &add_body(const body<M, R, T> &bod) {
             bods.push_back(bod);
             bods.back().clear(); // all bodies within a system object must start out without an evolution
+            check_overlap();
+            return *this;
         }
-        void add_body(body<M, R, T> &&bod) {
+        system<M, R, T> &add_body(body<M, R, T> &&bod) {
             bods.push_back(std::move(bod));
-            bods.back().clear(); // all bodies within a system object must start out without an evolution
+            bods.back().clear();
+            check_overlap();
+            return *this;
+        }
+        system<M, R, T> &add_bodies(const std::vector<body<M, R, T>> &bodies) {
+            if (bodies.size() == 0) {
+                return *this;
+            }
+            vec_size_t index = bods.size();
+            bods.insert(bods.end(), bodies.begin(), bodies.end());
+            clear_bodies(index);
+            return *this;
+        }
+        system<M, R, T> &add_bodies(std::vector<body<M, R, T>> &&bodies) {
+            if (bodies.size() == 0) {
+                return *this;
+            }
+            for (auto &b : bodies) {
+                bods.push_back(std::move(b));
+            }
+            return *this;
+        }
+        const body<M, R, T> &get_body(unsigned long long id) {
+            for (const auto &b : *this) {
+                if (b.id == id) {
+                    return b;
+                }
+            }
+            throw std::invalid_argument("The id passed does not correspond to any body present in this system "
+                                        "object.\n");
+        }
+        auto begin() {
+            return bods.begin();
+        }
+        auto end() {
+            return bods.end();
+        }
+        auto begin() const {
+            return bods.cbegin();
+        }
+        auto end() const {
+            return bods.cend();
+        }
+        auto cbegin() const {
+            return bods.cbegin();
+        }
+        auto cend() const {
+            return bods.cend();
+        }
+        auto rbegin() {
+            return bods.rbegin();
+        }
+        auto rend() {
+            return bods.rend();
+        }
+        auto rbegin() const {
+            return bods.crbegin();
+        }
+        auto rend() const {
+            return bods.crend();
+        }
+        auto crbegin() const {
+            return bods.crbegin();
+        }
+        auto crend() const {
+            return bods.crend();
         }
         const body<M, R, T> &operator[](std::vector<body<M, R, T>>::size_type index) {
             if (index >= bods.size()) {
@@ -499,9 +624,52 @@ namespace gtd {
             }
             return bods[index];
         }
+        template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
+        friend std::ostream &operator<<(std::ostream &os, const system<m, r, t> &sys);
+        template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
+        friend system<m, r, t> operator+(const system<m, r, t> &sys1, const system<m, r, t> &sys2);
     };
+    template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
+    std::ostream &operator<<(std::ostream &os, const system<M, R, T> &sys) {
+        typename std::vector<body<M, R, T>>::size_type count = sys.bods.size();
+        os << "[gtd::system@" << &sys << ",num_bodies=" << count;
+        if (count == 0) {
+            return os << ']';
+        }
+        os << ",bodies:";
+        count = 0;
+        for (const body<M, R, T> &b : sys) {
+            os << "\n body_" << count++ << '=' << b;
+        }
+        os << ']';
+        return os;
+    }
+    template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
+    system<M, R, T> operator+(const system<M, R, T> &sys1, const system<M, R, T> &sys2) {
+        typename std::vector<body<M, R, T>>::size_type size1 = sys1.bods.size();
+        typename std::vector<body<M, R, T>>::size_type size2 = sys2.bods.size();
+        if ((size1 == 0 && size2 == 0) || sys1.G != sys2.G) {
+            return {{}};
+        }
+        if (size1 == 0) {
+            return {sys2};
+        }
+        if (size2 == 0) {
+            return {sys1};
+        }
+        for (typename std::vector<body<M, R, T>>::size_type i = 0; i < size1; ++i) {
+            for (typename std::vector<body<M, R, T>>::size_type j = 0; j < size2; ++j) {
+                if ((sys1.bods[i].curr_pos-sys2.bods[j].curr_pos).magnitude() < sys1.bods[i].radius+sys2.bods[j].radius)
+                    throw overlapping_bodies_error();
+            }
+        }
+        system<M, R, T> ret_sys(sys1.bods, (sys1.dt + sys2.dt)/2.0l, (sys1.iterations + sys2.iterations)/2,
+                                sys1.prog && sys2.prog);
+        ret_sys.G = sys1.G;
+        ret_sys.add_bodies(sys2.bods);
+        return ret_sys;
+    }
     std::set<unsigned long long> body_counter::ids;
     unsigned long long body_counter::count = 0;
-    //template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
 }
 #endif
