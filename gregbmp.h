@@ -304,7 +304,7 @@ namespace gtd {
             }
             return (data[y][x].r << 16) + (data[y][x].g << 8) + data[y][x].b;
         }
-        void draw_2d_circle(long double x, long double y, long double r) {
+        void draw_circle(long double x, long double y, long double r) {
             if (r == 0 || x + r < 0 || y + r < 0 || x - r >= width || y - r >= height) {
                 return;
             }
@@ -314,11 +314,12 @@ namespace gtd {
             unsigned int left;
             unsigned int right;
             long double root;
-            while (bottom <= top && y < top) {
-                root = sqrtl(r*r - (y - bottom)*(y - bottom));
+            long double y_copy = y - r;
+            while (bottom <= top && y_copy <= top) {
+                root = sqrtl(r*r - (y - y_copy)*(y - y_copy));
                 left = roundl(x - root);
                 right = roundl(x + root);
-                if (left >= width) {
+                if (left >= width || right - left <= 0) {
                     goto end;
                 }
                 while (left <= right) {
@@ -326,6 +327,7 @@ namespace gtd {
                 }
                 end:
                 ++bottom;
+                y_copy += 1;
                 if (bottom >= height) {
                     break;
                 }
@@ -376,9 +378,9 @@ namespace gtd {
                 return false;
             }
             read_bmp(source_bmp);
+            return true;
         }
         bool write(const char *path_to_bmp) {
-            //std::cout << path_to_bmp << std::endl;
             if (path_to_bmp == nullptr || *path_to_bmp == 0) {
                 return false;
             }
@@ -399,7 +401,6 @@ namespace gtd {
             return true;
         }
         bool write() {
-            std::cout << path << std::endl;
             return write(path.c_str());
         }
         bmp &operator=(const bmp &other) {
@@ -422,6 +423,7 @@ namespace gtd {
                 }
                 copy_pixels(other.data);
             }
+            return *this;
         }
         bmp &operator=(bmp &&other) {
             if (&other == this) { // could happen!
@@ -434,6 +436,7 @@ namespace gtd {
             this->sc_clr = other.sc_clr;
             this->path = other.path;
             this->stroke_t = other.stroke_t;
+            return *this;
         }
         ~bmp() {
             dealloc();

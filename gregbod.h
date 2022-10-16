@@ -121,6 +121,7 @@ namespace gtd {
         std::vector<vector3D<T>> velocities; // ... body as it moves
         std::vector<K> energies;
         mutable std::vector<std::tuple<const vector3D<T>&, const vector3D<T>&, const K&>> cref;
+        typedef typename std::vector<vector3D<T>>::size_type vec_s_t;
         void add_pos_vel() {
             positions.push_back(curr_pos);
             velocities.push_back(curr_vel);
@@ -179,19 +180,19 @@ namespace gtd {
         const K &get_ke() const noexcept {
             return curr_ke;
         }
-        const vector3D<T> &pos_at(std::vector<body<M, R, T>>::size_type index) const {
+        const vector3D<T> &pos_at(vec_s_t index) const {
             if (index >= positions.size()) {
                 throw std::out_of_range("Requested position does not exist (index out of range).\n");
             }
             return positions[index];
         }
-        const vector3D<T> &vel_at(std::vector<body<M, R, T>>::size_type index) const {
+        const vector3D<T> &vel_at(vec_s_t index) const {
             if (index >= velocities.size()) {
                 throw std::out_of_range("Requested velocity does not exist (index out of range).\n");
             }
             return velocities[index];
         }
-        const K &ke_at(std::vector<body<M, R, T>>::size_type index) const {
+        const K &ke_at(typename std::vector<K>::size_type index) const {
             if (index >= energies.size()) {
                 throw std::out_of_range("Requested kinetic energy does not exist (index out of range).\n");
             }
@@ -384,7 +385,7 @@ namespace gtd {
             this->cref = std::move(other.cref);
             return *this;
         }
-        vector3D<T> operator[](std::vector<body<M, R, T>>::size_type index) const { // returns a copy
+        vector3D<T> operator[](vec_s_t index) const { // returns a copy
             if (index >= positions.size()) {
                 throw std::out_of_range("The specified position index is out of range.\n");
             }
@@ -618,7 +619,7 @@ namespace gtd {
         auto crend() const {
             return bods.crend();
         }
-        const body<M, R, T> &operator[](std::vector<body<M, R, T>>::size_type index) {
+        const body<M, R, T> &operator[](vec_size_t index) {
             if (index >= bods.size()) {
                 throw std::out_of_range("The requested body does not exist (index out of range).\n");
             }
