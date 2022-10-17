@@ -1492,7 +1492,7 @@ namespace gtd {
         }
 
         void space() const noexcept {
-            printf("Length w null: %zu, size: %zu, space front: %zu, space back: %zu, string - data: %d\n",
+            printf("Length w null: %zu, size: %zu, space front: %zu, space back: %zu, string - data: %ld\n",
                    length_w_null, size, space_front, space_back, string - data);
         }
 
