@@ -230,7 +230,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         vector2D<T> copy() {
             return vector2D<T>(this->x, this->y);
         }
-        inline T &operator[](unsigned char index) noexcept override {
+        inline T &operator[](unsigned char index) override {
             if (index > 1) {
                 throw std::invalid_argument("Only the indices '0' and '1' are possible.");
             }
@@ -1712,7 +1712,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         inline vector3D<T> copy() {
             return vector3D<T>(this->x, this->y, this->z);
         }
-        T &operator[](unsigned char index) noexcept override {
+        T &operator[](unsigned char index) override {
             if (index > 2) {
                 throw std::invalid_argument("Only the indices '0', '1' and '2' are possible.");
             }
