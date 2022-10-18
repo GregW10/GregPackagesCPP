@@ -233,17 +233,13 @@ namespace gtd {
         shape(p), radius{r} {}
         circle(const circle &other) = default;
         bool contains(const long double &x, const long double &y) const noexcept override {
-            if (sqrtl((x - shape::pos.x)*(x - shape::pos.x) + (y - shape::pos.y)*(y - shape::pos.y)) > radius)
-                return false;
-            return true;
+            return sqrtl((x - shape::pos.x)*(x - shape::pos.x) + (y - shape::pos.y)*(y - shape::pos.y)) <= radius;
         }
         bool contains(const long double &&x, const long double &&y) const noexcept override {
             return contains(x, y);
         }
         bool contains(const point &p) const noexcept override {
-            if (sqrtl((p.x - shape::pos.x)*(p.x - shape::pos.x) + (p.y - shape::pos.y)*(p.y - shape::pos.y)) > radius)
-                return false;
-            return true;
+            return sqrtl((p.x - shape::pos.x)*(p.x - shape::pos.x)+(p.y - shape::pos.y)*(p.y - shape::pos.y)) <= radius;
         }
         bool fully_contains(const pixel &p) const noexcept;
         bool partially_contains(const pixel &p) const noexcept;
@@ -295,18 +291,16 @@ namespace gtd {
         void set_pos(const long double &&x, const long double &&y) noexcept override {
             set_pos(x, y);
         }
-        void calc_shade(const circle &c, const color &bg_color = color{}) noexcept {
-            if (!c.contains(shape::pos) && !c.contains(shape::pos.x + 1, shape::pos.y) &&
-                !c.contains(shape::pos.x, shape::pos.y + 1) && !c.contains(shape::pos.x + 1, shape::pos.y + 1)) {
+        pixel &calc_shade(const circle &c, const color &bg_color = color{}) noexcept {
+            if (!c.partially_contains(*this)) {
                 col = bg_color; // the whole pixel is outside the circle, so its colour must be the background colour
-                return;
+                return *this;
             }
-            if (c.contains(shape::pos) && c.contains(shape::pos.x + 1, shape::pos.y) &&
-                c.contains(shape::pos.x, shape::pos.y + 1) && c.contains(shape::pos.x + 1, shape::pos.y + 1)) {
-                return; // the whole pixel is inside the circle, so its colour remains unchanged
+            if (c.fully_contains(*this)) {
+                return *this; // the whole pixel is inside the circle, so its colour remains unchanged
             }
             point p;
-            unsigned char count = 0;
+            unsigned short count = 0;
             for (unsigned char i = 1; i <= 16; ++i) { // creates a 16x16 grid of points on the pixel - the proportion
                 for (unsigned char j = 1; j <= 16; ++j) { // that the circle contains sets the brightness of the colour
                     p.x = shape::pos.x + i/17.0l;
@@ -315,28 +309,29 @@ namespace gtd {
                         ++count;
                 }
             }
+            if (count == 256) // case for the pixel being entirely within circle, so fully coloured
+                return *this;
             col.r = bg_color.r + (unsigned char)
-                    roundl((col.r >= bg_color.r ? col.r - bg_color.r : bg_color.r - col.r)*(count/255.0l));
+                    roundl(col.r >= bg_color.r ? (col.r - bg_color.r)*(count/256.0l) : (bg_color.r - col.r)*((256.0l - count)/256.0l));
             col.g = bg_color.g + (unsigned char)
-                    roundl((col.g >= bg_color.g ? col.g - bg_color.g : bg_color.g - col.g)*(count/255.0l));
+                    roundl(col.g >= bg_color.g ? (col.g - bg_color.g)*(count/256.0l) : (bg_color.g - col.g)*((256.0l - count)/256.0l));
             col.b = bg_color.b + (unsigned char)
-                    roundl((col.b >= bg_color.b ? col.b - bg_color.b : bg_color.b - col.b)*(count/255.0l));
+                    roundl(col.b >= bg_color.b ? (col.b - bg_color.b)*(count/256.0l) : (bg_color.b - col.b)*((256.0l - count)/256.0l));
+            return *this;
         }
         friend inline bool operator==(const pixel &p1, const pixel &p2);
         friend class circle;
         friend class bmp;
     };
     bool circle::fully_contains(const pixel &p) const noexcept {
-        if (contains(p.pos) && contains(p.pos.x, p.pos.y + 1) && contains(p.pos.x + 1, p.pos.y) &&
-            contains(p.pos.x + 1, p.pos.y + 1))
-            return true;
-        return false;
+        return contains(p.pos) && contains(p.pos.x, p.pos.y + 1) && contains(p.pos.x + 1, p.pos.y) &&
+               contains(p.pos.x + 1, p.pos.y + 1);
     }
     bool circle::partially_contains(const pixel &p) const noexcept {
-        if (contains(p.pos) || contains(p.pos.x, p.pos.y + 1) || contains(p.pos.x + 1, p.pos.y) ||
-            contains(p.pos.x + 1, p.pos.y + 1))
-            return true;
-        return false;
+        return (contains(p.pos) || contains(p.pos.x, p.pos.y + 1) || contains(p.pos.x + 1, p.pos.y) ||
+               contains(p.pos.x + 1, p.pos.y + 1)) ||
+               (/* radius <= sqrtl(0.5l) && */p.pos.x <= shape::pos.x && p.pos.x + 1 >= shape::pos.x &&
+               p.pos.y <= shape::pos.y && p.pos.y + 1 >= shape::pos.y);
     }
     class bmp {
         static constexpr unsigned int def_width = 2400;
@@ -345,7 +340,7 @@ namespace gtd {
         unsigned int height = def_height;
         color **data = nullptr;
         String path;
-        color sc_clr = colors::white; // selected colour
+        color sc_clr = colors::black; // selected colour
         unsigned int stroke_t = 10;
         unsigned char padding[3] = {0, 0, 0};
         unsigned char (*calc_pad)(const unsigned int&) =
@@ -457,43 +452,24 @@ namespace gtd {
                 }
             }
         }
-        // bool pixel_fully_inside_circle(const long double &x_circle, const long double &y_circle, const long double &r,
-        //                                unsigned int &x, unsigned int &y) const noexcept {
-        //     if (x < 0 || y < 0 || x >= width || y >= height)
-        //         return false;
-        //     long double left = x;
-        //     long double right = x + 1;
-        //     long double bottom = y;
-        //     long double top = y + 1;
-        //     if (sqrtl((left - x_circle)*(left - x_circle) + (bottom - y_circle)*(bottom - y_circle)) >= r)
-        //         return false;
-        //     if (sqrtl((left - x_circle)*(left - x_circle) + (top - y_circle)*(top - y_circle)) >= r)
-        //         return false;
-        //     if (sqrtl((right - x_circle)*(right - x_circle) + (bottom - y_circle)*(bottom - y_circle)) >= r)
-        //         return false;
-        //     if (sqrtl((right - x_circle)*(right - x_circle) + (top - y_circle)*(top - y_circle)) >= r)
-        //         return false;
-        //     return true;
-        // }
     public:
-        bmp() : path{std::move(get_home_path<String>() + file_sep() + "BMP_Image_On_" + get_date_and_time() + ".bmp")}
+        bmp() : path{std::move(get_home_path<String>() + file_sep() + "BMP_Image_" + get_date_and_time() + ".bmp")}
         {fill_background();}
         explicit bmp(const char *source_bmp) :
-        path{std::move(get_home_path<String>() + file_sep() + "BMP_Image_On_" + get_date_and_time() + ".bmp")} {
+        path{std::move(get_home_path<String>() + file_sep() + "BMP_Image_" + get_date_and_time() + ".bmp")} {
             read_bmp(source_bmp);
         }
         bmp(unsigned int bmp_width, unsigned int bmp_height) : width{bmp_width}, height{bmp_height},
-        sc_clr{colors::black},
-        path{std::move(get_home_path<String>() + file_sep() + "BMP_Image_On_" + get_date_and_time() + ".bmp")} {
+        path{std::move(get_home_path<String>() + file_sep() + "BMP_Image_" + get_date_and_time() + ".bmp")} {
             check_size();
             fill_background();
         }
         explicit bmp(color background_color) : sc_clr{background_color},
-        path{std::move(get_home_path<String>() + file_sep() + "BMP_Image_On_" + get_date_and_time() + ".bmp")}
+        path{std::move(get_home_path<String>() + file_sep() + "BMP_Image_" + get_date_and_time() + ".bmp")}
         {fill_background();}
         bmp(color background_color, unsigned int bmp_width, unsigned int bmp_height) : sc_clr{background_color},
         width{bmp_width}, height{bmp_height},
-        path{std::move(get_home_path<String>() + file_sep() + "BMP_Image_On_" + get_date_and_time() + ".bmp")} {
+        path{std::move(get_home_path<String>() + file_sep() + "BMP_Image_" + get_date_and_time() + ".bmp")} {
             check_size();
             fill_background();
         }
@@ -585,77 +561,100 @@ namespace gtd {
             }
             return (data[y][x].r << 16) + (data[y][x].g << 8) + data[y][x].b;
         }
+        unsigned char *as_ycbcr(unsigned int x, unsigned int y) {
+            if (x >= width || y >= height) {
+                return nullptr;
+            }
+            /* thanks to: https://web.archive.org/web/20180423091842/http://www.equasys.de/colorconversion.html for
+             * the conversion equations */
+            static unsigned char ret[3];
+            unsigned char &r = data[y][x].r;
+            unsigned char &g = data[y][x].g;
+            unsigned char &b = data[y][x].b;
+            ret[0] = (unsigned char) roundl(0.299l*r + 0.587l*g + 0.114l*b);
+            ret[1] = (unsigned char) roundl(128.0l - 0.169l*r - 0.331l*g + 0.5l*b);
+            ret[2] = (unsigned char) roundl(128.0l + 0.5l*r - 0.419l*g - 0.081l*b);
+            return ret;
+        }
+        bool contains(const pixel &p) const noexcept {
+            return p.pos.x >= 0 && p.pos.y >= 0 && p.pos.x < width && p.pos.y < height;
+        }
         void draw_circle(const circle &c) {
-            if (c.radius == 0 || c.pos.x + c.radius < 0 || c.pos.y + c.radius < 0 || c.pos.x - c.radius >= width || c.pos.y - c.radius >= height) {
+            if (c.radius == 0 || c.pos.x + c.radius < 0 || c.pos.y + c.radius < 0 || c.pos.x - c.radius >= width ||
+                c.pos.y - c.radius >= height) { // case for where the entire circle would be hidden
                 return;
             }
             long double top = c.pos.y + c.radius;
-            long double left;
-            long double right;
+            if (top > height - 1) {
+                top = height;
+            }
+            unsigned int left;
+            unsigned int right;
             long double root;
             long double y_btm = c.pos.y - c.radius;
+            if (y_btm < 0) {
+                y_btm = 0;
+            }
             long double y_counter = y_btm;
+            long double center_bound;
             unsigned int count = 0;
-            while (y_counter <= top) { // first loop roughly fills in all the pixels necessary
+            pixel p;
+            while (y_counter < top) { // first loop fills in all the totally covered pixels
                 root = sqrtl(c.radius*c.radius - (c.pos.y - y_counter)*(c.pos.y - y_counter));
-                left = roundl(c.pos.x - root);
-                right = roundl(c.pos.x + root);
-                if (left >= width || right - left <= 0) {
+                left = (unsigned int) roundl(c.pos.x - root);
+                right = (unsigned int) roundl(c.pos.x + root);
+                if (left >= width || right - left <= 0)
                     goto end;
+                center_bound = c.pos.x;
+                if (c.pos.x >= width) {
+                    center_bound = width - 1;
                 }
-                while (left <= c.pos.x) { // the cast to uns. int takes care of the conversion to axes coords and the rounding
-                    data[(unsigned int) y_counter][(unsigned int) left] = sc_clr;
-                    left += 1;
+                p.set_pos(left, (unsigned int) y_counter);
+                while (!c.fully_contains(p) && left <= center_bound) {
+                    ++left;
+                    p.set_pos(left, (unsigned int) y_counter);
+                }
+                while (left <= center_bound) { // the cast to uns. int takes care of correct conversion to axes coords
+                    data[(unsigned int) y_counter][left] = sc_clr;
+                    ++left;
+                }
+                if (right >= width)
+                    right = width - 1;
+                p.set_pos(right, (unsigned int) y_counter);
+                while (!c.fully_contains(p) && right >= c.pos.x) {
+                    --right;
+                    p.set_pos(right, (unsigned int) y_counter);
                 }
                 while (right >= c.pos.x) {
-                    data[(unsigned int) y_counter][(unsigned int) right] = sc_clr;
-                    right -= 1;
+                    data[(unsigned int) y_counter][right] = sc_clr;
+                    --right;
                 }
                 end:
                 ++count;
                 y_counter = y_btm + count; // to reduce accumulated f.p. error
-                if ((unsigned int) y_counter >= height) {
-                    break;
-                }
+                // if ((unsigned int) y_counter >= height) {
+                //     break;
+                // }
             }
-            pixel p;
             pixel prev;
-            // pixel s1; // pixels surrounding the one being adjusted
-            // pixel s2;
-            // pixel s3;
-            // pixel s4;
-            // pixel s5;
-            // pixel s6;
-            // pixel s7;
-            // pixel s8;
+            prev.pos.x = 0.5; // this way prev is guaranteed to be different from p in the first iteration
+            prev.pos.y = 0.5;
             std::vector<pixel> pixels(8); // pixels surrounding the one being adjusted
             long double theta = 0;
-            long double d_theta = 0.0625/c.radius;
-            long double two_pi = 2*M_PI;
+            long double d_theta = 0.000244140625/c.radius; // a small enough angle step to include all outer pixels
+            long double two_pi = 2*PI; // PI is defined in gregmat.h
             color background_color{};
             unsigned short tot_r;
             unsigned short tot_g;
             unsigned short tot_b;
-            // unsigned int x_index;
-            // unsigned int y_index;
             unsigned char bg_count;
             while (theta < two_pi) {//this loop fills in missing pixels and/or corrects existing ones with anti-aliasing
-                // x_index = (unsigned int) (cosl(theta)*c.radius);
-                // y_index = (unsigned int) (sinl(theta)*c.radius);
-                // p.set_pos(x_index, y_index);
                 p.set_pos((unsigned int) (c.pos.x + cosl(theta)*c.radius),
                           (unsigned int) (c.pos.y + sinl(theta)*c.radius));
                 if (p == prev)
                     goto bye;
+                p.set_color(sc_clr);
                 tot_r = tot_g = tot_b = 0;
-                // s1.set_pos(p.pos.x, p.pos.y + 1);
-                // s2.set_pos(p.pos.x - 1, p.pos.y + 1);
-                // s3.set_pos(p.pos.x - 1, p.pos.y);
-                // s4.set_pos(p.pos.x - 1, p.pos.y - 1);
-                // s5.set_pos(p.pos.x, p.pos.y - 1);
-                // s6.set_pos(p.pos.x + 1, p.pos.y - 1);
-                // s7.set_pos(p.pos.x + 1, p.pos.y);
-                // s8.set_pos(p.pos.x + 1, p.pos.y + 1);
                 pixels[0].set_pos(p.pos.x, p.pos.y + 1);
                 pixels[1].set_pos(p.pos.x - 1, p.pos.y + 1);
                 pixels[2].set_pos(p.pos.x - 1, p.pos.y);
@@ -666,21 +665,26 @@ namespace gtd {
                 pixels[7].set_pos(p.pos.x + 1, p.pos.y + 1);
                 bg_count = 0;
                 for (const pixel &pix : pixels) {
-                    if (!c.partially_contains(pix)) {
+                    if (!c.partially_contains(pix) && contains(pix)) {
                         tot_r += data[(unsigned int) pix.pos.y][(unsigned int) pix.pos.x].r;
                         tot_g += data[(unsigned int) pix.pos.y][(unsigned int) pix.pos.x].g;
                         tot_b += data[(unsigned int) pix.pos.y][(unsigned int) pix.pos.x].b;
                         ++bg_count;
                     }
                 }
-                background_color.r = (unsigned char) (tot_r/((long double) bg_count) + 0.5l);
-                background_color.g = (unsigned char) (tot_g/((long double) bg_count) + 0.5l);
-                background_color.b = (unsigned char) (tot_b/((long double) bg_count) + 0.5l);
+                if (bg_count == 0) {
+                    background_color = sc_clr;
+                }
+                else {
+                    background_color.r = (unsigned char) (tot_r/((long double) bg_count) + 0.5l);
+                    background_color.g = (unsigned char) (tot_g/((long double) bg_count) + 0.5l);
+                    background_color.b = (unsigned char) (tot_b/((long double) bg_count) + 0.5l);
+                }
                 p.calc_shade(c, background_color);
-                // data[(unsigned int) p.pos.y][(unsigned int) p.pos.x] = p.get_color();
-                data[(unsigned int) roundl(p.pos.y - 0.5l)][(unsigned int) roundl(p.pos.x - 0.5l)] = p.get_color();
+                if (contains(p))
+                    data[(unsigned int) roundl(p.pos.y - 0.5l)][(unsigned int) roundl(p.pos.x - 0.5l)] = p.get_color();
                 bye:
-                theta += d_theta; // f.p. rounding errors are not really an issue here
+                theta += d_theta; // f.p. rounding errors are not an issue here
                 prev = p;
             }
         }
