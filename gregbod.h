@@ -56,8 +56,8 @@ namespace gtd {
      * actually a different class, so the count of bodies for each different class template instantiation would be
      * different */
     class body_counter {
-        static unsigned long long count;
-        static std::set<unsigned long long> ids;
+        inline static unsigned long long count;
+        inline static std::set<unsigned long long> ids;
         void set_id() {
             unsigned long long prev = 0;
             for (const auto &i : ids) {
@@ -240,6 +240,9 @@ namespace gtd {
         void apply_vel_transform(const matrix<T> &&transform) {
             curr_vel.apply(transform);
         }
+        auto momentum() const noexcept {
+            return mass*curr_vel;
+        }
         void reset(bool clear_trajectory = true) { // resets the body to initial setup and clears traj. if specified
             curr_pos = positions[0];
             curr_vel = velocities[0];
@@ -370,7 +373,7 @@ namespace gtd {
             clear();
             return *this;
         }
-        body<M, R, T> &operator=(body<M, R, T> &&other) {
+        body<M, R, T> &operator=(body<M, R, T> &&other) noexcept {
             if (&other == this) {
                 return *this;
             }
@@ -394,6 +397,10 @@ namespace gtd {
         template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
         friend std::ostream &operator<<(std::ostream &os, const body<m, r, t> &bod);
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
+        friend inline auto com(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2);
+        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
+        friend inline auto avg_vel(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2);
+        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
         friend auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2);
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
         friend auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &&b2);
@@ -408,15 +415,25 @@ namespace gtd {
     };
     template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
     std::ostream &operator<<(std::ostream &os, const body<m, r, t> &bod) {
-        return os << "[gtd::body@" << &bod << ":id=" << bod.id << ",m=" << bod.mass << ",r=" << bod.radius
+        return os << "[gtd::body@" << &bod << ":id=" << bod.id << ",m=" << +bod.mass << ",r=" << +bod.radius
                   << ",current_pos=(" << bod.curr_pos << "),current_vel=(" << bod.curr_vel << "),current_ke="
                   << bod.curr_ke << "]";
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
-    auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) {
-        return body<decltype(b1.mass + b2.mass), long double, decltype(std::declval<t1>() + std::declval<t2>())>(b1.mass
-        + b2.mass, cbrtl(b1.radius*b1.radius*b1.radius + b2.radius*b2.radius*b2.radius), b1.curr_pos + b2.curr_pos,
-        b1.curr_vel + b2.curr_vel); // the returned body has a reset trajectory (since it is new!)
+    inline auto com(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) { // centre of mass position
+        return (b1.mass*b1.curr_pos + b2.mass*b2.curr_pos)/(b1.mass + b2.mass);
+    }
+    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
+    inline auto avg_vel(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) { /* average weighted velocity, taking
+        conservation of momentum into account */
+        return (b1.momentum() + b2.momentum())/(b1.mass + b2.mass);
+    }
+    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
+    auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) { /* performs a "merging" of two bodies,
+        with the new body having the sum of both mass, being at the centre-of-mass of both bodies, having a volume equal
+        to the sum of both volumes (using the radii), and a new velocity such that momentum is conserved */
+        return body<decltype(b1.mass + b2.mass), long double, decltype(com(b1, b2))>(b1.mass + b2.mass,
+        cbrtl(b1.radius*b1.radius*b1.radius + b2.radius*b2.radius*b2.radius), com(b1, b2), avg_vel(b1, b2));
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
     auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &&b2) {
@@ -583,6 +600,16 @@ namespace gtd {
             throw std::invalid_argument("The id passed does not correspond to any body present in this system "
                                         "object.\n");
         }
+        bool remove_body(unsigned long long id) {
+            auto end_it = bods.cend();
+            for (typename std::vector<body<M, R, T>>::const_iterator it = bods.cbegin(); it < end_it; ++it) {
+                if ((*it).id == id) {
+                    bods.erase(it);
+                    return true;
+                }
+            }
+            return false;
+        }
         auto begin() {
             return bods.begin();
         }
@@ -670,7 +697,7 @@ namespace gtd {
         ret_sys.add_bodies(sys2.bods);
         return ret_sys;
     }
-    std::set<unsigned long long> body_counter::ids;
-    unsigned long long body_counter::count = 0;
+    // std::set<unsigned long long> body_counter::ids;
+    // unsigned long long body_counter::count = 0;
 }
 #endif

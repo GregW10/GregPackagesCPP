@@ -2332,7 +2332,7 @@ namespace gtd {
 #endif
     }
 
-    const char *get_date_and_time() { // returns date & time with '-' instead of spaces and 'h', 'm', 's' inst. of colon
+    const char *get_date_and_time() { // returns date & time with '_' instead of spaces and 'h', 'm', 's' inst. of colon
         time_t t = time(nullptr);
         char *ptr = ctime(&t);
         char *end = ptr + 24; // ctime() always returns a string with 26 chars (including '\0'), end points to '\n'
@@ -2347,6 +2347,8 @@ namespace gtd {
         *(end -= 3) = '_';
         *(end -= 3) = '_';
         *(end - 4) = '_';
+        if (!isdigit_c(*++end)) // case for first 9 days of month
+            *end = 48;
         return ptr;
     }
 
