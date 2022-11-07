@@ -175,14 +175,14 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             y = value;
             return *this;
         }
-        inline T &get_x() const noexcept {
+        inline const T &get_x() const noexcept {
             return x;
         }
-        inline T &get_y() const noexcept {
+        inline const T &get_y() const noexcept {
             return y;
         }
         inline std::pair<T, T> to_pair() {
-            return std::pair<T, T>{this->x, this->y};
+            return {this->x, this->y};
         }
         virtual long double magnitude() const noexcept override {
             return std::sqrt(static_cast<long double>(x)*static_cast<long double>(x) + // best to avoid call to
@@ -478,11 +478,18 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->y = other.y;
             return *this;
         }
+        vector2D<T> &operator=(const vector2D<T> &other) noexcept {
+            this->x = other.x;
+            this->y = other.y;
+            return *this;
+        }
         vector2D<T> &operator=(const vector<T> &&other) noexcept override {
             return *this = other;
         }
-        vector2D<T> &operator=(const vector2D<T> &&other) noexcept {
-            return *this = other;
+        vector2D<T> &operator=(vector2D<T> &&other) noexcept {
+            this->x = std::move(other.x); // in case T is an object and not a primitive type
+            this->y = std::move(other.y);
+            return *this;
         }
         template <isNumWrapper U>
         friend std::ostream &operator<<(std::ostream &out, const vector2D<U> &vec);
@@ -1618,7 +1625,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->z = value;
             return *this;
         }
-        inline T &get_z() {
+        inline const T &get_z() const {
             return this->z;
         }
         inline std::tuple<T, T, T> to_tuple() {
@@ -2218,8 +2225,11 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return *this = other;
         }
         template <typename U> requires (isConvertible<U, T>)
-        vector3D<T> &operator=(const vector3D<U> &&other) noexcept {
-            return *this = other;
+        vector3D<T> &operator=(vector3D<U> &&other) noexcept {
+            this->x = std::move(other.x);
+            this->y = std::move(other.y);
+            this->z = std::move(other.z);
+            return *this;
         }
         template <isNumWrapper U>
         friend std::ostream &operator<<(std::ostream &out, const vector3D<U> &vec);
