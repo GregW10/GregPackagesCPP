@@ -23,6 +23,22 @@ namespace gtd {
     };
 #pragma pack(pop)
     inline std::ostream &operator<<(std::ostream &os, const color &col);
+    template <isNumWrapper T>
+    inline color operator*(const T &scalar, const color &col);
+    template <isNumWrapper T>
+    inline color operator*(const color &col, const T &scalar);
+    template <isNumWrapper T>
+    inline color operator*(const T &&scalar, const color &col);
+    template <isNumWrapper T>
+    inline color operator*(const color &&col, const T &scalar);
+    template <isNumWrapper T>
+    inline color operator*(const T &scalar, const color &&col);
+    template <isNumWrapper T>
+    inline color operator*(const color &col, const T &&scalar);
+    template <isNumWrapper T>
+    inline color operator*(const T &&scalar, const color &&col);
+    template <isNumWrapper T>
+    inline color operator*(const color &&col, const T &&scalar);
     namespace colors {
         color black{0, 0, 0};
         color white{255, 255, 255};
@@ -862,6 +878,38 @@ namespace gtd {
             return os << "0]";
         }
         return os << image.width*image.height*3 << ']';
+    }
+    template <isNumWrapper T>
+    inline color operator*(const T &scalar, const color &col) {
+        return {scalar*col.b, scalar*col.g, scalar*col.r};
+    }
+    template <isNumWrapper T>
+    inline color operator*(const color &col, const T &scalar) {
+        return {scalar*col.b, scalar*col.g, scalar*col.r};
+    }
+    template <isNumWrapper T>
+    inline color operator*(const T &&scalar, const color &col) {
+        return {scalar*col.b, scalar*col.g, scalar*col.r};
+    }
+    template <isNumWrapper T>
+    inline color operator*(const color &&col, const T &scalar) {
+        return {scalar*col.b, scalar*col.g, scalar*col.r};
+    }
+    template <isNumWrapper T>
+    inline color operator*(const T &scalar, const color &&col) {
+        return {scalar*col.b, scalar*col.g, scalar*col.r};
+    }
+    template <isNumWrapper T>
+    inline color operator*(const color &col, const T &&scalar) {
+        return {scalar*col.b, scalar*col.g, scalar*col.r};
+    }
+    template <isNumWrapper T>
+    inline color operator*(const T &&scalar, const color &&col) {
+        return {scalar*col.b, scalar*col.g, scalar*col.r};
+    }
+    template <isNumWrapper T>
+    inline color operator*(const color &&col, const T &&scalar) {
+        return {scalar*col.b, scalar*col.g, scalar*col.r};
     }
     inline std::ostream &operator<<(std::ostream &os, const color &col) {
         return os << "[gtd::color@" << &col << ":r=" << +col.r << ",g=" << +col.g << ",b=" << +col.b << ']';
