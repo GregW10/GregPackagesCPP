@@ -881,35 +881,35 @@ namespace gtd {
     }
     template <isNumWrapper T>
     inline color operator*(const T &scalar, const color &col) {
-        return {scalar*col.b, scalar*col.g, scalar*col.r};
+        return {(unsigned char) (scalar*col.b), (unsigned char) (scalar*col.g), (unsigned char) (scalar*col.r)};
     }
     template <isNumWrapper T>
     inline color operator*(const color &col, const T &scalar) {
-        return {scalar*col.b, scalar*col.g, scalar*col.r};
+        return {(unsigned char) (scalar*col.b), (unsigned char) (scalar*col.g), (unsigned char) (scalar*col.r)};
     }
     template <isNumWrapper T>
     inline color operator*(const T &&scalar, const color &col) {
-        return {scalar*col.b, scalar*col.g, scalar*col.r};
+        return {(unsigned char) (scalar*col.b), (unsigned char) (scalar*col.g), (unsigned char) (scalar*col.r)};
     }
     template <isNumWrapper T>
     inline color operator*(const color &&col, const T &scalar) {
-        return {scalar*col.b, scalar*col.g, scalar*col.r};
+        return {(unsigned char) (scalar*col.b), (unsigned char) (scalar*col.g), (unsigned char) (scalar*col.r)};
     }
     template <isNumWrapper T>
     inline color operator*(const T &scalar, const color &&col) {
-        return {scalar*col.b, scalar*col.g, scalar*col.r};
+        return {(unsigned char) (scalar*col.b), (unsigned char) (scalar*col.g), (unsigned char) (scalar*col.r)};
     }
     template <isNumWrapper T>
     inline color operator*(const color &col, const T &&scalar) {
-        return {scalar*col.b, scalar*col.g, scalar*col.r};
+        return {(unsigned char) (scalar*col.b), (unsigned char) (scalar*col.g), (unsigned char) (scalar*col.r)};
     }
     template <isNumWrapper T>
     inline color operator*(const T &&scalar, const color &&col) {
-        return {scalar*col.b, scalar*col.g, scalar*col.r};
+        return {(unsigned char) (scalar*col.b), (unsigned char) (scalar*col.g), (unsigned char) (scalar*col.r)};
     }
     template <isNumWrapper T>
     inline color operator*(const color &&col, const T &&scalar) {
-        return {scalar*col.b, scalar*col.g, scalar*col.r};
+        return {(unsigned char) (scalar*col.b), (unsigned char) (scalar*col.g), (unsigned char) (scalar*col.r)};
     }
     inline std::ostream &operator<<(std::ostream &os, const color &col) {
         return os << "[gtd::color@" << &col << ":r=" << +col.r << ",g=" << +col.g << ",b=" << +col.b << ']';

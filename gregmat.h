@@ -4,6 +4,12 @@
 #include <sstream>
 #include <cmath>
 
+#ifdef __PI__
+#undef __PI__
+#endif
+
+#define __PI__ (3.14159265358979323846264338327950288419716939937510582097494459230)
+
 template <typename From, typename To>
 concept isConvertible = std::is_convertible<From, To>::value;
 
@@ -450,7 +456,7 @@ namespace gtd {
             next_col = 0;
             return *this;
         }
-        matrix<T> &make_identity() noexcept {
+        matrix<T> &make_identity() {
             if (!is_square()) {
                 throw invalid_matrix_format("Only square matrices can be identity matrices.");
             }
@@ -465,7 +471,7 @@ namespace gtd {
             }
             return *this;
         }
-        bool is_zero() {
+        bool is_zero() const {
             for (const std::vector<T> &row : mat) {
                 for (const T &elem : row) {
                     if (elem != T{0})
@@ -474,7 +480,7 @@ namespace gtd {
             }
             return true;
         }
-        bool is_identity() {
+        bool is_identity() const {
             size_t rows = mat.size();
             size_t cols = mat[0].size();
             size_t one_index = 0;
@@ -593,8 +599,7 @@ namespace gtd {
             }
             return {out.str().c_str()};
         }
-        static inline matrix<long double> get_2D_rotation_matrix(const long double &&angle_rad =
-                static_cast<const long double&&>(PI)) {
+        static inline matrix<long double> get_2D_rotation_matrix(const long double &&angle_rad = __PI__) {
             if (angle_rad == PI/2) { // returns an exact matrix for the following 4 cases (no f.p. rounding errors)
                 return matrix<long double>(2, 2) << 0 << -1 << 1 << 0;
             }
@@ -607,8 +612,8 @@ namespace gtd {
             if (angle_rad == 2*PI) {
                 return matrix<long double>(2, 2).make_identity();
             }
-            return matrix<long double>(2, 2) << std::cos(angle_rad) << -std::sin(angle_rad) << std::sin(angle_rad)
-            << std::cos(angle_rad);
+            return matrix<long double>(2, 2) << std::cos(angle_rad) << -std::sin(angle_rad)
+                                             << std::sin(angle_rad) << std::cos(angle_rad);
         }
         static inline matrix<long double> get_2D_rotation_matrix(const long double &angle_rad = PI) {
             return get_2D_rotation_matrix(angle_rad);
@@ -619,8 +624,8 @@ namespace gtd {
         static inline matrix<long double> get_2D_scale_matrix(const long double &scale) {
             return matrix<long double>(2, 2) << scale << 0 << 0 << scale;
         }
-        static inline matrix<long double> get_3D_rotation_matrix(const long double &&angle_rad =
-                static_cast<const long double&&>(PI), char about = 'z') {
+        static inline matrix<long double> get_3D_rotation_matrix(const long double &angle_rad = PI,
+                                                                 char about = 'z') {
             if (!(about >= 'x' && about <= 'z') && !(about >= 'X' && about <= 'Z')) {
                 throw invalid_axis_error("Invalid axis specified. Axes are: 'x', 'y' and 'z'.");
             }
@@ -695,7 +700,7 @@ namespace gtd {
                                              << std::sin(angle_rad) <<  std::cos(angle_rad) << 0
                                              << 0                   <<  0                   << 1;
         }
-        static inline matrix<T> get_3D_rotation_matrix(const T &angle_rad = PI, char about = 'z') requires isConvertible<T, long double> {
+        static inline matrix<T> get_3D_rotation_matrix(const long double &&angle_rad = __PI__, char about = 'z') {
             return get_3D_rotation_matrix(angle_rad, about);
         }
         std::vector<T> operator[](size_t index) const { // using [] returns copy of row, so cannot make changes to mat.
