@@ -4466,10 +4466,16 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
         return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acos(cosine_of_angle));
     }
-    inline long double deg_to_rad(long double radians) {
+    inline long double rad_to_deg(const long double &radians) {
         return (radians*180)/PI;
     }
-    inline long double rad_to_deg(long double degrees) {
+    inline long double deg_to_rad(const long double &degrees) {
+        return (degrees*PI)/180;
+    }
+    inline long double rad_to_deg(const long double &&radians) {
+        return (radians*180)/PI;
+    }
+    inline long double deg_to_rad(const long double &&degrees) {
         return (degrees*PI)/180;
     }
 }
