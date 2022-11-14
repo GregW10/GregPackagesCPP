@@ -203,6 +203,12 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->y /= mag;
             return *this;
         }
+        vector2D<T> x_projection() const {
+            return {this->x, T{0}};
+        }
+        vector2D<T> y_projection() const {
+            return {T{0}, this->y};
+        }
         inline vector2D<T> &rotate(const long double &&angle_in_rad = __PI__) {
             this->apply(matrix<long double>::get_2D_rotation_matrix(angle_in_rad));
             return *this;
@@ -211,14 +217,14 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->apply(matrix<long double>::get_2D_rotation_matrix(angle_in_rad));
             return *this;
         }
-        template <isNumWrapper U>
+        template <isNumWrapper U = T>
         inline vector2D<T> &rotate_to(const vector2D<U> &new_direction) noexcept {
             if (this->is_zero()) {
                 return *this;
             }
             return this->rotate(angle_between(*this, new_direction));
         }
-        template <isNumWrapper U>
+        template <isNumWrapper U = T>
         inline vector2D<T> &rotate_to(const vector2D<U> &&new_direction) noexcept {
             return this->rotate_to(new_direction);
         }
@@ -242,16 +248,24 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return {this->x, this->y};
         }
         inline T &operator[](unsigned char index) override {
-            if (index > 1) {
-                throw std::invalid_argument("Only the indices '0' and '1' are possible.");
+            switch (index) {
+                case 0:
+                    return this->x;
+                case 1:
+                    return this->y;
+                default:
+                    throw std::invalid_argument("Only the indices '0' and '1' are possible.\n");
             }
-            if (index == 0) {
-                return x;
-            }
-            return y;
         }
-        const T &operator[](unsigned char index) const noexcept override {
-            return this->operator[](index);
+        const T &operator[](unsigned char index) const override {
+            switch (index) { // must repeat above code, as a non-const method cannot be called from a const method
+                case 0:
+                    return this->x;
+                case 1:
+                    return this->y;
+                default:
+                    throw std::invalid_argument("Only the indices '0' and '1' are possible.\n");
+            }
         }
         vector2D<T> operator-() const {
             return {-this->x, -this->y};
@@ -555,6 +569,102 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend bool operator>=(const vector2D<U> &&vec1, const vector2D<V> &vec2);
         template <isNumWrapper U, isNumWrapper V>
         friend bool operator>=(const vector2D<U> &&vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator==(const vector2D<U> &vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator==(const vector2D<U> &vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator==(const vector2D<U> &&vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator==(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator!=(const vector2D<U> &vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator!=(const vector2D<U> &vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator!=(const vector2D<U> &&vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator!=(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<(const vector2D<U> &vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<(const vector2D<U> &vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<(const vector2D<U> &&vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>(const vector2D<U> &vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>(const vector2D<U> &vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>(const vector2D<U> &&vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<=(const vector2D<U> &vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<=(const vector2D<U> &vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<=(const vector2D<U> &&vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<=(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>=(const vector2D<U> &vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>=(const vector2D<U> &vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>=(const vector2D<U> &&vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>=(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator==(const vector3D<U> &vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator==(const vector3D<U> &vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator==(const vector3D<U> &&vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator==(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator!=(const vector3D<U> &vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator!=(const vector3D<U> &vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator!=(const vector3D<U> &&vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator!=(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<(const vector3D<U> &vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<(const vector3D<U> &vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<(const vector3D<U> &&vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>(const vector3D<U> &vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>(const vector3D<U> &vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>(const vector3D<U> &&vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<=(const vector3D<U> &vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<=(const vector3D<U> &vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<=(const vector3D<U> &&vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator<=(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>=(const vector3D<U> &vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>=(const vector3D<U> &vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>=(const vector3D<U> &&vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend bool operator>=(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator+(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector2D<decltype(vec1.x + vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
@@ -1043,6 +1153,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend class vector3D;
         template <isNumWrapper M, isNumWrapper R, isNumWrapper U>
         friend class body;
+        template <isNumWrapper PosT, isNumWrapper DirT, isNumWrapper DistT>
+        friend class camera;
     };
     template <isNumWrapper U>
     std::ostream &operator<<(std::ostream &out, const vector2D<U> &vec) {
@@ -1810,6 +1922,18 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->z /= mag;
             return *this;
         }
+        vector3D<T> z_projection() const {
+            return {T{0}, T{0}, this->z};
+        }
+        vector2D<T> xy_projection() const {
+            return {this->x, this->y};
+        }
+        vector3D<T> xz_projection() const {
+            return {this->x, T{0}, this->z};
+        }
+        vector3D<T> yz_projection() const {
+            return {T{0}, this->y, this->z};
+        }
         inline vector3D<T> &rotate(const long double &&angle_in_rad = __PI__, char about = 'z') {
             this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
             return *this;
@@ -1818,7 +1942,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
             return *this;
         }
-        template <isNumWrapper U>
+        template <isNumWrapper U = T>
         inline vector3D<T> &rodrigues_rotate(const vector3D<U> &about, long double angle = PI) noexcept {
             if (about.is_zero()) {
                 return *this;
@@ -1828,22 +1952,22 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return *this = std::cos(angle)*cpy + std::sin(angle)*cross(about_unit, cpy) +
                     (about_unit*cpy)*(1 - std::cos(angle))*about_unit;
         }
-        template <isNumWrapper U>
+        template <isNumWrapper U = T>
         inline vector3D<T> &rodrigues_rotate(const vector3D<U> &&about, long double angle = PI) noexcept {
             return this->rodrigues_rotate(about, angle);
         }
-        template <isNumWrapper U>
+        template <isNumWrapper U = T>
         inline vector3D<T> &rotate_to(const vector3D<U> &new_direction) noexcept {
             if (this->is_zero()) {
                 return *this;
             }
             return this->rodrigues_rotate(cross(*this, new_direction), angle_between(*this, new_direction));
         }
-        template <isNumWrapper U>
+        template <isNumWrapper U = T>
         inline vector3D<T> &rotate_to(const vector3D<U> &&new_direction) noexcept {
             return this->rotate_to(new_direction);
         }
-        template <isNumWrapper U>
+        template <isNumWrapper U = T>
         inline vector3D<T> &rodrigues_rotate(const vector2D<U> &about, long double angle = PI) noexcept {
             if (about.is_zero()) {
                 return *this;
@@ -1853,18 +1977,18 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return *this = std::cos(angle)*cpy + std::sin(angle)*cross(about_unit, cpy) +
                     (about_unit*cpy)*(1 - std::cos(angle))*about_unit;
         }
-        template <isNumWrapper U>
+        template <isNumWrapper U = T>
         inline vector3D<T> &rodrigues_rotate(const vector2D<U> &&about, long double angle = PI) noexcept {
             return this->rodrigues_rotate(about, angle);
         }
-        template <isNumWrapper U>
+        template <isNumWrapper U = T>
         inline vector3D<T> &rotate_to(const vector2D<U> &new_direction) noexcept {
             if (this->is_zero()) {
                 return *this;
             }
             return this->rodrigues_rotate(cross(*this, new_direction), angle_between(*this, new_direction));
         }
-        template <isNumWrapper U>
+        template <isNumWrapper U = T>
         inline vector3D<T> &rotate_to(const vector2D<U> &&new_direction) noexcept {
             return this->rotate_to(new_direction);
         }
@@ -1890,19 +2014,28 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return {this->x, this->y, this->z};
         }
         T &operator[](unsigned char index) override {
-            if (index > 2) {
-                throw std::invalid_argument("Only the indices '0', '1' and '2' are possible.");
+            switch (index) {
+                case 0:
+                    return this->x;
+                case 1:
+                    return this->y;
+                case 2:
+                    return this->z;
+                default:
+                    throw std::invalid_argument("Only the indices '0', '1' and '2' are possible.\n");
             }
-            if (index == 0) {
-                return this->x;
-            }
-            else if (index == 1) {
-                return this->y;
-            }
-            return this->z;
         }
-        const T &operator[](unsigned char index) const noexcept override {
-            return this->operator[](index);
+        const T &operator[](unsigned char index) const override {
+            switch (index) { // must repeat above code, as a non-const method cannot be called from a const method
+                case 0:
+                    return this->x;
+                case 1:
+                    return this->y;
+                case 2:
+                    return this->z;
+                default:
+                    throw std::invalid_argument("Only the indices '0', '1' and '2' are possible.\n");
+            }
         }
         vector3D<T> operator-() const {
             return {-this->x, -this->y, -this->z};
@@ -3038,6 +3171,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend class vector3D;
         template <isNumWrapper M, isNumWrapper R, isNumWrapper U>
         friend class body;
+        template <isNumWrapper PosT, isNumWrapper DirT, isNumWrapper DistT>
+        friend class camera;
     };
     template <isNumWrapper U>
     std::ostream &operator<<(std::ostream &out, const vector3D<U> &vec) {
