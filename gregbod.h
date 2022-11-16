@@ -410,6 +410,8 @@ namespace gtd {
         friend auto operator+(const body<m1, r1, t1> &&b1, const body<m2, r2, t2> &&b2);
         template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
         friend system<m, r, t> operator+(const system<m, r, t> &sys1, const system<m, r, t> &sys2);
+        template <isNumWrapper PosT, isNumWrapper DirT, isNumWrapper LenT>
+        friend class ray;
         template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
         friend class system;
     };

@@ -17,9 +17,222 @@ namespace gtd {
         no_direction() : std::invalid_argument{"Zero vector error.\n"} {}
         explicit no_direction(const char *message) : std::invalid_argument{message} {}
     };
+    class zero_image_distance : public std::invalid_argument {
+    public:
+        zero_image_distance() : std::invalid_argument{"The image distance of a camera cannot be zero.\n"} {}
+        explicit zero_image_distance(const char *message) : std::invalid_argument{message} {}
+    };
     struct image_dimensions {
         unsigned int x;
         unsigned int y;
+    };
+    template <isNumWrapper PosT = long double, isNumWrapper DirT = long double, isNumWrapper LenT = long double>
+    class ray : public vector3D<DirT> {
+        /* A ray object represents a ray in simulated 3D space - whether this be an actual ray of light (from a light
+         * source), or a "line-of-sight" ray, such as those shot out from a camera object (see below). A ray has an
+         * origin (its position) a direction, and a parameter named 'l', which represents the length of the ray. A ray
+         * with length zero is taken as one which continues on to infinity. Since the ray class is a child class of
+         * vector3D<DirT>, the internal parent vector3D<DirT> object is made to be the direction, whilst a ray's
+         * position is represented by a separate vector3D<PosT> object. */
+        /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+        static inline const vector3D<DirT> zero{};
+        vector3D<PosT> pos; // origin of the ray
+        LenT l{0}; // length of the ray
+        ray<PosT, DirT, LenT> &calc() {
+            if (*this == zero)
+                throw no_direction("A ray's direction cannot be a zero vector, "
+                                   "or else the ray would have nowhere to point to.\n");
+            this->normalise();
+            return *this;
+        }
+        template <isNumWrapper T>
+        static inline const T &&minimum(const T &&first, const T &&second) {
+            return first <= second ? std::move(first) : std::move(second);
+        }
+    public:
+        ray() : vector3D<DirT>{0, 0, -1} {calc();}
+        ray(const vector2D<DirT> &direction) noexcept : vector3D<DirT>(direction) {calc();}
+        ray(vector2D<DirT> &&direction) noexcept : vector3D<DirT>(std::move(direction)) {calc();}
+        ray(const vector3D<DirT> &direction) noexcept : vector3D<DirT>(direction) {calc();}
+        ray(vector3D<DirT> &&direction) noexcept : vector3D<DirT>(std::move(direction)) {calc();}
+        template <typename U> requires isConvertible<U, DirT>
+        ray(const vector2D<U> &direction) noexcept : vector3D<DirT>(direction) {calc();}
+        template <typename U> requires isConvertible<U, DirT>
+        ray(const vector2D<U> &&direction) noexcept : vector3D<DirT>(direction) {calc();}
+        template <typename U> requires isConvertible<U, DirT>
+        ray(const vector3D<U> &direction) noexcept : vector3D<DirT>(direction) {calc();}
+        template <typename U> requires isConvertible<U, DirT>
+        ray(const vector3D<U> &&direction) noexcept : vector3D<DirT>(direction) {calc();}
+        ray(const DirT &x_component, const DirT &y_component, const DirT &z_component) noexcept :
+                vector3D<DirT>{x_component, y_component, z_component} {calc();}
+        ray(DirT &&x_component, DirT &&y_component, DirT &&z_component) noexcept :
+        vector3D<DirT>{std::move(x_component), std::move(y_component), std::move(z_component)} {calc();}
+        ray(const DirT &x_component, const DirT &y_component) noexcept :
+        vector3D<DirT>{x_component, y_component} {calc();}
+        ray(DirT &&x_component, DirT &&y_component) noexcept :
+        vector3D<DirT>{std::move(x_component), std::move(y_component)} {calc();}
+        ray(const vector2D<DirT> &origin, const vector2D<DirT> &direction) noexcept :
+        vector3D<DirT>(direction), pos{origin} {calc();}
+        ray(vector2D<DirT> &&origin, vector2D<DirT> &&direction) noexcept :
+        vector3D<DirT>(std::move(direction)), pos{std::move(origin)} {calc();}
+        ray(const vector3D<DirT> &origin, const vector3D<DirT> &direction) noexcept :
+        vector3D<DirT>(direction) {calc();}
+        ray(vector3D<DirT> &&origin, vector3D<DirT> &&direction) noexcept :
+        vector3D<DirT>(std::move(direction)), pos{std::move(origin)} {calc();}
+        template <typename U> requires isConvertible<U, DirT>
+        ray(const vector2D<U> &origin, const vector2D<U> &direction) noexcept :
+        vector3D<DirT>(direction), pos{origin} {calc();}
+        template <typename U> requires isConvertible<U, DirT>
+        ray(const vector2D<U> &&origin, const vector2D<U> &&direction) noexcept :
+        vector3D<DirT>(direction), pos{origin} {calc();}
+        template <typename U> requires isConvertible<U, DirT>
+        ray(const vector3D<U> &origin, const vector3D<U> &direction) noexcept :
+        vector3D<DirT>(direction), pos{origin} {calc();}
+        template <typename U> requires isConvertible<U, DirT>
+        ray(const vector3D<U> &&origin, const vector3D<U> &&direction) noexcept :
+        vector3D<DirT>(direction), pos{origin} {calc();}
+        ray(const DirT &x_pos_comp, const DirT &y_pos_comp, const DirT &z_pos_comp,
+            const DirT &x_dir_comp, const DirT &y_dir_comp, const DirT &z_dir_comp) noexcept :
+                vector3D<DirT>{x_dir_comp, y_dir_comp, z_dir_comp}, pos{x_pos_comp, y_pos_comp, z_pos_comp} {calc();}
+        ray(DirT &&x_pos_comp, DirT &&y_pos_comp, DirT &&z_pos_comp,
+            DirT &&x_dir_comp, DirT &&y_dir_comp, DirT &&z_dir_comp) noexcept :
+                vector3D<DirT>{std::move(x_dir_comp), std::move(y_dir_comp), std::move(z_dir_comp)},
+                pos{std::move(x_pos_comp), std::move(y_pos_comp), std::move(z_pos_comp)} {calc();}
+        ray(const DirT &x_pos_comp, const DirT &y_pos_comp, const DirT &x_dir_comp, const DirT &y_dir_comp) noexcept :
+                vector3D<DirT>{x_dir_comp, y_dir_comp}, pos{x_pos_comp, y_pos_comp} {calc();}
+        ray(DirT &&x_pos_comp, DirT &&y_pos_comp, DirT &&x_dir_comp, DirT &&y_dir_comp) noexcept :
+                vector3D<DirT>{std::move(x_dir_comp), std::move(y_dir_comp)},
+                pos{std::move(x_pos_comp), std::move(y_pos_comp)} {calc();}
+        ray(const vector3D<PosT> &origin, DirT &&x_dir_comp, DirT &&y_dir_comp, DirT &&z_dir_comp) noexcept :
+                vector3D<DirT>{std::move(x_dir_comp), std::move(y_dir_comp), std::move(z_dir_comp)},
+                pos{origin} {calc();}
+        void set_pos(const vector3D<PosT> &new_pos) {
+            pos = new_pos;
+        }
+        void set_pos(vector3D<PosT> &&new_pos) {
+            pos = std::move(new_pos);
+        }
+        void set_dir(const vector3D<DirT> &new_dir) { // set_dir() methods need not be called (reassign ray directly)
+            *this = new_dir;
+            calc();
+        }
+        void set_dir(vector3D<DirT> &&new_dir) {
+            *this = std::move(new_dir);
+            calc();
+        }
+        vector3D<DirT> &get_dir() {
+            return *this;
+        }
+        const vector3D<PosT> &get_pos() const noexcept { // useless method - no need to use
+            return pos;
+        }
+        const LenT &length() const noexcept {
+            return l;
+        }
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
+        bool intersects(const body<M, R, T> &bod) {
+            /* This method calculates whether the ray intersects with a given body, and if it does, stores the
+             * intersection distance in l. The 'b' and 'c' variables below are quadratic formula coefficients - the 'a'
+             * coefficient is always equal to 1 (since a = (*this)*(*this)), so has been inlined. */
+            this->calc();
+            auto b = 2*(pos - bod.curr_pos)*(*this); // operator* between two vectors is treated as scalar product
+            auto c = pos*pos - 2*bod.curr_pos*pos + bod.curr_pos*bod.curr_pos - bod.radius*bod.radius;
+            auto discriminant = b*b - 4*c; // recall that a = 1
+            if (discriminant < 0)
+                return false;
+            l = minimum((-b + sqrtl(discriminant))/2, (-b - sqrtl(discriminant))/2);
+            return true;
+        }
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
+        bool intersects(const body<M, R, T> &&bod) {
+            return intersects(bod);
+        }
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
+        bool intersects(const std::vector<std::reference_wrapper<body<M, R, T>>> &bodies) {
+            /* This method is similar to the other intersects() overloads, but it will set l to the distance between the
+             * ray's origin and the closest body, and return true (if the ray intersects with at least one body). This
+             * is intuitive, since a ray in real space will "terminate" once it hits an object, and will (in general)
+             * not continue through the object and then intersect with other objects behind it. */
+            bool one_intersection = false;
+            LenT min_l;
+            for (const auto &ref : bodies) {
+                if (this->intersects(ref.get())) {
+                    if (!one_intersection) {
+                        min_l = l;
+                        one_intersection = true;
+                        continue;
+                    }
+                    if (l < min_l)
+                        min_l = l;
+                }
+            }
+            if (!one_intersection) {
+                l = LenT{0};
+                return false;
+            }
+            l = min_l;
+            return true;
+        }
+        ray<PosT, DirT, LenT> &operator=(const vector<DirT> &other) noexcept override {
+            vector3D<DirT>::operator=(other);
+            this->calc();
+            return *this;
+        }
+        ray<PosT, DirT, LenT> &operator=(const vector3D<DirT> &other) noexcept override {
+            vector3D<DirT>::operator=(other);
+            this->calc();
+            return *this;
+        }
+        template <typename U> requires (isConvertible<U, DirT>)
+        ray<PosT, DirT, LenT> &operator=(const vector3D<U> &other) noexcept {
+            vector3D<DirT>::operator=(other);
+            this->calc();
+            return *this;
+        }
+        template <typename U> requires (isConvertible<U, DirT>)
+        ray<PosT, DirT, LenT> &operator=(const vector3D<U> &&other) noexcept {
+            vector3D<DirT>::operator=(other); // no need to use std::move() here
+            this->calc();
+            return *this;
+        }
+        ray<PosT, DirT, LenT> &operator=(const vector<DirT> &&other) noexcept override {
+            vector3D<DirT>::operator=(std::move(other));
+            this->calc();
+            return *this;
+        }
+        ray<PosT, DirT, LenT> &operator=(vector3D<DirT> &&other) noexcept override {
+            vector3D<DirT>::operator=(std::move(other));
+            this->calc();
+            return *this;
+        }
+        template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU>
+        friend std::ostream &operator<<(std::ostream &os, const ray<PosU, DirU, LenU> &r);
+        template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU>
+        friend std::ostream &operator<<(std::ostream &os, const ray<PosU, DirU, LenU> &&r);
+        template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+                  isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+        friend bool operator==(const ray<PosU, DirU, LenU> &r1, const ray<PosV, DirV, LenV> &r2);
+        template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+                isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+        friend bool operator==(const ray<PosU, DirU, LenU> &r1, const ray<PosV, DirV, LenV> &&r2);
+        template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+                isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+        friend bool operator==(const ray<PosU, DirU, LenU> &&r1, const ray<PosV, DirV, LenV> &r2);
+        template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+                isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+        friend bool operator==(const ray<PosU, DirU, LenU> &&r1, const ray<PosV, DirV, LenV> &&r2);
+        template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+                isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+        friend bool operator!=(const ray<PosU, DirU, LenU> &r1, const ray<PosV, DirV, LenV> &r2);
+        template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+                isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+        friend bool operator!=(const ray<PosU, DirU, LenU> &r1, const ray<PosV, DirV, LenV> &&r2);
+        template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+                isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+        friend bool operator!=(const ray<PosU, DirU, LenU> &&r1, const ray<PosV, DirV, LenV> &r2);
+        template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+                isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+        friend bool operator!=(const ray<PosU, DirU, LenU> &&r1, const ray<PosV, DirV, LenV> &&r2);
     };
     template <isNumWrapper PosT = long double, isNumWrapper DirT = long double, isNumWrapper DistT = long double>
     class camera {
@@ -32,7 +245,7 @@ namespace gtd {
          * the camera's "receptor", which is where the image in simulated 3D space is projected onto. This is done by
          * sending a ray out from every single "pixel" on the receptor through the pinhole, and calculating what it
          * intersects with - although the intersection calculation is not done in the camera class (see astro_scene). */
-        /* * * * * * * * * * * * * * * * * * */
+        /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
         static inline const vector3D<DirT> zero{}; // as this is repeatedly used
         static inline const vector3D<DirT> up{DirT{0}, DirT{0}, DirT{1}}; // same with all these
         static inline const vector3D<DirT> down{DirT{0}, DirT{0}, DirT{-1}};
@@ -57,9 +270,17 @@ namespace gtd {
         * flipped or not - this, essentially, avoids the image having to be flipped later - although for images that
         * have their origin in the top-left corner (unlike BMPs), this should be set to false */
         void calc_all() {
-            check_non_zero_dir();
+            check_non_zero();
             if (dir.x == DirT{0} && dir.y == DirT{0}) {
-                points_down = !(points_up = dir.z > DirT{0});
+                perp.set_x(DirT{1});
+                perp.set_y(DirT{0});
+                perp.set_z(DirT{0});
+                rotation_correction = 0;
+                if ((points_down = !(points_up = dir.z > DirT{0})))
+                    angle_with_down = 0;
+                else
+                    angle_with_down = PI;
+                goto end;
             }
             perp = cross(down, dir);
             angle_with_down = angle_between(down, dir);
@@ -69,6 +290,7 @@ namespace gtd {
                 rotation_correction = -angle_between(forwards, dir.xy_projection());
             else if (dir.y < 0)
                 rotation_correction = PI;
+            end:
             if (dims.x >= dims.y) {
                 w_factor = ((long double) dims.x)/dims.y;
                 h_factor = 1;
@@ -80,9 +302,12 @@ namespace gtd {
             if (!invert_ray)
                 h_factor = -h_factor;
         }
-        void check_non_zero_dir() { // the camera cannot, however, not be pointing in any direction
+        void check_non_zero() { // the camera cannot, however, not be pointing in any direction
             if (dir == zero)
                 throw no_direction("The camera's direction is a zero vector. The camera must point in a direction.\n");
+            if (dist == DistT{0})
+                throw zero_image_distance("A camera object's image distance cannot be zero, or else simulated bodies"
+                                          "directly\nin front of the camera would appear to be infinitely far away.\n");
         }
     public:
         camera() = default; // for a camera at the origin pointing up (taking the z-axis as up)
@@ -174,6 +399,9 @@ namespace gtd {
             dims = new_dimensions;
             return *this;
         }
+        void recalculate() {
+            calc_all();
+        }
         camera<PosT, DirT, DistT> &invert_rays(bool invert) {
             invert_ray = invert;
             h_factor = -h_factor;
@@ -207,14 +435,15 @@ namespace gtd {
         long double fovd_deg() const noexcept { // diagonal field of view in degrees
             return rad_to_deg(fovd_rad());
         }
-        vector3D<DirT> get_ray_from_pixel(unsigned int x, unsigned int y) {
+        template <isNumWrapper LenT = long double>
+        ray<PosT, DirT, LenT> get_ray_from_pixel(unsigned int x, unsigned int y) {
             if (x >= dims.x || y >= dims.y)
                 throw std::out_of_range("The pixel attempting to be accessed is not within the image dimensions.\n");
-            vector3D<DirT> // ray starts out as if it had been shot out of the camera facing directly down
-            ray{((((long double) x)/dims.x)*2 - 1)*w_factor, ((((long double) y)/dims.y)*2 - 1)*h_factor, -dist};
+            ray<PosT, DirT, LenT> // ray starts out as if it had been shot out of the camera facing directly down
+            ray{this->pos,
+                ((((long double) x)/dims.x)*2 - 1)*w_factor, ((((long double) y)/dims.y)*2 - 1)*h_factor, -dist};
             ray.rodrigues_rotate(perp, angle_with_down); // rotate to camera direction
-            ray.rodrigues_rotate(dir, -rotation_correction); // rotate the camera by the correction factor
-            ray.rodrigues_rotate(dir, -rot);
+            ray.rodrigues_rotate(dir, -rotation_correction - rot); // rotate around camera's z-axis appropriately
             return ray;
         }
         template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
@@ -290,5 +519,61 @@ namespace gtd {
             return true;
         }
     };
+    template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU>
+    std::ostream &operator<<(std::ostream &os, const ray<PosU, DirU, LenU> &r) {
+        return os << '(' << r.pos << ") + " << r.l  << '(' << static_cast<const vector3D<DirU>&>(r) << ')';
+    }
+    template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU>
+    std::ostream &operator<<(std::ostream &os, const ray<PosU, DirU, LenU> &&r) {
+        return os << '(' << r.pos << ") + " << r.l  << '(' << static_cast<const vector3D<DirU>&>(r) << ')';
+    }
+    template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+              isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+    bool operator==(const ray<PosU, DirU, LenU> &r1, const ray<PosV, DirV, LenV> &r2) {
+        return r1.pos == r2.pos && r1.l == r2.l &&
+               static_cast<const vector3D<DirU>&>(r1) == static_cast<const vector3D<DirV>&>(r2);
+    }
+    template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+              isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+    bool operator==(const ray<PosU, DirU, LenU> &r1, const ray<PosV, DirV, LenV> &&r2) {
+        return r1.pos == r2.pos && r1.l == r2.l &&
+               static_cast<const vector3D<DirU>&>(r1) == static_cast<const vector3D<DirV>&>(r2);
+    }
+    template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+              isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+    bool operator==(const ray<PosU, DirU, LenU> &&r1, const ray<PosV, DirV, LenV> &r2) {
+        return r1.pos == r2.pos && r1.l == r2.l &&
+               static_cast<const vector3D<DirU>&>(r1) == static_cast<const vector3D<DirV>&>(r2);
+    }
+    template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+              isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+    bool operator==(const ray<PosU, DirU, LenU> &&r1, const ray<PosV, DirV, LenV> &&r2) {
+        return r1.pos == r2.pos && r1.l == r2.l &&
+               static_cast<const vector3D<DirU>&>(r1) == static_cast<const vector3D<DirV>&>(r2);
+    }
+    template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+              isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+    bool operator!=(const ray<PosU, DirU, LenU> &r1, const ray<PosV, DirV, LenV> &r2) {
+        return r1.pos != r2.pos || r1.l != r2.l ||
+               static_cast<const vector3D<DirU>&>(r1) != static_cast<const vector3D<DirV>&>(r2);
+    }
+    template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+              isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+    bool operator!=(const ray<PosU, DirU, LenU> &r1, const ray<PosV, DirV, LenV> &&r2) {
+        return r1.pos != r2.pos || r1.l != r2.l ||
+               static_cast<const vector3D<DirU>&>(r1) != static_cast<const vector3D<DirV>&>(r2);
+    }
+    template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+              isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+    bool operator!=(const ray<PosU, DirU, LenU> &&r1, const ray<PosV, DirV, LenV> &r2) {
+        return r1.pos != r2.pos || r1.l != r2.l ||
+               static_cast<const vector3D<DirU>&>(r1) != static_cast<const vector3D<DirV>&>(r2);
+    }
+    template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
+              isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
+    bool operator!=(const ray<PosU, DirU, LenU> &&r1, const ray<PosV, DirV, LenV> &&r2) {
+        return r1.pos != r2.pos || r1.l != r2.l ||
+               static_cast<const vector3D<DirU>&>(r1) != static_cast<const vector3D<DirV>&>(r2);
+    }
 }
 #endif
