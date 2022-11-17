@@ -111,9 +111,11 @@ namespace gtd {
     };
     template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
     class body : public body_counter {
-        M mass;
+    protected:
         R radius;
         vector3D<T> curr_pos; // current position
+    private:
+        M mass;
         vector3D<T> curr_vel; // current velocity - have not included acc. as this should always be det. externally
         using K = decltype(0.5*mass*curr_vel.magnitude()*curr_vel.magnitude());
         K curr_ke; // current kinetic energy
@@ -134,7 +136,7 @@ namespace gtd {
         void set_ke() {
             auto mag = curr_vel.magnitude(); // best to push var. onto stack rather than call func. twice
             curr_ke = 0.5*mass*mag*mag; // this avoids the call to pow(mag, 2)
-        } // luckily, ^^^ 0.5 can be represented exaclty in binary (although mag probably won't be exact)
+        } // luckily, ^^^ 0.5 can be represented exactly in binary (although mag probably won't be exact)
         void check_mass() { // I prefer to throw an exception, rather than simply taking no action, to make it clear
             if (mass < M{0}) { // ... where a negative quantity has attempted to be set
                 throw negative_mass_error();
@@ -147,13 +149,13 @@ namespace gtd {
         }
     public:
         body() : mass{1}, radius{1}, curr_ke{0}, curr_pos{}, curr_vel{} {add_pos_vel_ke(); check_mass();check_radius();}
-        body(M &&body_mass, R &&body_radius) : mass{body_mass}, radius{body_radius}, curr_ke{0}, curr_pos{},
-                                               curr_vel{} {add_pos_vel(); check_mass(); check_radius();}
+        body(M &&body_mass, R &&body_radius) : mass{std::move(body_mass)}, radius{std::move(body_radius)}, curr_ke{0},
+        curr_pos{}, curr_vel{} {add_pos_vel(); check_mass(); check_radius();}
         body(const M &body_mass, const R &body_radius) : mass{body_mass}, radius{body_radius}, curr_ke{0}, curr_pos{},
                                                          curr_vel{} {add_pos_vel(); check_mass(); check_radius();}
         body(M &&body_mass, R &&body_radius, vector3D<T> &&pos, vector3D<T> &&vel) :
-        mass{body_mass}, radius{body_radius}, curr_pos{pos}, curr_vel{vel} {add_pos_vel_ke(); check_mass();
-            check_radius();}
+        mass{std::move(body_mass)}, radius{std::move(body_radius)}, curr_pos{std::move(pos)}, curr_vel{std::move(vel)}
+        {add_pos_vel_ke(); check_mass(); check_radius();}
         body(const M &body_mass, const R &body_radius, const vector3D<T> &pos, const vector3D<T> &vel) :
         mass{body_mass}, radius{body_radius}, curr_pos{}, curr_vel{} {add_pos_vel_ke(); check_mass(); check_radius();}
         template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t>
@@ -161,10 +163,10 @@ namespace gtd {
         curr_vel{other.curr_vel}, curr_ke{other.curr_ke} {add_pos_vel();}
         body(const body<M, R, T> &other) : mass{other.mass}, radius{other.radius}, curr_pos{other.curr_pos},
         curr_vel{other.curr_vel}, curr_ke{other.curr_ke} {add_pos_vel();}
-        body(body<M, R, T> &&other) : body_counter{std::move(other)}, mass{other.mass}, radius{other.radius},
-        curr_pos{other.curr_pos}, curr_vel{other.curr_vel}, curr_ke{other.curr_ke},
-        positions{std::move(other.positions)}, velocities{std::move(other.velocities)},
-        energies{std::move(other.energies)}, cref{std::move(other.cref)} {}
+        body(body<M, R, T> &&other) noexcept : body_counter{std::move(other)}, mass{std::move(other.mass)},
+        radius{std::move(other.radius)}, curr_pos{std::move(other.curr_pos)}, curr_vel{std::move(other.curr_vel)},
+        curr_ke{std::move(other.curr_ke)}, positions{std::move(other.positions)},
+        velocities{std::move(other.velocities)}, energies{std::move(other.energies)}, cref{std::move(other.cref)} {}
         const M &get_mass() const noexcept {
             return mass;
         }
@@ -394,6 +396,7 @@ namespace gtd {
             }
             return positions[index];
         }
+        virtual ~body() = default;
         template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
         friend std::ostream &operator<<(std::ostream &os, const body<m, r, t> &bod);
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
@@ -412,6 +415,9 @@ namespace gtd {
         friend system<m, r, t> operator+(const system<m, r, t> &sys1, const system<m, r, t> &sys2);
         template <isNumWrapper PosT, isNumWrapper DirT, isNumWrapper LenT>
         friend class ray;
+        template <isNumWrapper M_U, isNumWrapper R_U, isNumWrapper T_U, isNumWrapper PosU, isNumWrapper DirU,
+                isNumWrapper DistU, isNumWrapper LenU, isNumWrapper LumU>
+        friend class astro_scene;
         template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
         friend class system;
     };

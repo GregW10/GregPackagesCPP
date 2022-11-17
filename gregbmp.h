@@ -754,7 +754,7 @@ namespace gtd {
                 }
             }
         }
-        void clear() {
+        virtual void clear() {
             dealloc();
         }
         bool set_path(const char *str) {
@@ -770,7 +770,7 @@ namespace gtd {
         unsigned int file_size() const noexcept { // has to be unsigned int, otherwise the BMP format wouldn't allow it
             return 54 + 3*width*height + height*calc_pad(width);
         }
-        void reallocate() {
+        virtual void reallocate() {
             if (data != nullptr) {
                 return;
             }
