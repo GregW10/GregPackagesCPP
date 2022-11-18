@@ -12,7 +12,12 @@
 #include <regex>
 
 namespace gtd {
-    class overlapping_bodies_error : public std::exception {
+    class nbody_error : public std::logic_error {
+    public:
+        nbody_error() : std::logic_error{"Invalid parameters for an N-body simulation.\n"} {}
+        nbody_error(const char *message) : std::logic_error{message} {}
+    };
+    class overlapping_bodies_error : public nbody_error {
         const char *message;
         String str;
     public:
@@ -32,7 +37,7 @@ namespace gtd {
             return message;
         }
     };
-    class negative_mass_error : public std::exception {
+    class negative_mass_error : public nbody_error {
         const char *message;
     public:
         negative_mass_error() : message("A gtd::body cannot have a negative mass.\n") {}
@@ -41,7 +46,7 @@ namespace gtd {
             return message;
         }
     };
-    class negative_radius_error : public std::exception {
+    class negative_radius_error : public nbody_error {
         const char *message;
     public:
         negative_radius_error() : message("A gtd::body cannot have a negative radius.\n") {}
@@ -50,14 +55,20 @@ namespace gtd {
             return message;
         }
     };
+    class two_body_error : public nbody_error {
+    public:
+        two_body_error() : nbody_error{"A two-body integration can only be performed if there are two bodies present in"
+                                       " the system.\n"} {}
+        two_body_error(const char *message) : nbody_error{message} {}
+    };
     template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
     class system;
     /* body_counter was created because each instantiation of the body subclass with different template parameters is
      * actually a different class, so the count of bodies for each different class template instantiation would be
      * different */
     class body_counter {
-        inline static unsigned long long count;
-        inline static std::set<unsigned long long> ids;
+        static inline unsigned long long count = 0;
+        static inline std::set<unsigned long long> ids;
         void set_id() {
             unsigned long long prev = 0;
             for (const auto &i : ids) {
@@ -109,21 +120,30 @@ namespace gtd {
         template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
         friend class system;
     };
-    template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
+    template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double>
     class body : public body_counter {
     protected:
         R radius;
         vector3D<T> curr_pos; // current position
     private:
-        M mass;
+        M mass_;
         vector3D<T> curr_vel; // current velocity - have not included acc. as this should always be det. externally
-        using K = decltype(0.5*mass*curr_vel.magnitude()*curr_vel.magnitude());
+        vector3D<T> acc; // current acceleration of the body - only used within system class
+        T pe; // current potential energy of the body - only used in system class since requires other bodies to calc.
+        using K = decltype(0.5*mass_*curr_vel.magnitude()*curr_vel.magnitude());
         K curr_ke; // current kinetic energy
+        /* Only quantities that represent the state of a body on its own are stored (below) - position, velocity, and
+         * kinetic energy - whilst quantities that depend on the states of other bodies are not stored - acceleration
+         * and potential energy. */
         std::vector<vector3D<T>> positions; // these std::vectors will hold all the positions and velocities of the
         std::vector<vector3D<T>> velocities; // ... body as it moves
         std::vector<K> energies;
+        std::vector<T> r_grad_terms;
+        std::vector<T> v_grad_terms;
         mutable std::vector<std::tuple<const vector3D<T>&, const vector3D<T>&, const K&>> cref;
         typedef typename std::vector<vector3D<T>>::size_type vec_s_t;
+        static inline const String def_path = get_home_path<String>() + FILE_SEP + "Body_Trajectory_" +
+                                              get_date_and_time() + ".csv";
         void add_pos_vel() {
             positions.push_back(curr_pos);
             velocities.push_back(curr_vel);
@@ -135,10 +155,10 @@ namespace gtd {
         }
         void set_ke() {
             auto mag = curr_vel.magnitude(); // best to push var. onto stack rather than call func. twice
-            curr_ke = 0.5*mass*mag*mag; // this avoids the call to pow(mag, 2)
+            curr_ke = 0.5*mass_*mag*mag; // this avoids the call to pow(mag, 2)
         } // luckily, ^^^ 0.5 can be represented exactly in binary (although mag probably won't be exact)
         void check_mass() { // I prefer to throw an exception, rather than simply taking no action, to make it clear
-            if (mass < M{0}) { // ... where a negative quantity has attempted to be set
+            if (mass_ < M{0}) { // ... where a negative quantity has attempted to be set
                 throw negative_mass_error();
             }
         }
@@ -148,60 +168,67 @@ namespace gtd {
             }
         }
     public:
-        body() : mass{1}, radius{1}, curr_ke{0}, curr_pos{}, curr_vel{} {add_pos_vel_ke(); check_mass();check_radius();}
-        body(M &&body_mass, R &&body_radius) : mass{std::move(body_mass)}, radius{std::move(body_radius)}, curr_ke{0},
+        body() : mass_{1}, radius{1}, curr_ke{0}, curr_pos{}, curr_vel{}
+        {add_pos_vel_ke(); check_mass(); check_radius();}
+        body(M &&body_mass, R &&body_radius) : mass_{std::move(body_mass)}, radius{std::move(body_radius)}, curr_ke{0},
         curr_pos{}, curr_vel{} {add_pos_vel(); check_mass(); check_radius();}
-        body(const M &body_mass, const R &body_radius) : mass{body_mass}, radius{body_radius}, curr_ke{0}, curr_pos{},
-                                                         curr_vel{} {add_pos_vel(); check_mass(); check_radius();}
+        body(const M &body_mass, const R &body_radius) : mass_{body_mass}, radius{body_radius}, curr_ke{0}, curr_pos{},
+        curr_vel{} {add_pos_vel(); check_mass(); check_radius();}
         body(M &&body_mass, R &&body_radius, vector3D<T> &&pos, vector3D<T> &&vel) :
-        mass{std::move(body_mass)}, radius{std::move(body_radius)}, curr_pos{std::move(pos)}, curr_vel{std::move(vel)}
+        mass_{std::move(body_mass)}, radius{std::move(body_radius)}, curr_pos{std::move(pos)}, curr_vel{std::move(vel)}
         {add_pos_vel_ke(); check_mass(); check_radius();}
         body(const M &body_mass, const R &body_radius, const vector3D<T> &pos, const vector3D<T> &vel) :
-        mass{body_mass}, radius{body_radius}, curr_pos{}, curr_vel{} {add_pos_vel_ke(); check_mass(); check_radius();}
+        mass_{body_mass}, radius{body_radius}, curr_pos{}, curr_vel{} {add_pos_vel_ke(); check_mass(); check_radius();}
         template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t>
-        body(const body<m, r, t> &other) : mass{other.mass}, radius{other.radius}, curr_pos{other.curr_pos},
-        curr_vel{other.curr_vel}, curr_ke{other.curr_ke} {add_pos_vel();}
-        body(const body<M, R, T> &other) : mass{other.mass}, radius{other.radius}, curr_pos{other.curr_pos},
-        curr_vel{other.curr_vel}, curr_ke{other.curr_ke} {add_pos_vel();}
-        body(body<M, R, T> &&other) noexcept : body_counter{std::move(other)}, mass{std::move(other.mass)},
+        body(const body<m, r, t> &other) : mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos},
+        curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc} {add_pos_vel();}
+        body(const body<M, R, T> &other) : mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos},
+        curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc} {add_pos_vel();}
+        body(body<M, R, T> &&other) noexcept : body_counter{std::move(other)}, mass_{std::move(other.mass_)},
         radius{std::move(other.radius)}, curr_pos{std::move(other.curr_pos)}, curr_vel{std::move(other.curr_vel)},
-        curr_ke{std::move(other.curr_ke)}, positions{std::move(other.positions)},
+        curr_ke{std::move(other.curr_ke)}, acc{std::move(other.acc)}, positions{std::move(other.positions)},
         velocities{std::move(other.velocities)}, energies{std::move(other.energies)}, cref{std::move(other.cref)} {}
-        const M &get_mass() const noexcept {
-            return mass;
+        const M &mass() const noexcept {
+            return mass_;
         }
-        const R &get_radius() const noexcept {
+        const R &rad() const noexcept {
             return radius;
         }
-        const vector3D<T> &get_pos() const noexcept {
+        const vector3D<T> &pos() const noexcept {
             return curr_pos;
         }
-        const vector3D<T> &get_vel() const noexcept {
+        const vector3D<T> &vel() const noexcept {
             return curr_vel;
         }
-        const K &get_ke() const noexcept {
+        const vector3D<T> &acceleration() const noexcept {
+            return acc;
+        }
+        const K &ke() const noexcept {
             return curr_ke;
         }
-        const vector3D<T> &pos_at(vec_s_t index) const {
+        const T &potential_energy() const noexcept {
+            return pe;
+        }
+        const vector3D<T> &prev_pos_at(vec_s_t index) const {
             if (index >= positions.size()) {
                 throw std::out_of_range("Requested position does not exist (index out of range).\n");
             }
             return positions[index];
         }
-        const vector3D<T> &vel_at(vec_s_t index) const {
+        const vector3D<T> &prev_vel_at(vec_s_t index) const {
             if (index >= velocities.size()) {
                 throw std::out_of_range("Requested velocity does not exist (index out of range).\n");
             }
             return velocities[index];
         }
-        const K &ke_at(typename std::vector<K>::size_type index) const {
+        const K &prev_ke_at(typename std::vector<K>::size_type index) const {
             if (index >= energies.size()) {
                 throw std::out_of_range("Requested kinetic energy does not exist (index out of range).\n");
             }
             return energies[index];
         }
         void set_mass(const M &new_mass) {
-            mass = new_mass;
+            mass_ = new_mass;
             check_mass();
         }
         void set_radius(const R &new_radius) {
@@ -213,6 +240,18 @@ namespace gtd {
         }
         void set_radius(const R &&new_radius) {
             set_radius(new_radius);
+        }
+        void set_acc(const vector3D<T> &new_acc) {
+            acc = new_acc;
+        }
+        void set_acc(vector3D<T> &&new_acc) noexcept {
+            acc = std::move(new_acc);
+        }
+        void set_pe(const T &new_pe) {
+            pe = new_pe;
+        }
+        void set_pe(T &&new_pe) noexcept {
+            pe = std::move(new_pe);
         }
         void update(const vector3D<T> &new_position, const vector3D<T> &new_velocity) noexcept {
             curr_pos = new_position; // no checks to be performed, these new vecs can be anything
@@ -243,7 +282,10 @@ namespace gtd {
             curr_vel.apply(transform);
         }
         auto momentum() const noexcept {
-            return mass*curr_vel;
+            return mass_*curr_vel;
+        }
+        void reset_acc() noexcept {
+            acc = T{0};
         }
         void reset(bool clear_trajectory = true) { // resets the body to initial setup and clears traj. if specified
             curr_pos = positions[0];
@@ -315,51 +357,53 @@ namespace gtd {
         auto crend() const {
             return rend();
         }
-        bool write_trajectory_to_txt(String path = get_home_path<String>() + file_sep() + "Body_Trajectory_At_" +
-                get_date_and_time() + ".txt", bool truncate = false, bool full_csv_style = false) const {
-            if (!path.contains('.'))
-                path.append_back(".txt");
-            std::ofstream out(path.c_str(), truncate ? std::ios_base::trunc : std::ios_base::app);
-            if (!out.good()) {
+        bool trajectory_to_txt(std::ofstream &out, bool full_csv_style = true) const {
+            if (!out.good())
                 return false;
-            }
+            unsigned long long count = 0;
             if (full_csv_style) {
-                out << "body_id,mass,radius\r\n" << body_counter::id << ',' << mass << ',' << radius << "\r\n"
-                    << "position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,kinetic_energy\r\n";
+                out << "body_id,mass,radius\r\n" << body_counter::id << ',' << mass_ << ',' << radius << "\r\n"
+                    << "iteration,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,kinetic_energy\r\n";
                 for (const auto &[pos, vel, ke] : *this) {
-                    out << pos.x << "," << pos.y << "," << pos.z << "," << vel.x << "," << vel.y << "," << vel.z << ","
-                        << ke << "\r\n";
+                    out << count++ << ',' << pos.x << ',' << pos.y << ',' << pos.z << ',' << vel.x << ',' << vel.y
+                        << ',' << vel.z << ',' << ke << "\r\n";
                 }
                 out << "\r\n";
                 out.close();
                 return true;
             }
             long long before = out.tellp();
-            out << "Body ID: " << body_counter::id << ", Mass = " << mass << ", Radius = " << radius << "\n";
+            out << "Body ID: " << body_counter::id << ", Mass = " << mass_ << ", Radius = " << radius << "\n";
             long long after = out.tellp() - before;
             --after;
             for (long i = 0; i < after; ++i) {
                 out.put('-');
             }
             out.put('\n');
-            out << "position,velocity,kinetic_energy\n";
+            out << "iteration,position,velocity,kinetic_energy\n";
             for (const auto &[pos, vel, ke] : *this) {
-                out << pos << "," << vel << "," << ke << "\n";
+                out << count++ << ',' << pos << ',' << vel << ',' << ke << '\n';
             }
             out << '\n';
-            out.close();
             return true;
+        }
+        bool trajectory_to_txt(const String &path = def_path, bool truncate = false, bool full_csv_style = false) const{
+            std::ofstream out(path.c_str(), truncate ? std::ios_base::trunc : std::ios_base::app);
+            bool ret = trajectory_to_txt(out, full_csv_style);
+            out.close();
+            return ret;
         }
         template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t>
         body<M, R, T> &operator=(const body<m, r, t> &other) {
             if (&other == this) {
                 return *this;
             }
-            this->mass = other.mass;
+            this->mass_ = other.mass_;
             this->radius = other.radius;
             this->curr_pos = other.curr_pos;
             this->curr_vel = other.curr_vel;
             this ->curr_ke = other.curr_ke;
+            this->acc = other.acc;
             clear();
             return *this;
         }
@@ -367,11 +411,12 @@ namespace gtd {
             if (&other == this) {
                 return *this;
             }
-            this->mass = other.mass;
+            this->mass_ = other.mass_;
             this->radius = other.radius;
             this->curr_pos = other.curr_pos;
             this->curr_vel = other.curr_vel;
             this ->curr_ke = other.curr_ke;
+            this->acc = other.acc;
             clear();
             return *this;
         }
@@ -379,11 +424,12 @@ namespace gtd {
             if (&other == this) {
                 return *this;
             }
-            this->mass = other.mass;
-            this->radius = other.radius;
-            this->curr_pos = other.curr_pos;
-            this->curr_vel = other.curr_vel;
-            this ->curr_ke = other.curr_ke;
+            this->mass_ = std::move(other.mass_);
+            this->radius = std::move(other.radius);
+            this->curr_pos = std::move(other.curr_pos);
+            this->curr_vel = std::move(other.curr_vel);
+            this ->curr_ke = std::move(other.curr_ke);
+            this->acc = std::move(other.acc);
             this->positions = std::move(other.positions);
             this->velocities = std::move(other.velocities);
             this->energies = std::move(other.energies);
@@ -423,24 +469,24 @@ namespace gtd {
     };
     template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
     std::ostream &operator<<(std::ostream &os, const body<m, r, t> &bod) {
-        return os << "[gtd::body@" << &bod << ":id=" << bod.id << ",m=" << +bod.mass << ",r=" << +bod.radius
+        return os << "[gtd::body@" << &bod << ":id=" << bod.id << ",m=" << +bod.mass_ << ",r=" << +bod.radius
                   << ",current_pos=(" << bod.curr_pos << "),current_vel=(" << bod.curr_vel << "),current_ke="
                   << bod.curr_ke << "]";
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
-    inline auto com(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) { // centre of mass position
-        return (b1.mass*b1.curr_pos + b2.mass*b2.curr_pos)/(b1.mass + b2.mass);
+    inline auto com(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) { // centre of mass_ position
+        return (b1.mass_*b1.curr_pos + b2.mass_*b2.curr_pos)/(b1.mass_ + b2.mass_);
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
     inline auto avg_vel(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) { /* average weighted velocity, taking
         conservation of momentum into account */
-        return (b1.momentum() + b2.momentum())/(b1.mass + b2.mass);
+        return (b1.momentum() + b2.momentum())/(b1.mass_ + b2.mass_);
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
-    auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) { /* performs a "merging" of two bodies,
-        with the new body having the sum of both mass, being at the centre-of-mass of both bodies, having a volume equal
+    auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) { /* performs a "merging" of two bodies, with
+        the new body having the sum of both masses, being at the centre-of-mass of both bodies, having a volume equal
         to the sum of both volumes (using the radii), and a new velocity such that momentum is conserved */
-        return body<decltype(b1.mass + b2.mass), long double, decltype(com(b1, b2))>(b1.mass + b2.mass,
+        return body<decltype(b1.mass_ + b2.mass_), long double, decltype(com(b1, b2))>(b1.mass_ + b2.mass_,
         cbrtl(b1.radius*b1.radius*b1.radius + b2.radius*b2.radius*b2.radius), com(b1, b2), avg_vel(b1, b2));
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
@@ -455,20 +501,34 @@ namespace gtd {
     auto operator+(const body<m1, r1, t1> &&b1, const body<m2, r2, t2> &&b2) {
         return b1 + b2;
     }
-    template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
+    template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double>
     class system { // G, below, has not been made static as it varies between objects, depending on units passed
+    public:
+        static constexpr int two_body = 1; // static constants to determine which integration method to perform
+        static constexpr int euler = 2;
+        static constexpr int modified_euler = 4;
+        static constexpr int leapfrog_kdk = 8;
+        static constexpr int leapfrog_dkd = 16;
+        static constexpr int rk4 = 32;
+        static constexpr int barnes_hut = 65536; // static constants to determine the force approx. method to use
+        static constexpr int fast_multipole = 131072;
+    private:
         long double G = 66743; // Newtonian constant of Gravitation (* 10^15 m^3 kg^-1 s^-2)
-        static constexpr int two_body = 0; // static constants to determine which integration method to perform
-        static constexpr int euler = 1;
-        static constexpr int modified_euler = 2;
-        static constexpr int rk4 = 4;
         using vec_size_t = typename std::vector<body<M, R, T>>::size_type;
-        std::vector<body<M, R, T>> bods;
+        using bod_t = body<M, R, T>;
+        std::vector<bod_t> bods;
         long double dt;
         unsigned long long iterations;
-        using P = decltype((G*std::declval<M>()*std::declval<M>())/std::declval<T>()); // will be long double
-        std::map<unsigned long long, std::vector<P>> pe; // map to store potential energies of bodies ({id, pe})
-        bool prog; // whether to show the progress of the evolution of the system
+        // using P = decltype((G*std::declval<M>()*std::declval<M>())/std::declval<T>()); // will be long double
+        std::map<unsigned long long, std::vector<T>> pe; // map to store potential energies of bodies ({id, pe})
+        std::map<unsigned long long, std::vector<T>> energy; // total energy for each body at each iteration (KE + PE)
+        std::vector<T> tot_pe; // total potential energy for the entire system at each iteration
+        std::vector<T> tot_ke; // total kinetic energy for the entire system at each iteration
+        std::vector<T> tot_e; // total energy for the entire system at each iteration (KE + PE)
+        bool evolved = false;
+        bool prog = false; // whether to show the progress of the evolution of the system
+        static inline const String def_path = get_home_path<String>() + FILE_SEP + "System_Trajectories_" +
+                                              get_date_and_time() + ".csv";
         static inline unsigned long long to_ull(String &&str) {
             if (!str.isnumeric()) {
                 return -1;
@@ -537,7 +597,69 @@ namespace gtd {
                 }
             }
         }
+        void cumulative_acc(bod_t &b1, bod_t &b2) {
+            vector3D<T> &&r12 = b2.curr_pos - b1.curr_pos;
+            vector3D<T> &&r12_cubed = r12*r12*r12;
+            b2.acc -= (b1.acc += ((G*b2.mass_)/(r12_cubed.magnitude()))*r12);
+            b2.pe += (b1.pe -= (G*b1.mass_*b2.mass_)/r12.magnitude());
+
+        }
+        vector3D<T> kv2(const bod_t &bod) {
+
+        }
+        void take_euler_step() {
+            for (bod_t &bod : bods) {
+                bod.curr_pos = bod.curr_pos + bod.curr_vel*dt;
+                bod.curr_vel = bod.curr_vel + bod.acc*dt;
+                bod.add_pos_vel_ke();
+            }
+        }
+        void take_modified_euler_step() {
+            for (bod_t &bod : bods) {
+                vector3D<T> &&r_n_plus1_euler = bod.curr_pos + dt*bod.curr_vel;
+                vector3D<T> &&v_n_plus1_euler = bod.curr_vel + dt*bod.acc;
+                bod.curr_pos = r_n_plus1_euler + (dt/2)*(bod.curr_vel + v_n_plus1_euler);
+            }
+
+        }
+        void calc_initial_energy() {
+            pe.clear();
+            vec_size_t size = bods.size();
+            for (bod_t &bod : bods)
+                bod.pe = T{0};
+            T total_pe = T{0};
+            T total_ke = T{0};
+            T total_e = T{0};
+            for (unsigned long long outer = 0; outer < size; ++outer) {
+                bod_t &ref = bods[outer];
+                for (unsigned long long inner = outer + 1; inner < size; ++inner) {
+                    bods[inner].pe += (ref.pe -= (G*ref.mass_*bods[inner].mass_)/(ref.curr_pos -
+                                                                                  bods[inner].curr_pos).magnitude());
+                }
+                pe.emplace(ref.id, std::vector<T>{ref.pe});
+                energy.emplace(ref.id, std::vector<T>{(T) (ref.curr_ke + ref.pe)});
+                total_pe += ref.pe;
+                total_ke += ref.curr_ke;
+                total_e += ref.pe + ref.curr_ke;
+            }
+            tot_pe.push_back(total_pe);
+            tot_ke.push_back(total_ke);
+            tot_e.push_back(total_e);
+        }
+        static bool check_option(int option) noexcept {
+            unsigned short loword = option & 0x0000ffff;
+            unsigned short hiword = option >> 16;
+            return (loword & (loword - 1)) == 0 || loword == 0 || loword > rk4 ||
+                   (hiword & (hiword - 1)) == 0 || hiword > 2;
+        }
     public:
+        system(long double timestep = 1, unsigned long long num_iterations = 1000, bool show_progress = true,
+               const char *units_format = "M1:1,D1:1,T1:1") :
+               dt{timestep}, iterations{num_iterations}, prog{show_progress} {
+            /* units_format is a string with 3 ratios: it specifies the ratio of the units used for mass, distance and
+             * time to kg, metres and seconds (SI units), respectively. This means any units can be used. */
+            parse_units_format(units_format);
+        }
         system(const std::vector<body<M, R, T>> &bodies, long double timestep = 1,
                unsigned long long num_iterations = 1000, bool show_progress = true,
                const char *units_format = "M1:1,D1:1,T1:1") :
@@ -568,6 +690,15 @@ namespace gtd {
         }
         vec_size_t num_bodies() {
             return bods.size();
+        }
+        void set_progress(bool show_progress) noexcept {
+            prog = show_progress;
+        }
+        bool set_iterations(unsigned long long number) noexcept {
+            if (!number)
+                return false;
+            iterations = number;
+            return true;
         }
         system<M, R, T> &add_body(const body<M, R, T> &bod) {
             bods.push_back(bod);
@@ -618,6 +749,141 @@ namespace gtd {
             }
             return false;
         }
+        void reset() {
+            for (bod_t &bod : bods)
+                bod.reset(true);
+            evolved = false;
+        }
+        /* reset() deletes the evolution of the bodies AND returns them to their original positions, velocities, and
+         * kinetic energies, whilst clear_evolution() deletes the evolution BUT retains the current positions,
+         * velocities and kinetic energies of the bodies. */
+        void clear_evolution() {
+            for (bod_t &bod : bods)
+                bod.clear();
+            evolved = false;
+        }
+        bool evolve(int integration_method) {
+            if (bods.size() == 0 || !check_option(integration_method))
+                return false;
+            time_t start = time(nullptr);
+            unsigned long long steps = 0;
+            if (evolved)
+                this->clear_evolution();
+            this->calc_initial_energy();
+            vec_size_t num_bods = bods.size();
+            T total_pe;
+            T total_ke;
+            T total_e;
+            if ((integration_method & two_body) == two_body) {
+                if (bods.size() != 2)
+                    throw two_body_error();
+                if ((integration_method & barnes_hut) == barnes_hut) {
+                    // lots of stuff here
+                    return true;
+                }
+                return true;
+            }
+            else if ((integration_method & euler) == euler) {
+                if ((integration_method & barnes_hut) == barnes_hut) {
+                    // lots of stuff here
+                }
+                else {
+                    while (steps++ < iterations) {
+                        total_pe = T{0};
+                        total_ke = T{0};
+                        total_e = T{0};
+                        for (bod_t &bod : bods) {
+                            bod.acc = vector3D<T>::zero;
+                            bod.pe = T{0};
+                        }
+                        for (unsigned long long outer = 0; outer < num_bods; ++outer) {
+                            bod_t &ref = bods[outer];
+                            for (unsigned long long inner = outer + 1; inner < num_bods; ++inner) {
+                                cumulative_acc(ref, bods[inner]);
+                            }
+                            pe.find(ref.id)->second.push_back(ref.pe);
+                            energy.find(ref.id)->second.push_back((T) (ref.curr_ke + ref.pe));
+                            total_pe += ref.pe;
+                            total_ke += ref.curr_ke;
+                            total_e += ref.pe + ref.curr_ke;
+                        }
+                        tot_pe.push_back(total_pe);
+                        tot_ke.push_back(total_ke);
+                        tot_e.push_back(total_e);
+                        this->take_euler_step();
+                        if (prog)
+                            printf("Iteration %llu/%llu\r", steps, iterations);
+                    }
+                    if (prog) {
+                        time_t total = time(nullptr) - start;
+                        printf("\n--------------------Done--------------------\n"
+                               "Euler method time elapsed: %zu second%s\n", total, "s" + (total == 1));
+                    }
+                }
+            }
+            else if ((integration_method & modified_euler) == modified_euler) {
+                if ((integration_method & barnes_hut) == barnes_hut) {
+                    // lots of stuff here
+                    return true;
+                }
+                else {
+                    while (steps++ < iterations) {
+                        total_pe = T{0};
+                        total_ke = T{0};
+                        total_e = T{0};
+                        for (bod_t &bod : bods) {
+                            bod.acc = vector3D<T>::zero;
+                            bod.pe = T{0};
+                        }
+                        for (unsigned long long outer = 0; outer < num_bods; ++outer) {
+                            bod_t &ref = bods[outer];
+                            for (unsigned long long inner = outer + 1; inner < num_bods; ++inner) {
+                                cumulative_acc(ref, bods[inner]);
+                            }
+                            pe.find(ref.id)->second.push_back(ref.pe);
+                            energy.find(ref.id)->second.push_back((T) (ref.curr_ke + ref.pe));
+                            total_pe += ref.pe;
+                            total_ke += ref.curr_ke;
+                            total_e += ref.pe + ref.curr_ke;
+                        }
+                        tot_pe.push_back(total_pe);
+                        tot_ke.push_back(total_ke);
+                        tot_e.push_back(total_e);
+                        this->take_modified_euler_step();
+                        if (prog)
+                            printf("Iteration %llu/%llu\r", steps, iterations);
+                    }
+                    if (prog) {
+                        time_t total = time(nullptr) - start;
+                        printf("\n--------------------Done--------------------\n"
+                               "Modified Euler method, time elapsed: %zu second%s\n", total, "s" + (total == 1));
+                    }
+                }
+            }
+            else if ((integration_method & leapfrog_kdk) == leapfrog_kdk) {
+                if ((integration_method & barnes_hut) == barnes_hut) {
+                    // lots of stuff here
+                    return true;
+                }
+                return true;
+            }
+            else if ((integration_method & leapfrog_dkd) == leapfrog_dkd) {
+                if ((integration_method & barnes_hut) == barnes_hut) {
+                    // lots of stuff here
+                    return true;
+                }
+                return true;
+            }
+            else if ((integration_method & rk4) == rk4) {
+                if ((integration_method & barnes_hut) == barnes_hut) {
+                    // lots of stuff here
+                    return true;
+                }
+                return true;
+            }
+            evolved = true;
+            return true;
+        }
         auto begin() {
             return bods.begin();
         }
@@ -653,6 +919,33 @@ namespace gtd {
         }
         auto crend() const {
             return bods.crend();
+        }
+        bool write_trajectories(const String &path = def_path, bool binary = false) {
+            if (!evolved || bods.size() == 0)
+                return false;
+            if (binary) {} // needs work
+            std::ofstream out(path.c_str(), std::ios_base::trunc);
+            if (!out.good())
+                return false;
+            vec_size_t size = bods[0].positions.size(); // used instead of iterations, as iterations might have changed
+            unsigned long long i;
+            for (const bod_t &bod : bods) {
+                out << "body_id,mass,radius\r\n" << bod.id << ',' << bod.mass_ << ',' << bod.radius << "\r\n"
+                    << "time_elapsed,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,kinetic_energy,"
+                       "potential_energy,total_energy\r\n";
+                for (i = 0; i < size; ++i) {
+                    out << i*dt << ',' << bod.positions[i].x << ',' << bod.positions[i].y << ',' << bod.positions[i].z
+                        << ',' << bod.velocities[i].x << ',' << bod.velocities[i].y << ',' << bod.velocities[i].z << ','
+                        << bod.energies[i] << ',' << pe.find(bod.id)->second[i] << ',' << energy.find(bod.id)->second[i]
+                        << "\r\n";
+                }
+                out << ",,,,,,,,,\r\n";
+            }
+            out << "time_elapsed,system_PE,system_KE,system_E\r\n";
+            for (i = 0; i < size; ++i)
+                out << i*dt << ',' << tot_pe[i] << ',' << tot_ke[i] << ',' << tot_e[i] << "\r\n";
+            out.close();
+            return true;
         }
         const body<M, R, T> &operator[](vec_size_t index) {
             if (index >= bods.size()) {
@@ -707,5 +1000,7 @@ namespace gtd {
     }
     // std::set<unsigned long long> body_counter::ids;
     // unsigned long long body_counter::count = 0;
+    typedef body<long double, long double, long double> bod;
+    typedef system<long double, long double, long double> sys;
 }
 #endif

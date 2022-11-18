@@ -866,7 +866,7 @@ namespace gtd {
             }
             return data[index];
         }
-        ~bmp() {
+        virtual ~bmp() {
             dealloc();
         }
         friend inline std::ostream &operator<<(std::ostream &os, const bmp &image);

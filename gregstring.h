@@ -23,6 +23,12 @@
 #include <shlobj.h>
 #endif
 
+#ifndef _WIN32
+#define FILE_SEP '/'
+#else
+#define FILE_SEP '\\'
+#endif
+
 namespace gtd {
     unsigned char to_upper(unsigned char ch);
     unsigned char to_lower(unsigned char ch);
