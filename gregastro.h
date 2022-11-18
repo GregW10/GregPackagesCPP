@@ -591,17 +591,19 @@ namespace gtd {
             pt_src = false;
         }
     public:
-        star() = default;
-        star(M &&star_mass, R &&star_radius, LumT &&luminosity, us num_sources = 1) :
-        bod_t{std::move(star_mass), std::move(star_radius)}, lum{std::move(luminosity)} {create_sources(num_sources);}
-        star(const M &star_mass, const R &star_radius, const LumT &luminosity, us num_sources = 1) :
-        bod_t{star_mass, star_radius}, lum{luminosity} {create_sources(num_sources);}
-        star(M &&star_mass, R &&star_radius, vector3D<T> &&pos, vector3D<T> &&vel, LumT &&luminosity, us num_sources=1):
+        explicit star(us num_light_sources = 1) {create_sources(num_light_sources);}
+        star(M &&star_mass, R &&star_radius, LumT &&luminosity, us num_light_sources = 1) :
+        bod_t{std::move(star_mass), std::move(star_radius)}, lum{std::move(luminosity)}
+        {create_sources(num_light_sources);}
+        star(const M &star_mass, const R &star_radius, const LumT &luminosity, us num_light_sources = 1) :
+        bod_t{star_mass, star_radius}, lum{luminosity} {create_sources(num_light_sources);}
+        star(M &&star_mass, R &&star_radius, vector3D<T> &&pos, vector3D<T> &&vel, LumT &&luminosity,
+             us num_light_sources = 1):
         bod_t{std::move(star_mass), std::move(star_radius), std::move(pos), std::move(vel)}, lum{std::move(luminosity)}
-        {create_sources(num_sources);}
+        {create_sources(num_light_sources);}
         star(const M &star_mass, const R &star_radius, const vector3D<T> &pos, const vector3D<T> &vel,
-             const LumT &luminosity, us num_sources = 1) :
-        bod_t{star_mass, star_radius, pos, vel}, lum{luminosity} {create_sources(num_sources);}
+             const LumT &luminosity, us num_light_sources = 1) :
+        bod_t{star_mass, star_radius, pos, vel}, lum{luminosity} {create_sources(num_light_sources);}
         template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t>
         explicit star(const body<m, r, t> &other) : bod_t{other} {}
         explicit star(const body<M, R, T> &other) : bod_t{other} {}
@@ -633,8 +635,8 @@ namespace gtd {
         unsigned int num_stars = 4*log(bmp::width*bmp::height);
         long double star_radius = sqrt(bmp::width*bmp::width)/1000.0l; // in pixels
         std::vector<point> star_points;
-        std::map<unsigned long long, std::reference_wrapper<bod_t>> bodies;
-        std::map<unsigned long long, std::reference_wrapper<star_t>> stars;
+        std::map<const unsigned long long, const bod_t*> bodies;
+        std::map<const unsigned long long, const star_t*> stars;
         cam_t cam{dims};
         cam_t *fcam = nullptr;
         bool rendered = false;
@@ -682,18 +684,20 @@ namespace gtd {
             delete [] fdata;
             fdata = nullptr;
         }
-        void put_bodies(const std::vector<bod_t> &vec, bool erase = true) {
+        void put_bodies(const std::vector<bod_t*> &vec, bool erase = true) {
             if (erase) {
                 bodies.clear();
                 stars.clear();
             }
-            for (const bod_t &bod : vec) {
-                try {
-                    star_t &ref = dynamic_cast<const star_t&>(bod);
-                    stars.insert({ref.id, ref}); // all bodies have a unique id, hence why a map is used
-                } catch (const std::bad_cast &e) {
-                    bodies.insert({bod.id, bod});
-                }
+            const star_t *star_ptr = nullptr;
+            for (const bod_t *const &bod_ptr : vec) {
+                if (bod_ptr == nullptr) // no need to throw an exception, simply ignored
+                    continue;
+                star_ptr = dynamic_cast<const star_t*>(bod_ptr); // no bad_cast exception thrown with pointers
+                if (star_ptr == nullptr)
+                    bodies.emplace(bod_ptr->id, bod_ptr);
+                else
+                    stars.emplace(star_ptr->id, star_ptr); // all bodies have a unique id, hence why a map is used
             }
         }
         void set_cam() { // needs work
@@ -717,7 +721,7 @@ namespace gtd {
 
 
         astro_scene(unsigned int bmp_width, unsigned int bmp_height, const cam_t &c,
-                    const std::vector<bod_t> &bods, bool modulated_brightness = false) :
+                    const std::vector<bod_t*> &bods, bool modulated_brightness = false) :
                 bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp"),
                     colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness}, cam{c}
                     {put_bodies(bods); set_cam();}
@@ -751,20 +755,26 @@ namespace gtd {
             star_radius = rad;
             return true;
         }
-        void add_bodies(const std::vector<bod_t> &new_bodies) {
+        void add_bodies(const std::vector<bod_t*> &new_bodies) {
             put_bodies(new_bodies, false);
         }
-        void add_stars(const std::vector<star_t> &new_stars) {
-            for (const star_t &s : new_stars)
-                stars.insert({s.id, s});
+        void add_stars(const std::vector<star_t*> &new_stars) {
+            for (const star_t *const &s : new_stars) {
+                if (s == nullptr)
+                    continue;
+                stars.emplace(s->id, s);
+            }
         }
-        void assign_bodies(const std::vector<bod_t> &new_bodies) {
+        void assign_bodies(const std::vector<bod_t*> &new_bodies) {
             put_bodies(new_bodies, true);
         }
-        void assign_stars(const std::vector<star_t> &new_stars) {
+        void assign_stars(const std::vector<star_t*> &new_stars) {
             stars.clear();
-            for (const star_t &s : new_stars)
-                stars.insert({s.id, s});
+            for (const star_t *const &s : new_stars) {
+                if (s == nullptr)
+                    continue;
+                stars.emplace(s->id, s);
+            }
         }
         bool render(bool reset_star_positions = true) noexcept {
             if (rendered) {
@@ -783,7 +793,7 @@ namespace gtd {
             bmp::reallocate();
             alloc();
         }
-        ~astro_scene() {
+        ~astro_scene() override {
             dealloc();
         }
     };

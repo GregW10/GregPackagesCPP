@@ -143,6 +143,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
     class vector3D;
     template <isNumWrapper T>
     class vector2D : public vector<T> {
+    public:
+        static inline const vector2D<T> zero{T{0}, T{0}};
     protected:
         T x{0};
         T y{0};
@@ -151,9 +153,9 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         vector2D(const vector2D<T> &other) : x{other.x}, y{other.y} {}
         vector2D(vector2D<T> &&other) noexcept : x{std::move(other.x)}, y{std::move(other.y)} {}
         template <typename U> requires isConvertible<U, T>
-        vector2D(const vector2D<U> &other) noexcept : x{other.x}, y{other.y} {}
+        vector2D(const vector2D<U> &other) noexcept : x{(T) other.x}, y{(T) other.y} {}
         template <typename U> requires isConvertible<U, T>
-        vector2D(const vector2D<U> &&other) noexcept : x{other.x}, y{other.y} {}
+        vector2D(const vector2D<U> &&other) noexcept : x{(T) other.x}, y{(T) other.y} {}
         vector2D(const T &x_component, const T &y_component) noexcept : x{x_component}, y{y_component} {}
         vector2D(T &&x_component, T &&y_component) noexcept : x{std::move(x_component)}, y{std::move(y_component)} {}
         String str(unsigned char f_p_dec_places = 5) const override {
@@ -1860,6 +1862,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
     }
     template <isNumWrapper T>
     class vector3D : public vector2D<T> {
+    public:
+        static inline const vector3D<T> zero{T{0}, T{0}, T{0}};
     protected:
         T z{0};
     public:
@@ -1873,9 +1877,9 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         template <typename U> requires isConvertible<U, T>
         vector3D(const vector2D<U> &&other) noexcept : vector2D<T>(other) {}
         template <typename U> requires isConvertible<U, T>
-        vector3D(const vector3D<U> &other) noexcept : vector2D<T>(other), z{other.z} {}
+        vector3D(const vector3D<U> &other) noexcept : vector2D<T>(other), z{(T) other.z} {}
         template <typename U> requires isConvertible<U, T>
-        vector3D(const vector3D<U> &&other) noexcept : vector2D<T>(other), z{other.z} {}
+        vector3D(const vector3D<U> &&other) noexcept : vector2D<T>(other), z{(T) other.z} {}
         vector3D(const T &x_component, const T &y_component, const T &z_component) noexcept :
         vector2D<T>{x_component, y_component}, z{z_component} {}
         vector3D(T &&x_component, T &&y_component, T &&z_component) noexcept :
@@ -3208,6 +3212,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend class ray;
         template <isNumWrapper PosT, isNumWrapper DirT, isNumWrapper DistT>
         friend class camera;
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper U>
+        friend class system;
     };
     template <isNumWrapper U>
     std::ostream &operator<<(std::ostream &out, const vector3D<U> &vec) {
