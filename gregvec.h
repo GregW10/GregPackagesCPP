@@ -183,6 +183,11 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         inline const T &get_y() const noexcept {
             return y;
         }
+        virtual vector2D<T> &make_zero() {
+            this->x = T{0};
+            this->y = T{0};
+            return *this;
+        }
         template <isNumWrapper U>
         vector3D<T> &set_length(const U &new_length) noexcept {
             long double frac = new_length/this->magnitude();
@@ -1918,6 +1923,12 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         }
         inline const T &get_z() const {
             return this->z;
+        }
+        vector3D<T> &make_zero() override {
+            this->x = T{0};
+            this->y = T{0};
+            this->z = T{0};
+            return *this;
         }
         template <isNumWrapper U>
         vector3D<T> &set_length(const U &new_length) noexcept {
