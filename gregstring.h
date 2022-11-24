@@ -19,13 +19,30 @@
 #ifndef _WIN32
 #include <unistd.h>
 #include <pwd.h>
+#define FILE_SEP '/'
+#define RESET_TXT_FLAGS "\033[0m"
+#define BLACK_TXT_START "\033[30m"
+#define RED_TXT_START "\033[31m"
+#define GREEN_TXT_START "\033[32m"
+#define YELLOW_TXT_START "\033[33m"
+#define BLUE_TXT_START "\033[34m"
+#define MAGENTA_TXT_START "\033[35m"
+#define CYAN_TXT_START "\033[36m"
+#define WHITE_TXT_START "\033[37m"
+#define BOLD_TXT_START "\033[1m"
+#define UNDERLINED_TXT_START "\033[4m"
+#define BLACK_TXT(str) BLACK_TXT_START str RESET_TXT_FLAGS
+#define RED_TXT(str) RED_TXT_START str RESET_TXT_FLAGS
+#define GREEN_TXT(str) GREEN_TXT_START str RESET_TXT_FLAGS
+#define YELLOW_TXT(str) YELLOW_TXT_START str RESET_TXT_FLAGS
+#define BLUE_TXT(str) BLUE_TXT_START str RESET_TXT_FLAGS
+#define MAGENTA_TXT(str) MAGENTA_TXT_START str RESET_TXT_FLAGS
+#define CYAN_TXT(str) CYAN_TXT_START str RESET_TXT_FLAGS
+#define WHITE_TXT(str) WHITE_TXT_START str RESET_TXT_FLAGS
+#define BOLD_TXT(str) BOLD_TXT_START str RESET_TXT_FLAGS
+#define UNDERLINED_TXT(str) UNDERLINED_TXT_START str RESET_TXT_FLAGS
 #else
 #include <shlobj.h>
-#endif
-
-#ifndef _WIN32
-#define FILE_SEP '/'
-#else
 #define FILE_SEP '\\'
 #endif
 
