@@ -151,9 +151,6 @@ namespace gtd {
         std::vector<vector3D<T>> positions; // these std::vectors will hold all the positions and velocities of the
         std::vector<vector3D<T>> velocities; // ... body as it moves
         std::vector<K> energies;
-        std::vector<T> r_terms; // these 3 std::vectors are used in system for numerous integration schemes
-        std::vector<T> r_grad_terms;
-        std::vector<T> v_grad_terms;
         mutable std::vector<std::tuple<const vector3D<T>&, const vector3D<T>&, const K&>> cref;
         typedef typename std::vector<vector3D<T>>::size_type vec_s_t;
         static inline String def_path = get_home_path<String>() + FILE_SEP + "Body_Trajectory_";
@@ -306,6 +303,7 @@ namespace gtd {
             curr_ke = energies[0];
             if (clear_trajectory) {
                 clear();
+                return;
             }
             add_pos_vel();
             energies.push_back(curr_ke);
@@ -543,9 +541,11 @@ namespace gtd {
         static constexpr int two_body = 1; // static constants to determine which integration method to perform
         static constexpr int euler = 2;
         static constexpr int modified_euler = 4;
-        static constexpr int leapfrog_kdk = 8;
-        static constexpr int leapfrog_dkd = 16;
-        static constexpr int rk4 = 32;
+        static constexpr int midpoint = 8;
+        static constexpr int leapfrog_kdk = 16;
+        static constexpr int leapfrog_dkd = 32;
+        static constexpr int rk4 = 64;
+        static constexpr int rk3_8 = 128;
         static constexpr int barnes_hut = 65536; // static constants to determine the force approx. method to use
         static constexpr int fast_multipole = 131072;
         static inline bool merge_if_overlapped = false;
@@ -559,8 +559,11 @@ namespace gtd {
         long double prev_dt{}; // used in methods called after evolve(), since could be changed by setter
         unsigned long long prev_iterations{}; // same here
         // using P = decltype((G*std::declval<M>()*std::declval<M>())/std::declval<T>()); // will be long double
-        std::map<unsigned long long, std::vector<T>> pe; // map to store potential energies of bodies ({id, pe})
-        std::map<unsigned long long, std::vector<T>> energy; // total energy for each body at each iteration (KE + PE)
+        std::vector<std::vector<T>> pe; // to store potential energies of bodies
+        std::vector<std::vector<T>> energy; // total energy for each body at each iteration (KE + PE)
+        /* it would have been nice to use std::maps to store potential and total energies for all bodies, as it would
+         * have allowed lookup by body_id, but its lookup complexity is O(log(N)), whereas accessing an element in a
+         * std::vector by index is O(1) */
         std::vector<T> tot_pe; // total potential energy for the entire system at each iteration
         std::vector<T> tot_ke; // total kinetic energy for the entire system at each iteration
         std::vector<T> tot_e; // total energy for the entire system at each iteration (KE + PE)
@@ -605,7 +608,7 @@ namespace gtd {
             unsigned long long t_num = to_ull(str.substr(colon_index + 1, comma_index));
             G *= m_num*d_num*d_num*d_num*t_num*t_num;
             G /= m_denom*d_denom*d_denom*d_denom*t_denom*t_denom;
-            G /= 1000000000000000; // correcting for the original G being *10^(15) times larger than it should be
+            G /= 1000000000000000; // correcting for the original G being 10^(15) times larger than it should be
         }
         void clear_bodies() { // makes sure the trajectories of all bodies are deleted
             for (auto &bod : bods) {
@@ -682,6 +685,15 @@ namespace gtd {
                 bod.add_pos_vel_ke();
             }
         }
+        void take_midpoint_step(const std::vector<std::tuple<vector3D<T>, vector3D<T>, vector3D<T>>>
+                                &predicted_vals) {
+            unsigned long long count = 0;
+            for (bod_t &bod : bods) {
+                bod.curr_pos = bod.curr_pos + dt*std::get<1>(predicted_vals[count]);
+                bod.curr_vel = bod.curr_vel + dt*std::get<2>(predicted_vals[count++]);
+                bod.add_pos_vel_ke();
+            }
+        }
         // void calc_initial_energy() {
         //     pe.clear();
         //     vec_size_t size = bods.size();
@@ -707,11 +719,46 @@ namespace gtd {
         //     tot_e.push_back(total_e);
         // }
         void create_energy_vectors() {
-            vec_size_t size = bods.size();
-            for (const bod_t &bod : bods) {
-                pe.emplace(bod.id, std::vector<T>{});
-                energy.emplace(bod.id, std::vector<T>{});
+            // vec_size_t size = bods.size();
+            // for (const bod_t &bod : bods) {
+            //     pe.emplace(bod.id, std::vector<T>{});
+            //     energy.emplace(bod.id, std::vector<T>{});
+            // }
+            pe.resize(bods.size());
+            energy.resize(bods.size());
+        }
+        void calc_accelerations() {
+            static T total_pe;
+            static T total_ke;
+            static unsigned long long outer;
+            static unsigned long long inner;
+            static vec_size_t num_bods;
+            total_pe = T{0};
+            total_ke = T{0};
+            // total_e = T{0};
+            for (bod_t &bod : bods) {
+                bod.acc.make_zero();
+                bod.pe = T{0};
             }
+            num_bods = bods.size();
+            for (outer = 0; outer < num_bods; ++outer) {
+                bod_t &ref = bods[outer];
+                for (inner = outer + 1; inner < num_bods; ++inner) {
+                    cumulative_acc(ref, bods[inner]);
+                }
+                ref.pe /= T{2};
+                // pe.find(ref.id)->second.push_back(ref.pe);
+                // energy.find(ref.id)->second.push_back((T) (ref.curr_ke + ref.pe));
+                pe[outer].push_back(ref.pe);
+                energy[outer].push_back(ref.curr_ke + ref.pe);
+                total_pe += ref.pe;
+                total_ke += ref.curr_ke;
+                // total_e += ref.pe + ref.curr_ke;
+            }
+            // total_pe /= T{2}; // pairs of particles were counted twice, so must divide by 2
+            tot_pe.push_back(total_pe);
+            tot_ke.push_back(total_ke);
+            tot_e.push_back(total_pe + total_ke);
         }
         void calc_final_energy() {
             // pe.clear();
@@ -725,37 +772,61 @@ namespace gtd {
             for (unsigned long long outer = 0; outer < size; ++outer) {
                 bod_t &ref = bods[outer];
                 for (inner = outer + 1; inner < size; ++inner) {
-                    bods[inner].pe += (ref.pe -= (G*ref.mass_*bods[inner].mass_)/(ref.curr_pos -
-                                                                                  bods[inner].curr_pos).magnitude());
+                    auto &&pot_energy = (G*ref.mass_*bods[inner].mass_)/(ref.curr_pos-bods[inner].curr_pos).magnitude();
+                    ref.pe -= pot_energy;
+                    bods[inner].pe -= pot_energy;
                 }
                 // pe.emplace(ref.id, std::vector<T>{ref.pe});
                 // energy.emplace(ref.id, std::vector<T>{(T) (ref.curr_ke + ref.pe)});
-                pe.find(ref.id)->second.push_back(ref.pe);
-                energy.find(ref.id)->second.push_back(ref.curr_ke + ref.pe);
+                ref.pe /= T{2};
+                // pe.find(ref.id)->second.push_back(ref.pe);
+                // energy.find(ref.id)->second.push_back(ref.curr_ke + ref.pe);
+                pe[outer].push_back(ref.pe);
+                energy[outer].push_back(ref.curr_ke + ref.pe);
                 total_pe += ref.pe;
                 total_ke += ref.curr_ke;
                 // total_e += ref.pe + ref.curr_ke;
             }
-            total_pe /= T{2};
+            // total_pe /= T{2};
             tot_pe.push_back(total_pe);
             tot_ke.push_back(total_ke);
             tot_e.push_back(total_pe + total_ke);
         }
-        static bool check_option(int option) noexcept {
+        static inline bool check_option(int option) noexcept {
             unsigned short loword = option & 0x0000ffff;
             unsigned short hiword = option >> 16;
             return (loword & (loword - 1)) == 0 || loword == 0 || loword > rk4 ||
                    (hiword & (hiword - 1)) == 0 || hiword > 2;
         }
+        void print_progress(const unsigned long long &step) const noexcept {
+#ifndef _WIN32
+            printf(CYAN_TXT_START "Iteration " BLUE_TXT_START "%llu" RED_TXT_START "/" MAGENTA_TXT_START
+                   "%llu\r", step, iterations);
+#else
+            printf("Iteration %llu/%llu\r", steps, iterations);
+#endif
+        }
+        static inline void print_conclusion(const char *method, const time_t &start_time) {
+            time_t total = time(nullptr) - start_time;
+#ifndef _WIN32
+            std::cout << RESET_TXT_FLAGS;
+            printf(BLACK_TXT("\n--------------------Done--------------------\n")
+                   UNDERLINED_TXT(GREEN_TXT("%s"))WHITE_TXT(" - time elapsed: ")
+                   BOLD_TXT(YELLOW_TXT("%zu"))WHITE_TXT(" second%c\n"), method, total, "s"[total == 1]);
+#else
+            printf("\n--------------------Done--------------------\n"
+                               "Midpoint method - time elapsed: %zu second%c\n", total, "s"[total == 1]);
+#endif
+        }
     public:
         system(const std::initializer_list<bod_t> &list) : bods{list} {
             parse_units_format("M1:1,D1:1,T1:1");
-            clear_bodies(0);
+            clear_bodies();
             check_overlap();
         }
         system(std::initializer_list<bod_t> &&list) : bods{std::move(list)} {
             parse_units_format("M1:1,D1:1,T1:1");
-            clear_bodies(0);
+            clear_bodies();
             check_overlap();
         }
         explicit system(long double timestep = 1, unsigned long long num_iterations = 1000, bool show_progress = true,
@@ -772,7 +843,7 @@ namespace gtd {
             /* units_format is a string with 3 ratios: it specifies the ratio of the units used for mass, distance and
              * time to kg, metres and seconds (SI units), respectively. This means any units can be used. */
             parse_units_format(units_format);
-            clear_bodies(0);
+            clear_bodies();
             check_overlap();
         }
         system(std::vector<body<M, R, T>> &&bodies, long double timestep = 1,
@@ -780,17 +851,18 @@ namespace gtd {
                const char *units_format = "M1:1,D1:1,T1:1") :
                bods{std::move(bodies)}, dt{timestep}, iterations{num_iterations}, prog{show_progress} {
             parse_units_format(units_format);
-            clear_bodies(0);
+            clear_bodies();
             check_overlap();
         }
         system(const system<M, R, T> &other) :
-        bods{other.bods}, dt{other.dt}, iterations{other.iterations}, prog{other.prog}, pe{other.pe}, G{other.G} {
-            clear_bodies(0);
+        bods{other.bods}, dt{other.dt}, iterations{other.iterations}, prog{other.prog}, pe{other.pe},
+        energy{other.energy}, G{other.G} {
+            clear_bodies();
             check_overlap();
         }
         system(system<M, R, T> &&other) : bods{std::move(other.bods)}, dt{other.dt}, iterations{other.iterations},
-        prog{other.prog}, pe{std::move(other.pe)}, G{other.G} {
-            clear_bodies(0);
+        prog{other.prog}, pe{std::move(other.pe)}, energy{std::move(other.energy)}, G{other.G} {
+            clear_bodies();
             check_overlap();
         }
         vec_size_t num_bodies() {
@@ -829,7 +901,7 @@ namespace gtd {
             check_overlap();
             return *this;
         }
-        system<M, R, T> &add_bodies(const std::vector<body<M, R, T>> &bodies) {
+        system<M, R, T> &add_bodies(const std::vector<bod_t> &bodies) {
             if (bodies.size() == 0) {
                 return *this;
             }
@@ -839,7 +911,7 @@ namespace gtd {
             check_overlap();
             return *this;
         }
-        system<M, R, T> &add_bodies(std::vector<body<M, R, T>> &&bodies) {
+        system<M, R, T> &add_bodies(std::vector<bod_t> &&bodies) {
             if (bodies.size() == 0) {
                 return *this;
             }
@@ -903,9 +975,10 @@ namespace gtd {
                 this->create_energy_vectors();
             // this->calc_initial_energy();
             vec_size_t num_bods = bods.size();
-            T total_pe;
-            T total_ke;
-            T total_e;
+#ifndef _WIN32
+            if (prog)
+                std::cout << BOLD_TXT_START;
+#endif
             if ((integration_method & two_body) == two_body) {
                 if (bods.size() != 2)
                     throw two_body_error();
@@ -920,38 +993,14 @@ namespace gtd {
                     // lots of stuff here
                 }
                 else {
-                    unsigned long long inner;
                     while (steps++ < iterations) {
-                        total_pe = T{0};
-                        total_ke = T{0};
-                        // total_e = T{0};
-                        for (bod_t &bod : bods) {
-                            bod.acc = vector3D<T>::zero;
-                            bod.pe = T{0};
-                        }
-                        for (unsigned long long outer = 0; outer < num_bods; ++outer) {
-                            bod_t &ref = bods[outer];
-                            for (inner = outer + 1; inner < num_bods; ++inner) {
-                                cumulative_acc(ref, bods[inner]);
-                            }
-                            pe.find(ref.id)->second.push_back(ref.pe);
-                            energy.find(ref.id)->second.push_back((T) (ref.curr_ke + ref.pe));
-                            total_pe += ref.pe;
-                            total_ke += ref.curr_ke;
-                            // total_e += ref.pe + ref.curr_ke;
-                        }
-                        total_pe /= T{2}; // pairs of particles were counted twice, so must divide by 2
-                        tot_pe.push_back(total_pe);
-                        tot_ke.push_back(total_ke);
-                        tot_e.push_back(total_pe + total_ke);
+                        this->calc_accelerations();
                         this->take_euler_step();
                         if (prog) // re-evaluating this within the loop is not great, but I don't want to dup. code
-                            printf("Iteration %llu/%llu\r", steps, iterations);
+                            this->print_progress(steps);
                     }
                     if (prog) {
-                        time_t total = time(nullptr) - start;
-                        printf("\n--------------------Done--------------------\n"
-                               "Euler method time elapsed: %zu second%c\n", total, "s"[total == 1]);
+                        this->print_conclusion("Euler", start);
                     }
                 }
             }
@@ -961,34 +1010,12 @@ namespace gtd {
                 std::vector<std::tuple<vector3D<T>, vector3D<T>, vector3D<T>>> predicted{num_bods};
                 if ((integration_method & barnes_hut) == barnes_hut) {
                     // lots of stuff here
-                    return true;
                 }
                 else {
                     unsigned long long outer;
                     unsigned long long inner;
                     while (steps++ < iterations) {
-                        total_pe = T{0};
-                        total_ke = T{0};
-                        // total_e = T{0};
-                        for (bod_t &bod : bods) {
-                            bod.acc = vector3D<T>::zero;
-                            bod.pe = T{0};
-                        }
-                        for (outer = 0; outer < num_bods; ++outer) {
-                            bod_t &ref = bods[outer];
-                            for (inner = outer + 1; inner < num_bods; ++inner) {
-                                cumulative_acc(ref, bods[inner]);
-                            }
-                            pe.find(ref.id)->second.push_back(ref.pe);
-                            energy.find(ref.id)->second.push_back((T) (ref.curr_ke + ref.pe));
-                            total_pe += ref.pe;
-                            total_ke += ref.curr_ke;
-                            // total_e += ref.pe + ref.curr_ke;
-                        }
-                        total_pe /= T{2};
-                        tot_pe.push_back(total_pe);
-                        tot_ke.push_back(total_ke);
-                        tot_e.push_back(total_pe + total_ke);
+                        this->calc_accelerations();
                         for (outer = 0; outer < num_bods; ++outer) {
                             bod_t &ref = bods[outer];
                             std::get<0>(predicted[outer]) = ref.curr_pos + dt*ref.curr_vel;
@@ -1009,21 +1036,58 @@ namespace gtd {
                         for (std::tuple<vector3D<T>, vector3D<T>, vector3D<T>> &tup : predicted)
                             std::get<2>(tup).make_zero();
                         if (prog)
-                            printf("Iteration %llu/%llu\r", steps, iterations);
+                            this->print_progress(steps);
                     }
                     if (prog) {
-                        time_t total = time(nullptr) - start;
-                        printf("\n--------------------Done--------------------\n"
-                               "Modified Euler method, time elapsed: %zu second%c\n", total, "s"[total == 1]);
+                        this->print_conclusion("Modified Euler", start);
+                    }
+                }
+            }
+            else if ((integration_method & midpoint) == midpoint) {
+                std::vector<std::tuple<vector3D<T>, vector3D<T>, vector3D<T>>> predicted{num_bods};
+                if ((integration_method & barnes_hut) == barnes_hut) {
+                    // lots of stuff here
+                }
+                else {
+                    unsigned long long outer;
+                    unsigned long long inner;
+                    while (steps++ < iterations) {
+                        this->calc_accelerations();
+                        long double &&half_step = dt/2;
+                        for (outer = 0; outer < num_bods; ++outer) {
+                            bod_t &ref = bods[outer];
+                            std::get<0>(predicted[outer]) = ref.curr_pos + half_step*ref.curr_vel;
+                            std::get<1>(predicted[outer]) = ref.curr_vel + half_step*ref.acc;
+                        }
+                        for (outer = 0; outer < num_bods; ++outer) {
+                            bod_t &ref = bods[outer];
+                            std::tuple<vector3D<T>, vector3D<T>, vector3D<T>> &pred_outer = predicted[outer];
+                            for (inner = outer + 1; inner < num_bods; ++inner) {
+                                bod_t &ref_i = bods[inner];
+                                vector3D<T> &&r12 = std::get<0>(predicted[inner]) - std::get<0>(pred_outer);
+                                long double &&r12_cubed_mag = (r12*r12*r12).magnitude();
+                                std::get<2>(pred_outer) += ((G*ref_i.mass_)/(r12_cubed_mag))*r12;
+                                std::get<2>(predicted[inner]) -= ((G*ref.mass_)/(r12_cubed_mag))*r12;
+                            }
+                        }
+                        this->take_midpoint_step(predicted);
+                        for (std::tuple<vector3D<T>, vector3D<T>, vector3D<T>> &tup : predicted)
+                            std::get<2>(tup).make_zero();
+                        if (prog)
+                            this->print_progress(steps);
+                    }
+                    if (prog) {
+                        this->print_conclusion("Midpoint method", start);
                     }
                 }
             }
             else if ((integration_method & leapfrog_kdk) == leapfrog_kdk) {
                 if ((integration_method & barnes_hut) == barnes_hut) {
                     // lots of stuff here
-                    return true;
                 }
-                return true;
+                else {
+
+                }
             }
             else if ((integration_method & leapfrog_dkd) == leapfrog_dkd) {
                 if ((integration_method & barnes_hut) == barnes_hut) {
@@ -1201,6 +1265,7 @@ namespace gtd {
             std::ofstream out(path.c_str(), std::ios_base::trunc);
             if (!out.good())
                 return false;
+            unsigned long long count = 0;
             unsigned long long i;
             for (const bod_t &bod : bods) {
                 out << "body_id,mass,radius\r\n" << bod.id << ',' << bod.mass_ << ',' << bod.radius << "\r\n"
@@ -1209,10 +1274,11 @@ namespace gtd {
                 for (i = 0; i <= prev_iterations; ++i) {
                     out << i*prev_dt << ',' << bod.positions[i].x << ',' << bod.positions[i].y << ','
                         << bod.positions[i].z << ',' << bod.velocities[i].x << ',' << bod.velocities[i].y << ','
-                        << bod.velocities[i].z << ',' << bod.energies[i] << ',' << pe.find(bod.id)->second[i] << ','
-                        << energy.find(bod.id)->second[i] << "\r\n";
+                        << bod.velocities[i].z << ',' << bod.energies[i] << ',' << pe[count][i] << ','
+                        << energy[count][i] << "\r\n";
                 }
                 out << ",,,,,,,,,\r\n";
+                ++count;
             }
             out << "time_elapsed,system_PE,system_KE,system_E\r\n";
             for (i = 0; i <= prev_iterations; ++i)
