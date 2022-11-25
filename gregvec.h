@@ -3223,7 +3223,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend class ray;
         template <isNumWrapper PosT, isNumWrapper DirT, isNumWrapper DistT>
         friend class camera;
-        template <isNumWrapper M, isNumWrapper R, isNumWrapper U>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool>
         friend class system;
     };
     template <isNumWrapper U>
@@ -4111,12 +4111,6 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
     requires isConvertible<U, decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)> {
         return vector3D<decltype(std::declval<U>()*v.x + std::declval<U>()*v.y + std::declval<U>()*v.z)>(v).apply(m);
     }
-
-
-
-
-
-
     template <isNumWrapper U, isNumWrapper V>
     auto operator+(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x + vec2.x)> {
         return vector3D<decltype(vec1.x + vec2.x)>(vec1.x + vec2.x, vec1.y + vec2.y, vec1.z);
@@ -4665,5 +4659,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
     inline long double deg_to_rad(const long double &&degrees) {
         return (degrees*PI)/180;
     }
+    typedef vector2D<long double> vec2;
+    typedef vector3D<long double> vec3;
 }
 #endif
