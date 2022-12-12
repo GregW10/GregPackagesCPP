@@ -72,6 +72,21 @@ namespace gtd {
                                            "evolved.\n"} {}
         explicit no_evolution_error(const char *message) : nbody_error{message} {}
     };
+    class invalid_id_error : public nbody_error {
+        unsigned long long invalid_id{};
+        String msg;
+    public:
+        invalid_id_error() : nbody_error{"Body with specified ID was not found.\n"} {}
+        explicit invalid_id_error(const char *message) : nbody_error{message} {}
+        explicit invalid_id_error(unsigned long long id) : invalid_id{id} {
+            msg.append_back("No body found with ID = ").append_back(invalid_id).append_back(".\n");
+        }
+        const char *what() const noexcept override {
+            if (msg == "")
+                return nbody_error::what();
+            return msg.c_str();
+        }
+    };
     template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool>
     class system;
     /* body_counter was created because each instantiation of the body subclass with different template parameters is

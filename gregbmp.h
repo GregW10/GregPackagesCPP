@@ -923,5 +923,8 @@ namespace gtd {
     inline bool operator==(const pixel &p1, const pixel &p2) {
         return p1.pos.x == p2.pos.x && p1.pos.y == p2.pos.y && p1.col == p2.col;
     }
+    long double avg_bgr(color col) {
+        return ((long double) (col.b + col.g + col.r))/3;
+    }
 }
 #endif
