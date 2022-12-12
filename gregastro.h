@@ -12,25 +12,70 @@
 #include "gregbmp.h"
 
 namespace gtd {
+    template <typename T>
+    concept container = requires (T val, T val2, const T val_c) {
+        typename T::value_type;
+        typename T::reference;
+        typename T::const_reference;
+        typename T::iterator;
+        typename T::const_iterator;
+        typename T::difference_type;
+        typename T::size_type;
+        requires std::copy_constructible<typename T::value_type>;
+        requires std::default_initializable<typename T::value_type>;
+        requires std::signed_integral<typename T::difference_type>;
+        requires std::unsigned_integral<typename T::size_type>;
+        requires std::destructible<typename T::value_type>;
+        requires std::convertible_to<typename T::iterator, typename T::const_iterator>;
+        requires std::same_as<typename T::difference_type,
+                              typename std::iterator_traits<typename T::iterator>::difference_type>;
+        requires std::same_as<typename T::difference_type,
+                              typename std::iterator_traits<typename T::const_iterator>::difference_type>;
+        {val.begin()} -> std::same_as<typename T::iterator>;
+        {val.end()} -> std::same_as<typename T::iterator>;
+        {val.cbegin()} -> std::same_as<typename T::const_iterator>;
+        {val.cend()} -> std::same_as<typename T::const_iterator>;
+        {val_c.begin()} -> std::same_as<typename T::const_iterator>;
+        {val_c.end()} -> std::same_as<typename T::const_iterator>;
+        {val_c.cbegin()} -> std::same_as<typename T::const_iterator>;
+        {val_c.cend()} -> std::same_as<typename T::const_iterator>;
+        {val == val_c} -> std::convertible_to<bool>;
+        {val != val_c} -> std::convertible_to<bool>;
+        val.swap(val2);
+        std::swap(val, val2);
+        {val.size()} -> std::same_as<typename T::size_type>;
+        {val.max_size()} -> std::same_as<typename T::size_type>;
+        {val.empty()} -> std::convertible_to<bool>;
+    };
     class astro_error : public std::logic_error {
     public:
         astro_error() : std::logic_error{"An error occurred due to invalid evaluation of conditions.\n"} {}
         explicit astro_error(const char *message) : std::logic_error{message} {}
+    };
+    class camera_error : public astro_error {
+    public:
+        camera_error() : astro_error{"Error occured with camera.\n"} {}
+        explicit camera_error(const char *message) : astro_error{message} {}
     };
     class no_direction : public astro_error {
     public:
         no_direction() : astro_error{"Zero vector error.\n"} {}
         explicit no_direction(const char *message) : astro_error{message} {}
     };
-    class zero_image_distance : public astro_error {
+    class zero_image_distance : public camera_error {
     public:
-        zero_image_distance() : astro_error{"The image distance of a camera cannot be zero.\n"} {}
-        explicit zero_image_distance(const char *message) : astro_error{message} {}
+        zero_image_distance() : camera_error{"The image distance of a camera cannot be zero.\n"} {}
+        explicit zero_image_distance(const char *message) : camera_error{message} {}
     };
     class no_intersection : public astro_error {
     public:
         no_intersection() : astro_error{"The ray has not intersected with any body.\n"} {}
         explicit no_intersection(const char *message) : astro_error{message} {}
+    };
+    class camera_dimensions_error : public camera_error {
+    public:
+        camera_dimensions_error() : camera_error{"The dimensions of the camera are invalid.\n"} {}
+        explicit camera_dimensions_error(const char *message) : camera_error{message} {}
     };
     struct image_dimensions {
         unsigned int x;
@@ -45,6 +90,7 @@ namespace gtd {
          * vector3D<DirT>, the internal parent vector3D<DirT> object is made to be the direction, whilst a ray's
          * position is represented by a separate vector3D<PosT> object. */
         /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+        using ray_t = ray<PosT, DirT, LenT>;
         static inline const vector3D<DirT> zero{};
         vector3D<PosT> pos; // origin of the ray
         LenT l{0}; // length of the ray
@@ -167,7 +213,13 @@ namespace gtd {
                 ibod_id = -1;
                 return (intersected = false);
             }
-            l = minimum((-b + sqrtl(discriminant))/2, (-b - sqrtl(discriminant))/2);
+            // l = minimum((-b + sqrtl(discriminant))/2, (-b - sqrtl(discriminant))/2);
+            l = (-b - sqrtl(discriminant))/2; // this will always be the shorter distance
+            if (l < 0) { // if l is negative, that means the ray projected backwards intersected, which is not valid
+                ibod_id = -1;
+                l = 0;
+                return (intersected = false);
+            }
             ibod_id = bod.id;
             return (intersected = true);
         }
@@ -175,8 +227,9 @@ namespace gtd {
         bool intersects(const body<M, R, T> &&bod) {
             return intersects(bod);
         }
-        template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
-        bool intersects(const std::vector<std::reference_wrapper<body<M, R, T>>> &bodies) {
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, container C>
+        requires std::same_as<typename C::value_type, const body<M, R, T>*>
+        bool intersects(const C &bodies) {
             /* This method is similar to the other intersects() overloads, but it will set l to the distance between the
              * ray's origin and the closest body, and return true (if the ray intersects with at least one body). This
              * is intuitive, since a ray in real space will "terminate" once it hits an object, and will (in general)
@@ -185,17 +238,17 @@ namespace gtd {
             bool one_intersection = false;
             unsigned long long closest_body_id;
             LenT min_l;
-            for (const auto &ref : bodies) {
-                if (this->intersects(ref.get())) {
+            for (const auto &ptr : bodies) {
+                if (this->intersects(*ptr)) {
                     if (!one_intersection) {
                         min_l = l;
                         one_intersection = true;
-                        closest_body_id = ref.get().id;
+                        closest_body_id = ptr->id;
                         continue;
                     }
                     if (l < min_l) {
                         min_l = l;
-                        closest_body_id = ref.get().id;
+                        closest_body_id = ptr->id;
                     }
                 }
             }
@@ -208,34 +261,134 @@ namespace gtd {
             ibod_id = closest_body_id;
             return (intersected = true);
         }
-        ray<PosT, DirT, LenT> &operator=(const vector<DirT> &other) noexcept override {
+        auto end_point() const {
+            return pos + (*this)*l;
+        }
+        ray_t &set_x(DirT value) noexcept override {
+            vector3D<DirT>::x = value;
+            return *this;
+        }
+        ray_t &set_y(DirT value) noexcept override {
+            vector3D<DirT>::y = value;
+            return *this;
+        }
+        ray_t &set_z(DirT value) noexcept override {
+            vector3D<DirT>::z = value;
+            return *this;
+        }
+        ray_t &make_zero() override {
+            vector3D<DirT>::x = DirT{0};
+            vector3D<DirT>::y = DirT{0};
+            vector3D<DirT>::z = DirT{0};
+            return *this;
+        }
+        ray_t &set_length(const DirT &new_length) noexcept override {
+            long double frac = new_length/this->magnitude();
+            vector3D<DirT>::x *= frac;
+            vector3D<DirT>::y *= frac;
+            vector3D<DirT>::z *= frac;
+            return *this;
+        }
+        ray_t &set_length(const DirT &&new_length) noexcept override {
+            long double frac = new_length/this->magnitude();
+            vector3D<DirT>::x *= frac;
+            vector3D<DirT>::y *= frac;
+            vector3D<DirT>::z *= frac;
+            return *this;
+        }
+        ray_t &normalise() noexcept override { // makes the vector a unit vector
+            if (this->is_zero()) {
+                return *this;
+            }
+            long double mag = this->magnitude();
+            vector3D<DirT>::x /= mag;
+            vector3D<DirT>::y /= mag;
+            vector3D<DirT>::z /= mag;
+            return *this;
+        }
+        ray_t &rotate(const long double &&angle_in_rad = __PI__, char about = 'z') override {
+            this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
+            return *this;
+        }
+        ray_t &rotate(const long double &angle_in_rad = PI, char about = 'z') override {
+            this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
+            return *this;
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rodrigues_rotate(const vector3D<DirT> &about, long double angle = PI) noexcept override {
+            vector3D<DirT>::rodrigues_rotate(about, angle);
+            return *this;
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rodrigues_rotate(const vector3D<DirT> &&about, long double angle = PI) noexcept override {
+            return this->rodrigues_rotate(about, angle);
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rotate_to(const vector3D<DirT> &new_direction) noexcept override {
+            if (this->is_zero()) {
+                return *this;
+            }
+            return this->rodrigues_rotate(cross(*this, new_direction), angle_between(*this, new_direction));
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rotate_to(const vector3D<DirT> &&new_direction) noexcept override {
+            return this->rotate_to(new_direction);
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rodrigues_rotate(const vector2D<DirT> &about, long double angle = PI) noexcept override {
+            vector3D<DirT>::rodrigues_rotate(about, angle);
+            return *this;
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rodrigues_rotate(const vector2D<DirT> &&about, long double angle = PI) noexcept override {
+            return this->rodrigues_rotate(about, angle);
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rotate_to(const vector2D<DirT> &new_direction) noexcept override {
+            if (this->is_zero()) {
+                return *this;
+            }
+            return this->rodrigues_rotate(cross(*this, new_direction), angle_between(*this, new_direction));
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rotate_to(const vector2D<DirT> &&new_direction) noexcept override {
+            return this->rotate_to(new_direction);
+        }
+        ray_t &apply(const matrix<DirT> &transform) override {
+            vector3D<DirT>::apply(transform);
+            return *this;
+        }
+        ray_t &apply(const matrix<DirT> &&transform) override {
+            return this->apply(transform);
+        }
+        ray_t &operator=(const vector<DirT> &other) noexcept override {
             vector3D<DirT>::operator=(other);
             this->calc();
             return *this;
         }
-        ray<PosT, DirT, LenT> &operator=(const vector3D<DirT> &other) noexcept override {
+        ray_t &operator=(const vector3D<DirT> &other) noexcept override {
             vector3D<DirT>::operator=(other);
             this->calc();
             return *this;
         }
         template <typename U> requires (isConvertible<U, DirT>)
-        ray<PosT, DirT, LenT> &operator=(const vector3D<U> &other) noexcept {
+        ray_t &operator=(const vector3D<U> &other) noexcept {
             vector3D<DirT>::operator=(other);
             this->calc();
             return *this;
         }
         template <typename U> requires (isConvertible<U, DirT>)
-        ray<PosT, DirT, LenT> &operator=(const vector3D<U> &&other) noexcept {
+        ray_t &operator=(const vector3D<U> &&other) noexcept {
             vector3D<DirT>::operator=(other); // no need to use std::move() here
             this->calc();
             return *this;
         }
-        ray<PosT, DirT, LenT> &operator=(const vector<DirT> &&other) noexcept override {
+        ray_t &operator=(const vector<DirT> &&other) noexcept override {
             vector3D<DirT>::operator=(std::move(other));
             this->calc();
             return *this;
         }
-        ray<PosT, DirT, LenT> &operator=(vector3D<DirT> &&other) noexcept override {
+        ray_t &operator=(vector3D<DirT> &&other) noexcept override {
             vector3D<DirT>::operator=(std::move(other));
             this->calc();
             return *this;
@@ -268,10 +421,10 @@ namespace gtd {
         template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU,
                 isNumWrapper PosV, isNumWrapper DirV, isNumWrapper LenV>
         friend bool operator!=(const ray<PosU, DirU, LenU> &&r1, const ray<PosV, DirV, LenV> &&r2);
-        template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU, isNumWrapper LumU>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper>
         friend class light_src;
-        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, isNumWrapper PosU, isNumWrapper DirU,
-                isNumWrapper DistU, isNumWrapper LenU, isNumWrapper LumU>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
+                  isNumWrapper>
         friend class astro_scene;
     };
     template <isNumWrapper PosT = long double, isNumWrapper DirT = long double,
@@ -280,7 +433,7 @@ namespace gtd {
         /* A light_src object represents a point source of light in simulated 3D space, i.e. it is a zero-dimensional
          * source of rays that travel in all directions. */
         vector3D<PosT> pos; // position of the light source
-        LumT lum{1}; // luminosity of the light source (W m^-2)
+        LumT lum{1}; // luminosity of the light source (W)
     public:
         light_src() = default;
         explicit light_src(const vector3D<PosT> &position) : pos{position} {}
@@ -334,13 +487,21 @@ namespace gtd {
         ray<PosT, DirT, LenT> cast_ray(const vector3D<PosT> &end_point) const requires isConvertible<long double, LenT>{
             return {pos, end_point - pos}; // length zero as its intersection with bodies has not yet been calculated
         }
-        ray<PosT, DirT, LenT> cast_ray(vector3D<PosT> &&end_point) const requires isConvertible<long double, LenT>{
+        ray<PosT, DirT, LenT> cast_ray(const vector3D<PosT> &&end_point) const requires isConvertible<long double,LenT>{
             return {pos, end_point - pos};
+        }
+        LumT flux_at_point(const vector3D<PosT> &pnt) const requires isConvertible<long double,LenT> {
+            auto &&d = (pnt - pos).magnitude();
+            return lum/(4*__PI__*d*d);
+        }
+        LumT flux_at_point(const vector3D<PosT> &&pnt) const requires isConvertible<long double,LenT> {
+            auto &&d = (pnt - pos).magnitude();
+            return lum/(4*__PI__*d*d);
         }
         template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU, isNumWrapper LumU>
         friend std::ostream &operator<<(std::ostream &os, const light_src<PosU, DirU, LenU, LumU> &src);
-        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, isNumWrapper PosU, isNumWrapper DirU,
-                isNumWrapper DistU, isNumWrapper LenU, isNumWrapper LumU>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
+                  isNumWrapper>
         friend class astro_scene;
     };
     template <isNumWrapper PosT = long double, isNumWrapper DirT = long double, isNumWrapper DistT = long double>
@@ -545,20 +706,21 @@ namespace gtd {
             return rad_to_deg(fovd_rad());
         }
         template <isNumWrapper LenT = long double>
-        ray<PosT, DirT, LenT> ray_from_pixel(unsigned int x, unsigned int y) {
+        ray<PosT, DirT, LenT> ray_from_pixel(unsigned int x, unsigned int y) const {
             if (x >= dims.x || y >= dims.y)
                 throw std::out_of_range("The pixel attempting to be accessed is not within the image dimensions.\n");
             ray<PosT, DirT, LenT> // ray starts out as if it had been shot out of the camera facing directly down
-            ray{this->pos,
+            ry{this->pos,
                 ((((long double) x)/dims.x)*2 - 1)*w_factor, ((((long double) y)/dims.y)*2 - 1)*h_factor, -dist};
-            return ray.rodrigues_rotate(perp, angle_with_down).rodrigues_rotate(dir, -rotation_correction - rot);
+            return ry.rodrigues_rotate(perp, angle_with_down).rodrigues_rotate(dir, -rotation_correction - rot);
         } // ^^^ rotate to camera's direction and rotate around camera's z-axis appropriately
-        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, isNumWrapper PosU, isNumWrapper DirU,
-                  isNumWrapper DistU, isNumWrapper LenU, isNumWrapper LumU>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
+                  isNumWrapper>
         friend class astro_scene;
     };
-    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, isNumWrapper PosT = long double,
-              isNumWrapper DirT = long double, isNumWrapper LenT = long double, isNumWrapper LumT = long double>
+    template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
+              isNumWrapper PosT = long double, isNumWrapper DirT = long double, isNumWrapper LenT = long double,
+              isNumWrapper LumT = long double>
                       requires isConvertible<long double, PosT>
     class star : public body<M, R, T> {
         using bod_t = body<M, R, T>;
@@ -570,7 +732,7 @@ namespace gtd {
         void create_sources(unsigned short num) {
             sources.clear();
             if (num <= 1) {
-                sources.push_back({bod_t::curr_pos, lum});
+                sources.push_back({bod_t::curr_pos, lum}); // can't have zero sources - in that case, just use a body
                 pt_src = true;
                 return;
             }
@@ -581,12 +743,13 @@ namespace gtd {
             std::mt19937 mersenne{(unsigned int) rand()};
             std::uniform_real_distribution<long double> dist{-1, 1};
             vector3D<long double> source_pos;
+            LumT src_lum = lum/num;
             while (num --> 0) {
                 source_pos.set_x(dist(mersenne));
                 source_pos.set_y(dist(mersenne));
                 source_pos.set_z(dist(mersenne));
                 source_pos.set_length(bod_t::radius);
-                sources.push_back({bod_t::curr_pos + source_pos, lum});
+                sources.push_back({bod_t::curr_pos + source_pos, src_lum});
             }
             pt_src = false;
         }
@@ -608,20 +771,28 @@ namespace gtd {
         explicit star(const body<m, r, t> &other) : bod_t{other} {}
         explicit star(const body<M, R, T> &other) : bod_t{other} {}
         explicit star(body<M, R, T> &&other) noexcept : bod_t{std::move(other)} {}
-        const std::vector<src_t> &light_sources() {
+        const std::vector<src_t> &light_sources() const {
             return sources;
+        }
+        bool is_pnt_src() const noexcept {
+            return pt_src;
         }
         unsigned short num_sources() {
             return sources.size();
         }
-        void recreate_sources(unsigned short new_number) {
+        void recreate_sources(unsigned short new_number = 1) {
             create_sources(new_number);
         }
-        template <isNumWrapper M_U, isNumWrapper R_U, isNumWrapper T_U, isNumWrapper PosU, isNumWrapper DirU,
-                  isNumWrapper DistU, isNumWrapper LenU, isNumWrapper LumU>
+        vector3D<DirT> normal_at_point(const vector3D<PosT> &pnt) const {
+            if (pnt == bod_t::curr_pos)
+                return {};
+            return (pnt - bod_t::curr_pos).normalise();
+        }
+        template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
+                  isNumWrapper>
         friend class astro_scene;
     };
-    template <isNumWrapper M, isNumWrapper R, isNumWrapper T,
+    template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
               isNumWrapper PosT = long double, isNumWrapper DirT = long double, isNumWrapper DistT = long double,
               isNumWrapper LenT = long double, isNumWrapper LumT = long double>
     class astro_scene : public bmp {
@@ -635,13 +806,55 @@ namespace gtd {
         unsigned int num_stars = 4*log(bmp::width*bmp::height);
         long double star_radius = sqrt(bmp::width*bmp::width)/1000.0l; // in pixels
         std::vector<point> star_points;
+        std::vector<const bod_t*> all;
+        std::deque<const star_t*> all_stars;
         std::map<const unsigned long long, const bod_t*> bodies;
         std::map<const unsigned long long, const star_t*> stars;
+        std::map<const unsigned long long, color> body_clrs;
+        std::map<const unsigned long long, color> star_clrs;
         cam_t cam{dims};
-        cam_t *fcam = nullptr;
+        const cam_t *pcam = &cam;
+        bool def_cam = true;
         bool rendered = false;
         bool mod_b = false; // modulated brightness
         LumT **fdata = nullptr;
+        long double min_clr_brightness_b = 128; // minimum average BGR value for bodies (in default case)
+        long double min_clr_brightness_s = 240; // minimum average BGR value for stars (in default case)
+        std::function<color()> col_gen_b = [this](){ // default colour generator for bodies
+            srand(time(nullptr));
+            std::mt19937 mersenne{(unsigned int) rand()};
+            std::uniform_int_distribution dist{0, 255};
+            color ret{};
+            do {
+                ret.b = dist(mersenne);
+                ret.g = dist(mersenne);
+                ret.r = dist(mersenne);
+            } while (avg_bgr(ret) < min_clr_brightness_b);
+            return ret;
+        }; // std::function objects are being used as these are capturing lambdas (cannot assign to function pointers)
+        std::function<color()> col_gen_s = [this](){ // default colour generator for bodies
+            srand(time(nullptr));
+            std::mt19937 mersenne{(unsigned int) rand()};
+            std::uniform_int_distribution dist{0, 255};
+            color ret{};
+            do {
+                ret.b = dist(mersenne);
+                ret.g = dist(mersenne);
+                ret.r = dist(mersenne);
+            } while (avg_bgr(ret) < min_clr_brightness_s);
+            return ret;
+        };
+        void populate_vecs() {
+            all.clear();
+            all_stars.clear();
+            for (const auto &[id, bod_ptr] : bodies) {
+                all.push_back(bod_ptr);
+            }
+            for (const auto &[id, s_ptr] : stars) {
+                all.push_back(s_ptr);
+                all_stars.push_back(s_ptr);
+            }
+        }
         void create_stars(bool reset) {
             if (!num_stars)
                 return;
@@ -667,8 +880,8 @@ namespace gtd {
             }
         }
         void alloc() {
-            if (!mod_b)
-                return;
+            // if (!mod_b)
+            //     return;
             dealloc();
             fdata = new LumT*[bmp::height];
             LumT **ptr = fdata;
@@ -694,47 +907,80 @@ namespace gtd {
                 if (bod_ptr == nullptr) // no need to throw an exception, simply ignored
                     continue;
                 star_ptr = dynamic_cast<const star_t*>(bod_ptr); // no bad_cast exception thrown with pointers
-                if (star_ptr == nullptr)
+                if (star_ptr == nullptr) {
                     bodies.emplace(bod_ptr->id, bod_ptr);
-                else
+                    body_clrs.emplace(bod_ptr->id, col_gen_b());
+                }
+                else {
                     stars.emplace(star_ptr->id, star_ptr); // all bodies have a unique id, hence why a map is used
+                    star_clrs.emplace(bod_ptr->id, col_gen_s());
+                }
             }
         }
-        void set_cam() { // needs work
+        void set_default_cam() { // needs work - this is where the default camera will be set
             cam.dims = this->dims;
-            if (fcam != nullptr)
-                fcam->dims = this->dims;
+            // get COM of all bodies
+            // get vector perpendicular to the plane the bodies lie in
+            // do this by calculating the magnitude of the cross product between pairs of bodies, and then taking the
+            // ... average unit vector of all the cross products created
+            // place camera on this vector at just enough distance to fit all bodies into FOV (FOV set to arb. value)
+            // if (fcam != nullptr)
+            //     fcam->dims = this->dims;
+        }
+        void check_cam() const {
+            if (cam.dims != this->dims)
+                throw camera_dimensions_error("The dimensions of the camera supplied do not equal that of this "
+                                              "astro_scene object.\n");
         }
     public:
         astro_scene() :
-        bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp")} {}
+        bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp")}
+        {alloc();}
 
 
         explicit astro_scene(const char *source_bmp) :
-        bmp{source_bmp,
-            std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp")} {}
+        bmp{source_bmp, std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp")}
+        {alloc();}
 
 
         astro_scene(unsigned int bmp_width, unsigned int bmp_height, bool modulated_brightness = false) :
         bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp"),
-            colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness} {}
+            colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness} {alloc();}
 
 
         astro_scene(unsigned int bmp_width, unsigned int bmp_height, const cam_t &c,
                     const std::vector<bod_t*> &bods, bool modulated_brightness = false) :
                 bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp"),
                     colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness}, cam{c}
-                    {put_bodies(bods); set_cam();}
+                    {check_cam(); put_bodies(bods); alloc(); def_cam = false;}
+
+
+        astro_scene(unsigned int bmp_width, unsigned int bmp_height, const cam_t &c,
+                    const std::vector<bod_t*> &bods, color (*bdy_clr_gen)(),
+                    bool modulated_brightness = false) :
+                bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp"),
+                    colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness}, cam{c}, col_gen_b{bdy_clr_gen}
+        {check_cam(); put_bodies(bods); alloc(); def_cam = false;}
+
+
+        astro_scene(unsigned int bmp_width, unsigned int bmp_height, const cam_t &c,
+                    const std::vector<bod_t*> &bods, color (*bdy_clr_gen)(), color (*star_clr_gen)(),
+                    bool modulated_brightness = false) :
+                bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp"),
+                    colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness}, cam{c}, col_gen_b{bdy_clr_gen},
+                    col_gen_s{star_clr_gen}
+        {check_cam(); put_bodies(bods); alloc(); def_cam = false;}
 
 
         astro_scene(const String &bmp_path, unsigned int bmp_width, unsigned int bmp_height,
                     bool modulated_brightness = false) :
-                bmp{bmp_path, colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness} {}
+                bmp{bmp_path, colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness} {alloc();}
 
 
         astro_scene(String &&bmp_path, unsigned int bmp_width, unsigned int bmp_height,
                     bool modulated_brightness = false) :
-                bmp{std::move(bmp_path), colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness} {}
+                bmp{std::move(bmp_path), colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness}
+                {alloc();}
 
 
         astro_scene(const astro_scene &other) : bmp{other} {} // not = default, as I will add stuff in body later
@@ -743,6 +989,74 @@ namespace gtd {
         astro_scene(astro_scene &&other) noexcept : bmp{std::move(other)} {}
 
 
+        void set_camera(const cam_t &c) { // if an outside camera is being followed, this method does not change that
+            cam = c;
+            check_cam();
+            def_cam = false;
+        }
+        void set_camera(cam_t &&c) {
+            cam = std::move(c);
+            check_cam();
+            def_cam = false;
+        }
+        bool set_body_default_min_clr_brightness(const long double &val) noexcept {
+            /* sets the minimum brightness for the randomly generated colours for the bodies - has no effect if colours
+             * are manually specified by the user */
+            if (val < 0 || val > 255)
+                return false;
+            min_clr_brightness_b = val;
+            return true;
+        }
+        bool set_body_default_min_clr_brightness(long double &&val) noexcept {
+            return set_body_default_min_clr_brightness(val);
+        }
+        bool set_star_default_min_clr_brightness(const long double &val) noexcept {
+            /* same as above but for stars */
+            if (val < 0 || val > 255)
+                return false;
+            min_clr_brightness_s = val;
+            return true;
+        }
+        bool set_star_default_min_clr_brightness(long double &&val) noexcept {
+            return set_star_default_min_clr_brightness(val);
+        }
+        void set_body_col_gen(color (*const &func)()) noexcept {
+            col_gen_b = func;
+        }
+        void set_star_col_gen(color (*const &func)()) noexcept {
+            col_gen_s = func;
+        }
+        const std::function<color()> &get_body_col_gen() const noexcept {
+            return col_gen_b;
+        }
+        const std::function<color()> &get_star_col_gen() const noexcept {
+            return col_gen_s;
+        }
+        color get_clr_by_id(const unsigned long long &id) {
+            if (body_clrs.contains(id))
+                return body_clrs[id];
+            if (star_clrs.contains(id))
+                return star_clrs[id];
+            throw invalid_id_error(id);
+        }
+        bool set_body_clr(const unsigned long long &id, color col) {
+            if (!bodies.contains(id))
+                return false;
+            body_clrs[id] = col;
+            return true;
+        }
+        bool set_body_clr(unsigned long long &&id, color col) {
+            return set_body_clr(id, col);
+        }
+        bool set_star_clr(const unsigned long long &id, color col) {
+            if (!stars.contains(id))
+                return false;
+            star_clrs[id] = col;
+            return true;
+        }
+        bool set_star_clr(unsigned long long &&id, color col) {
+            return set_star_clr(id, col);
+        }
         bool set_num_decor_stars(unsigned int num) {
             if (num*star_radius*star_radius >= bmp::width*bmp::height)
                 return false;
@@ -755,6 +1069,47 @@ namespace gtd {
             star_radius = rad;
             return true;
         }
+        void use_default_camera() noexcept { // this automatically unfollows an outside camera if it was being followed
+            def_cam = true;
+            *pcam = cam;
+        }
+        bool follow_camera(const cam_t *c) noexcept {
+            if (c == nullptr)
+                return false;
+            pcam = c; // as the camera pointed to by pcam can be altered outside, dims are only checked at last moment
+            return true;
+        }
+        bool unfollow_camera() noexcept { // returns true if outside camera was being followed, else false
+            return pcam != &cam && (pcam = &cam);
+        }
+        void generate_body_clrs() {
+            std::for_each(bodies.begin(), bodies.end(), [this](const std::pair<unsigned long long, bod_t*> &p) {
+                body_clrs[p->first] = col_gen_b(); // unfortunately, cannot iterate over keys only
+            });
+        }
+        void generate_star_clrs() {
+            std::for_each(stars.begin(), stars.end(), [this](const std::pair<unsigned long long, star_t*> &p){
+                star_clrs[p->first] = col_gen_s();
+            });
+        }
+        void generate_clrs() {
+            this->generate_body_clrs();
+            this->generate_star_clrs();
+        }
+        void add_body(const bod_t &bod) {
+            try {
+                const star_t &s = dynamic_cast<const star_t&>(bod);
+                stars.emplace(s.id, &s);
+                star_clrs.emplace(s.id, col_gen_s());
+            } catch (const std::bad_cast &e) {
+                bodies.emplace(bod.id, &bod);
+                body_clrs.emplace(bod.id, col_gen_b());
+            }
+        }
+        void add_star(const star_t &s) {
+            stars.emplace(s.id, &s);
+            star_clrs.emplace(s.id, col_gen_s());
+        }
         void add_bodies(const std::vector<bod_t*> &new_bodies) {
             put_bodies(new_bodies, false);
         }
@@ -763,6 +1118,7 @@ namespace gtd {
                 if (s == nullptr)
                     continue;
                 stars.emplace(s->id, s);
+                star_clrs.emplace(s->id, col_gen_s());
             }
         }
         void assign_bodies(const std::vector<bod_t*> &new_bodies) {
@@ -774,27 +1130,125 @@ namespace gtd {
                 if (s == nullptr)
                     continue;
                 stars.emplace(s->id, s);
+                star_clrs.emplace(s->id, col_gen_s());
             }
         }
-        bool render(bool reset_star_positions = true) noexcept {
+        /* only makes sense to call this method if not following outside camera */
+        bool correct_camera_dimensions() noexcept {
+            cam.dims = this->dims;
+            return pcam == &cam; // returns true only if internal camera is being used
+        }
+        bool render(bool reset_star_positions = true) {
             if (rendered) {
                 bmp::sc_clr = colors::black;
                 bmp::fill_bg();
             }
+            if (pcam == &cam)
+                if (def_cam)
+                    this->set_default_cam();
+            if (pcam->dims != this->dims)
+                /* as mentioned further above, pcam is only checked as it might have been pointing to an outside cam. */
+                /* an exception is raised instead of just silently correcting it because 1. it would be good for the
+                 * caller to know that the camera they are providing is of incorrect dimensions and 2. this class
+                 * guarantees not to modify a followed camera (hence why pcam points to a const camera) */
+                throw camera_dimensions_error("The camera dimensions do not equal astro_scene dimensions.\n");
             create_stars(reset_star_positions);
-            rendered = true;
-            return true;
+            populate_vecs();
+            typename std::vector<star_t*>::size_type num_s = all_stars.size();
+            unsigned int x;
+            unsigned int z;
+            color **row_c = bmp::data;
+            LumT **row_f = fdata;
+            color *pix_c; // a single pixel's colour
+            LumT *pix_f; // a single pixel's cumulative flux - later converted to brightness
+            const star_t *sptr;
+            LumT max_flux{0}; // maximum flux falling on one of the visible points of any body
+            std::cout << all.size() << std::endl;
+            for (unsigned int y = 0; y < bmp::height; ++y, ++row_c, ++row_f) {
+                pix_c = *row_c;
+                pix_f = *row_f;
+                for (x = 0; x < bmp::width; ++x, ++pix_c, ++pix_f) {
+                    ray_t &&cam_ray = pcam->ray_from_pixel(x, y);
+                    // std::cout << cam_ray << std::endl;
+                    if (!cam_ray.template intersects<M, R, T>(all)) {
+                        *pix_c = colors::black; // in case of no intersection, pixel is the black of space
+                        *pix_f = LumT{0}; // not truly necessary, since black multiplied by anything will still be black
+                        //std::cout << "none" << std::endl;
+                        continue;
+                    }
+                    if (stars.contains(cam_ray.ibod_id)) {
+                        *pix_c = star_clrs[cam_ray.ibod_id];
+                        std::cout << "star" << std::endl;
+                        *pix_f = LumT{-1}; // only pixels that lie on stars will have a negative cumulative lum.
+                        // std::cout << cam_ray.l << std::endl;
+                        continue;
+                    }
+                    // std::cout << "body" << std::endl;
+                    // next comes the case of the ray having intersected with a body
+                    *pix_c = body_clrs[cam_ray.ibod_id]; // this was the easy part ;)
+                    // std::cout << *pix_c << std::endl;
+                    *pix_f = LumT{0}; // cumulative flux must start out as zero (W m^-2)
+                    ray_t &&end_point = cam_ray.end_point();
+                    for (z = 0; z < num_s; ++z) {
+                        sptr = all_stars.front();
+                        all_stars.pop_front();
+                        for (const src_t &src : sptr->sources) {
+                            ray_t &&src_to_ep = src.cast_ray(end_point);
+                            if (sptr->normal_at_point(src.pos)*src_to_ep <= 0) // to not count rays from back of star
+                                continue;
+                            if (!src_to_ep.template intersects<M, R, T>(all)) // this could only be due to some kind of f.p. error
+                                continue;
+                            if (cam_ray.ibod_id != src_to_ep.ibod_id) // light ray does not make it to point on body
+                                continue;
+                            *pix_f -= src.flux_at_point(end_point)*
+                                ((src_to_ep.normalise()*((end_point - bodies[cam_ray.ibod_id]->curr_pos).normalise())));
+                            std::cout << src.flux_at_point(end_point);
+                            /* value subtracted since the normal and light ray always have an obtuse angle between */
+                        }
+                        all_stars.push_back(sptr);
+                    }
+                    if (*pix_f > max_flux)
+                        max_flux = *pix_f;
+                }
+            }
+            /* now the entire arrays of colours and flux quantities have to be gone through again to multiply each
+             * colour by the normalised flux values (i.e., each flux value is divided by the maximum flux value
+             * (to yield a value between 0-1), and then multiplied by the corresponding colour at the given pixel) */
+            row_c = bmp::data;
+            row_f = fdata;
+            for (unsigned int y = 0; y < bmp::height; ++y, ++row_c, ++row_f) {
+                pix_c = *row_c;
+                pix_f = *row_f;
+                for (x = 0; x < bmp::width; ++x, ++pix_c, ++pix_f) {
+                    if (*pix_f != -1)
+                        *pix_c = (*pix_f/max_flux)*(*pix_c);
+                    // std::cout << *pix_f << std::endl;
+                }
+            }
+            return (rendered = true);
+        }
+        void clear_bodies() noexcept {
+            bodies.clear();
+            body_clrs.clear();
+        }
+        void clear_stars() noexcept {
+            stars.clear();
+            star_clrs.clear();
+        }
+        void clear_both() noexcept {
+            this->clear_bodies();
+            this->clear_stars();
         }
         void clear() override {
             bmp::clear();
-            dealloc();
+            this->dealloc();
         }
         void reallocate() override {
             bmp::reallocate();
-            alloc();
+            this->alloc();
         }
         ~astro_scene() override {
-            dealloc();
+            this->dealloc(); // bmp::~bmp() is automatically called after this
         }
     };
     bool operator==(const image_dimensions &dims1, const image_dimensions &dims2) {
@@ -863,5 +1317,25 @@ namespace gtd {
         return r1.pos != r2.pos || r1.l != r2.l ||
                static_cast<const vector3D<DirU>&>(r1) != static_cast<const vector3D<DirV>&>(r2);
     }
+    namespace col_gens {
+        template <unsigned char min = 0, unsigned char max = 255>
+        color grayscale() {
+            static_assert(min <= max, "Min. color value passed must be equal to or less than max. color value.\n");
+            static unsigned char val;
+            static std::uniform_int_distribution<unsigned short> dist{(unsigned short) min,(unsigned short) max};//[a,b]
+            srand(time(nullptr));
+            std::mt19937 mt{(unsigned int) rand()};
+            val = dist(mt);
+            return {val, val, val};
+        }
+        template <color col>
+        color monoscale() {
+            static std::uniform_real_distribution<long double> dist{0, 1}; // [a, b)
+            srand(time(nullptr));
+            std::mt19937 mt{(unsigned int) rand()};
+            return dist(mt)*col;
+        }
+    }
+    typedef star<long double, long double, long double, long double, long double, long double, long double> star_t;
 }
 #endif

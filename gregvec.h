@@ -169,18 +169,18 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             }
             return s;
         }
-        inline virtual vector2D<T> &set_x(T value) noexcept {
+        virtual vector2D<T> &set_x(T value) noexcept {
             x = value;
             return *this;
         }
-        inline virtual vector2D<T> &set_y(T value) noexcept {
+        virtual vector2D<T> &set_y(T value) noexcept {
             y = value;
             return *this;
         }
-        inline const T &get_x() const noexcept {
+        const T &get_x() const noexcept {
             return x;
         }
-        inline const T &get_y() const noexcept {
+        const T &get_y() const noexcept {
             return y;
         }
         virtual vector2D<T> &make_zero() {
@@ -188,24 +188,22 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->y = T{0};
             return *this;
         }
-        template <isNumWrapper U>
-        vector3D<T> &set_length(const U &new_length) noexcept {
+        virtual vector2D<T> &set_length(const T &new_length) noexcept {
             long double frac = new_length/this->magnitude();
             this->x *= frac;
             this->y *= frac;
             return *this;
         }
-        template <isNumWrapper U>
-        vector3D<T> &set_length(const U &&new_length) noexcept {
+        virtual vector2D<T> &set_length(const T &&new_length) noexcept {
             long double frac = new_length/this->magnitude();
             this->x *= frac;
             this->y *= frac;
             return *this;
         }
-        inline std::pair<T, T> to_pair() const {
+        std::pair<T, T> to_pair() const {
             return {this->x, this->y};
         }
-        virtual long double magnitude() const noexcept override {
+        long double magnitude() const noexcept override {
             return std::sqrtl(static_cast<long double>(x)*static_cast<long double>(x) + // best to avoid call to
                               static_cast<long double>(y)*static_cast<long double>(y)); // std::pow() where possible
         }
@@ -230,29 +228,29 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         vector2D<T> y_projection() const {
             return {T{0}, this->y};
         }
-        inline vector2D<T> &rotate(const long double &&angle_in_rad = __PI__) {
+        virtual vector2D<T> &rotate(const long double &&angle_in_rad = __PI__) {
             this->apply(matrix<long double>::get_2D_rotation_matrix(angle_in_rad));
             return *this;
         }
-        inline vector2D<T> &rotate(const long double &angle_in_rad = PI) {
+        virtual vector2D<T> &rotate(const long double &angle_in_rad = PI) {
             this->apply(matrix<long double>::get_2D_rotation_matrix(angle_in_rad));
             return *this;
         }
-        template <isNumWrapper U = T>
-        inline vector2D<T> &rotate_to(const vector2D<U> &new_direction) noexcept {
+        // template <isNumWrapper U = T>
+        virtual vector2D<T> &rotate_to(const vector2D<T> &new_direction) noexcept {
             if (this->is_zero()) {
                 return *this;
             }
             return this->rotate(angle_between(*this, new_direction));
         }
-        template <isNumWrapper U = T>
-        inline vector2D<T> &rotate_to(const vector2D<U> &&new_direction) noexcept {
+        // template <isNumWrapper U = T>
+        virtual vector2D<T> &rotate_to(const vector2D<T> &&new_direction) noexcept {
             return this->rotate_to(new_direction);
         }
-        inline virtual bool is_zero() const noexcept {
+        virtual bool is_zero() const noexcept {
             return this->x == T{0} && this->y == T{0};
         }
-        inline virtual vector2D<T> &apply(const matrix<T> &transform) {
+        virtual vector2D<T> &apply(const matrix<T> &transform) {
             if (transform.mat.size() != 2 || transform.mat[0].size() != 2) {
                 throw invalid_matrix_format("Only 2x2 matrices can be applied to a vector2D object.");
             }
@@ -262,13 +260,13 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->y = transform.mat[1][0]*org_x + transform.mat[1][1]*org_y;
             return *this;
         }
-        inline virtual vector2D<T> &apply(const matrix<T> &&transform) {
+        virtual vector2D<T> &apply(const matrix<T> &&transform) {
             return this->apply(transform);
         }
         vector2D<T> copy() const {
             return {this->x, this->y};
         }
-        inline T &operator[](unsigned char index) override {
+        T &operator[](unsigned char index) override {
             switch (index) {
                 case 0:
                     return this->x;
@@ -1909,19 +1907,19 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             }
             return s;
         }
-        inline vector3D<T> &set_x(T value) noexcept override {
+        vector3D<T> &set_x(T value) noexcept override {
             this->x = value;
             return *this;
         }
-        inline vector3D<T> &set_y(T value) noexcept override {
+        vector3D<T> &set_y(T value) noexcept override {
             this->y = value;
             return *this;
         }
-        inline vector3D<T> &set_z(T value) noexcept {
+        virtual vector3D<T> &set_z(T value) noexcept {
             this->z = value;
             return *this;
         }
-        inline const T &get_z() const {
+        const T &get_z() const {
             return this->z;
         }
         vector3D<T> &make_zero() override {
@@ -1930,16 +1928,16 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->z = T{0};
             return *this;
         }
-        template <isNumWrapper U>
-        vector3D<T> &set_length(const U &new_length) noexcept {
+        // template <isNumWrapper U>
+        vector3D<T> &set_length(const T &new_length) noexcept override {
             long double frac = new_length/this->magnitude();
             this->x *= frac;
             this->y *= frac;
             this->z *= frac;
             return *this;
         }
-        template <isNumWrapper U>
-        vector3D<T> &set_length(const U &&new_length) noexcept {
+        // template <isNumWrapper U>
+        vector3D<T> &set_length(const T &&new_length) noexcept override {
             long double frac = new_length/this->magnitude();
             this->x *= frac;
             this->y *= frac;
@@ -1982,16 +1980,16 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         vector3D<T> yz_projection() const {
             return {T{0}, this->y, this->z};
         }
-        inline vector3D<T> &rotate(const long double &&angle_in_rad = __PI__, char about = 'z') {
+        virtual vector3D<T> &rotate(const long double &&angle_in_rad = __PI__, char about = 'z') {
             this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
             return *this;
         }
-        inline vector3D<T> &rotate(const long double &angle_in_rad = PI, char about = 'z') {
+        virtual vector3D<T> &rotate(const long double &angle_in_rad = PI, char about = 'z') {
             this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
             return *this;
         }
-        template <isNumWrapper U = T>
-        inline vector3D<T> &rodrigues_rotate(const vector3D<U> &about, long double angle = PI) noexcept {
+        // template <isNumWrapper U = T>
+        virtual vector3D<T> &rodrigues_rotate(const vector3D<T> &about, long double angle = PI) noexcept {
             if (about.is_zero()) {
                 return *this;
             }
@@ -2000,23 +1998,23 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return *this = std::cosl(angle)*cpy + std::sinl(angle)*cross(about_unit, cpy) +
                     (about_unit*cpy)*(1 - std::cosl(angle))*about_unit;
         }
-        template <isNumWrapper U = T>
-        inline vector3D<T> &rodrigues_rotate(const vector3D<U> &&about, long double angle = PI) noexcept {
+        // template <isNumWrapper U = T>
+        virtual vector3D<T> &rodrigues_rotate(const vector3D<T> &&about, long double angle = PI) noexcept {
             return this->rodrigues_rotate(about, angle);
         }
-        template <isNumWrapper U = T>
-        inline vector3D<T> &rotate_to(const vector3D<U> &new_direction) noexcept {
+        // template <isNumWrapper U = T>
+        virtual vector3D<T> &rotate_to(const vector3D<T> &new_direction) noexcept {
             if (this->is_zero()) {
                 return *this;
             }
             return this->rodrigues_rotate(cross(*this, new_direction), angle_between(*this, new_direction));
         }
-        template <isNumWrapper U = T>
-        inline vector3D<T> &rotate_to(const vector3D<U> &&new_direction) noexcept {
+        // template <isNumWrapper U = T>
+        virtual vector3D<T> &rotate_to(const vector3D<T> &&new_direction) noexcept {
             return this->rotate_to(new_direction);
         }
-        template <isNumWrapper U = T>
-        inline vector3D<T> &rodrigues_rotate(const vector2D<U> &about, long double angle = PI) noexcept {
+        // template <isNumWrapper U = T>
+        virtual vector3D<T> &rodrigues_rotate(const vector2D<T> &about, long double angle = PI) noexcept {
             if (about.is_zero()) {
                 return *this;
             }
@@ -2025,25 +2023,25 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return *this = std::cosl(angle)*cpy + std::sinl(angle)*cross(about_unit, cpy) +
                     (about_unit*cpy)*(1 - std::cosl(angle))*about_unit;
         }
-        template <isNumWrapper U = T>
-        inline vector3D<T> &rodrigues_rotate(const vector2D<U> &&about, long double angle = PI) noexcept {
+        // template <isNumWrapper U = T>
+        virtual vector3D<T> &rodrigues_rotate(const vector2D<T> &&about, long double angle = PI) noexcept {
             return this->rodrigues_rotate(about, angle);
         }
-        template <isNumWrapper U = T>
-        inline vector3D<T> &rotate_to(const vector2D<U> &new_direction) noexcept {
+        // template <isNumWrapper U = T>
+        vector3D<T> &rotate_to(const vector2D<T> &new_direction) noexcept override {
             if (this->is_zero()) {
                 return *this;
             }
             return this->rodrigues_rotate(cross(*this, new_direction), angle_between(*this, new_direction));
         }
-        template <isNumWrapper U = T>
-        inline vector3D<T> &rotate_to(const vector2D<U> &&new_direction) noexcept {
+        // template <isNumWrapper U = T>
+        vector3D<T> &rotate_to(const vector2D<T> &&new_direction) noexcept override {
             return this->rotate_to(new_direction);
         }
-        inline bool is_zero() const noexcept override {
+        bool is_zero() const noexcept override {
             return this->x == T{0} && this->y == T{0} && this->z == T{0};
         }
-        inline vector3D<T> &apply(const matrix<T> &transform) override {
+        vector3D<T> &apply(const matrix<T> &transform) override {
             if (transform.mat.size() != 3 || transform.mat[0].size() != 3) {
                 throw invalid_matrix_format("Only 3x3 matrices can be applied to a vector3D object.");
             }
@@ -2055,10 +2053,10 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->z = transform.mat[2][0]*org_x + transform.mat[2][1]*org_y + transform.mat[2][2]*org_z;
             return *this;
         }
-        inline vector3D<T> &apply(const matrix<T> &&transform) override {
+        vector3D<T> &apply(const matrix<T> &&transform) override {
             return this->apply(transform);
         }
-        inline vector3D<T> copy() const {
+        vector3D<T> copy() const {
             return {this->x, this->y, this->z};
         }
         T &operator[](unsigned char index) override {
