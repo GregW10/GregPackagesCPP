@@ -508,10 +508,10 @@ namespace gtd {
         template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg1, bool prg2, bool mrg1, bool mrg2>
         friend system<m, r, t, prg1 && prg2, mrg1 && mrg2>operator+(const system<m, r, t, prg1, mrg1> &sys1,
                                                                     const system<m, r, t, prg2, mrg2> &sys2);
-        template <isNumWrapper PosT, isNumWrapper DirT, isNumWrapper LenT>
+        template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class ray;
-        template <isNumWrapper M_U, isNumWrapper R_U, isNumWrapper T_U, isNumWrapper PosU, isNumWrapper DirU,
-                isNumWrapper DistU, isNumWrapper LenU, isNumWrapper LumU>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
+                  isNumWrapper, bool>
         friend class astro_scene;
         template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool>
         friend class system;

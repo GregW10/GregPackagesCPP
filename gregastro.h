@@ -81,6 +81,9 @@ namespace gtd {
         unsigned int x;
         unsigned int y;
     };
+    template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper PosT, isNumWrapper, isNumWrapper, isNumWrapper>
+    requires isConvertible<long double, PosT>
+    class star;
     template <isNumWrapper PosT = long double, isNumWrapper DirT = long double, isNumWrapper LenT = long double>
     class ray : public vector3D<DirT> {
         /* A ray object represents a ray in simulated 3D space - whether this be an actual ray of light (from a light
@@ -228,7 +231,9 @@ namespace gtd {
             return intersects(bod);
         }
         template <isNumWrapper M, isNumWrapper R, isNumWrapper T, container C>
-        requires std::same_as<typename C::value_type, const body<M, R, T>*>
+        requires (std::same_as<typename C::mapped_type, const body<M, R, T>*> ||
+                  isConvertible<typename C::mapped_type, const body<M, R, T>*>) &&
+                 std::same_as<typename C::key_type, const unsigned long long>
         bool intersects(const C &bodies) {
             /* This method is similar to the other intersects() overloads, but it will set l to the distance between the
              * ray's origin and the closest body, and return true (if the ray intersects with at least one body). This
@@ -238,17 +243,17 @@ namespace gtd {
             bool one_intersection = false;
             unsigned long long closest_body_id;
             LenT min_l;
-            for (const auto &ptr : bodies) {
+            for (const auto &[id, ptr] : bodies) {
                 if (this->intersects(*ptr)) {
                     if (!one_intersection) {
                         min_l = l;
                         one_intersection = true;
-                        closest_body_id = ptr->id;
+                        closest_body_id = id;// ptr->id;
                         continue;
                     }
                     if (l < min_l) {
                         min_l = l;
-                        closest_body_id = ptr->id;
+                        closest_body_id = id;// ptr->id;
                     }
                 }
             }
@@ -424,7 +429,7 @@ namespace gtd {
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper>
         friend class light_src;
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
-                  isNumWrapper>
+                  isNumWrapper, bool>
         friend class astro_scene;
     };
     template <isNumWrapper PosT = long double, isNumWrapper DirT = long double,
@@ -501,7 +506,7 @@ namespace gtd {
         template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU, isNumWrapper LumU>
         friend std::ostream &operator<<(std::ostream &os, const light_src<PosU, DirU, LenU, LumU> &src);
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
-                  isNumWrapper>
+                  isNumWrapper, bool>
         friend class astro_scene;
     };
     template <isNumWrapper PosT = long double, isNumWrapper DirT = long double, isNumWrapper DistT = long double>
@@ -715,7 +720,7 @@ namespace gtd {
             return ry.rodrigues_rotate(perp, angle_with_down).rodrigues_rotate(dir, -rotation_correction - rot);
         } // ^^^ rotate to camera's direction and rotate around camera's z-axis appropriately
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
-                  isNumWrapper>
+                  isNumWrapper, bool>
         friend class astro_scene;
     };
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
@@ -789,12 +794,12 @@ namespace gtd {
             return (pnt - bod_t::curr_pos).normalise();
         }
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
-                  isNumWrapper>
+                  isNumWrapper, bool>
         friend class astro_scene;
     };
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
               isNumWrapper PosT = long double, isNumWrapper DirT = long double, isNumWrapper DistT = long double,
-              isNumWrapper LenT = long double, isNumWrapper LumT = long double>
+              isNumWrapper LenT = long double, isNumWrapper LumT = long double, bool modulatedBrightness = true>
     class astro_scene : public bmp {
     private:
         using bod_t = body<M, R, T>;
@@ -806,8 +811,11 @@ namespace gtd {
         unsigned int num_stars = 4*log(bmp::width*bmp::height);
         long double star_radius = sqrt(bmp::width*bmp::width)/1000.0l; // in pixels
         std::vector<point> star_points;
-        std::vector<const bod_t*> all;
-        std::deque<const star_t*> all_stars;
+        // std::vector<const bod_t*> all;
+        // std::deque<const star_t*> all_stars;
+        /* indeed, all the std::maps below lead to a larger memory footprint, but, they also allow certain algorithms
+         * to be implemented faster */
+        std::map<const unsigned long long, const bod_t*> tot_map;
         std::map<const unsigned long long, const bod_t*> bodies;
         std::map<const unsigned long long, const star_t*> stars;
         std::map<const unsigned long long, color> body_clrs;
@@ -816,7 +824,6 @@ namespace gtd {
         const cam_t *pcam = &cam;
         bool def_cam = true;
         bool rendered = false;
-        bool mod_b = false; // modulated brightness
         LumT **fdata = nullptr;
         long double min_clr_brightness_b = 128; // minimum average BGR value for bodies (in default case)
         long double min_clr_brightness_s = 240; // minimum average BGR value for stars (in default case)
@@ -844,16 +851,9 @@ namespace gtd {
             } while (avg_bgr(ret) < min_clr_brightness_s);
             return ret;
         };
-        void populate_vecs() {
-            all.clear();
-            all_stars.clear();
-            for (const auto &[id, bod_ptr] : bodies) {
-                all.push_back(bod_ptr);
-            }
-            for (const auto &[id, s_ptr] : stars) {
-                all.push_back(s_ptr);
-                all_stars.push_back(s_ptr);
-            }
+        void populate_tot_map() {
+            tot_map.insert(bodies.begin(), bodies.end());
+            tot_map.insert(stars.begin(), stars.end());
         }
         void create_stars(bool reset) {
             if (!num_stars)
@@ -880,8 +880,8 @@ namespace gtd {
             }
         }
         void alloc() {
-            // if (!mod_b)
-            //     return;
+            if (!modulatedBrightness)
+                return;
             dealloc();
             fdata = new LumT*[bmp::height];
             LumT **ptr = fdata;
@@ -943,43 +943,39 @@ namespace gtd {
         {alloc();}
 
 
-        astro_scene(unsigned int bmp_width, unsigned int bmp_height, bool modulated_brightness = false) :
+        astro_scene(unsigned int bmp_width, unsigned int bmp_height) :
         bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp"),
-            colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness} {alloc();}
+            colors::black, bmp_width, bmp_height} {alloc();}
 
 
         astro_scene(unsigned int bmp_width, unsigned int bmp_height, const cam_t &c,
-                    const std::vector<bod_t*> &bods, bool modulated_brightness = false) :
+                    const std::vector<bod_t*> &bods) :
                 bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp"),
-                    colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness}, cam{c}
+                    colors::black, bmp_width, bmp_height}, cam{c}
                     {check_cam(); put_bodies(bods); alloc(); def_cam = false;}
 
 
         astro_scene(unsigned int bmp_width, unsigned int bmp_height, const cam_t &c,
-                    const std::vector<bod_t*> &bods, color (*bdy_clr_gen)(),
-                    bool modulated_brightness = false) :
+                    const std::vector<bod_t*> &bods, color (*bdy_clr_gen)()) :
                 bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp"),
-                    colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness}, cam{c}, col_gen_b{bdy_clr_gen}
+                    colors::black, bmp_width, bmp_height}, cam{c}, col_gen_b{bdy_clr_gen}
         {check_cam(); put_bodies(bods); alloc(); def_cam = false;}
 
 
         astro_scene(unsigned int bmp_width, unsigned int bmp_height, const cam_t &c,
-                    const std::vector<bod_t*> &bods, color (*bdy_clr_gen)(), color (*star_clr_gen)(),
-                    bool modulated_brightness = false) :
+                    const std::vector<bod_t*> &bods, color (*bdy_clr_gen)(), color (*star_clr_gen)()) :
                 bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp"),
-                    colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness}, cam{c}, col_gen_b{bdy_clr_gen},
+                    colors::black, bmp_width, bmp_height}, cam{c}, col_gen_b{bdy_clr_gen},
                     col_gen_s{star_clr_gen}
         {check_cam(); put_bodies(bods); alloc(); def_cam = false;}
 
 
-        astro_scene(const String &bmp_path, unsigned int bmp_width, unsigned int bmp_height,
-                    bool modulated_brightness = false) :
-                bmp{bmp_path, colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness} {alloc();}
+        astro_scene(const String &bmp_path, unsigned int bmp_width, unsigned int bmp_height) :
+                bmp{bmp_path, colors::black, bmp_width, bmp_height} {alloc();}
 
 
-        astro_scene(String &&bmp_path, unsigned int bmp_width, unsigned int bmp_height,
-                    bool modulated_brightness = false) :
-                bmp{std::move(bmp_path), colors::black, bmp_width, bmp_height}, mod_b{modulated_brightness}
+        astro_scene(String &&bmp_path, unsigned int bmp_width, unsigned int bmp_height) :
+                bmp{std::move(bmp_path), colors::black, bmp_width, bmp_height}
                 {alloc();}
 
 
@@ -1152,60 +1148,68 @@ namespace gtd {
                  * caller to know that the camera they are providing is of incorrect dimensions and 2. this class
                  * guarantees not to modify a followed camera (hence why pcam points to a const camera) */
                 throw camera_dimensions_error("The camera dimensions do not equal astro_scene dimensions.\n");
-            create_stars(reset_star_positions);
-            populate_vecs();
-            typename std::vector<star_t*>::size_type num_s = all_stars.size();
+            this->create_stars(reset_star_positions);
+            this->populate_tot_map();
+            typename std::vector<star_t*>::size_type num_s = /*all_*/stars.size();
             unsigned int x;
-            unsigned int z;
+            unsigned int flux_counter;
             color **row_c = bmp::data;
             LumT **row_f = fdata;
             color *pix_c; // a single pixel's colour
-            LumT *pix_f; // a single pixel's cumulative flux - later converted to brightness
+            LumT *pix_f; // a single pixel's cumulative flux - later converted to brightness - only if modBright true
             const star_t *sptr;
             LumT max_flux{0}; // maximum flux falling on one of the visible points of any body
-            std::cout << all.size() << std::endl;
             for (unsigned int y = 0; y < bmp::height; ++y, ++row_c, ++row_f) {
                 pix_c = *row_c;
                 pix_f = *row_f;
                 for (x = 0; x < bmp::width; ++x, ++pix_c, ++pix_f) {
                     ray_t &&cam_ray = pcam->ray_from_pixel(x, y);
-                    // std::cout << cam_ray << std::endl;
-                    if (!cam_ray.template intersects<M, R, T>(all)) {
+                    if (!cam_ray.template intersects<M, R, T>(tot_map)) {
                         *pix_c = colors::black; // in case of no intersection, pixel is the black of space
                         *pix_f = LumT{0}; // not truly necessary, since black multiplied by anything will still be black
-                        //std::cout << "none" << std::endl;
                         continue;
                     }
                     if (stars.contains(cam_ray.ibod_id)) {
                         *pix_c = star_clrs[cam_ray.ibod_id];
-                        std::cout << "star" << std::endl;
                         *pix_f = LumT{-1}; // only pixels that lie on stars will have a negative cumulative lum.
-                        // std::cout << cam_ray.l << std::endl;
                         continue;
                     }
-                    // std::cout << "body" << std::endl;
                     // next comes the case of the ray having intersected with a body
-                    *pix_c = body_clrs[cam_ray.ibod_id]; // this was the easy part ;)
-                    // std::cout << *pix_c << std::endl;
+                    *pix_c = colors::forest_green;//body_clrs[cam_ray.ibod_id]; // this was the easy part ;)
                     *pix_f = LumT{0}; // cumulative flux must start out as zero (W m^-2)
-                    ray_t &&end_point = cam_ray.end_point();
-                    for (z = 0; z < num_s; ++z) {
-                        sptr = all_stars.front();
-                        all_stars.pop_front();
-                        for (const src_t &src : sptr->sources) {
-                            ray_t &&src_to_ep = src.cast_ray(end_point);
-                            if (sptr->normal_at_point(src.pos)*src_to_ep <= 0) // to not count rays from back of star
-                                continue;
-                            if (!src_to_ep.template intersects<M, R, T>(all)) // this could only be due to some kind of f.p. error
-                                continue;
+                    vector3D<PosT> &&end_point = cam_ray.end_point();
+                    auto end_it = stars.end(); // thank goodness for auto ;)
+                    for (auto it = stars.begin(); it != end_it;) {
+                        sptr = it->second;
+                        it = stars.erase(it); // it will now point to pair after erased pair
+                        if (sptr->sources.size() == 1) {
+                            ray_t &&src_to_ep = sptr->sources[0].cast_ray(end_point);
+                            if (!src_to_ep.template intersects<M, R, T>(stars) &&
+                                !src_to_ep.template intersects<M, R, T>(bodies)) // in case of f.p. error
+                                goto bye;
                             if (cam_ray.ibod_id != src_to_ep.ibod_id) // light ray does not make it to point on body
-                                continue;
-                            *pix_f -= src.flux_at_point(end_point)*
-                                ((src_to_ep.normalise()*((end_point - bodies[cam_ray.ibod_id]->curr_pos).normalise())));
-                            std::cout << src.flux_at_point(end_point);
+                                goto bye;
+                            *pix_f -= sptr->sources[0].flux_at_point(end_point)*
+                            ((src_to_ep.normalise()*((end_point - bodies[cam_ray.ibod_id]->curr_pos).normalise())));
                             /* value subtracted since the normal and light ray always have an obtuse angle between */
                         }
-                        all_stars.push_back(sptr);
+                        else {
+                            for (const src_t &src : sptr->sources) {
+                                ray_t &&src_to_ep = src.cast_ray(end_point);
+                                if (sptr->normal_at_point(src.pos)*src_to_ep <= 0)
+                                    continue;
+                                if (!src_to_ep.template intersects<M, R, T>(stars) &&
+                                    !src_to_ep.template intersects<M, R, T>(bodies))
+                                    continue;
+                                if (cam_ray.ibod_id != src_to_ep.ibod_id)
+                                    continue;
+                                *pix_f -= src.flux_at_point(end_point)*
+                                ((src_to_ep.normalise()*((end_point - bodies[cam_ray.ibod_id]->curr_pos).normalise())));
+                            }
+                        }
+                        bye:
+                        // all_stars.push_back(sptr);
+                        stars.insert(it, {sptr->id, sptr}); // is O(1) thanks to valid hint provided
                     }
                     if (*pix_f > max_flux)
                         max_flux = *pix_f;
@@ -1222,7 +1226,6 @@ namespace gtd {
                 for (x = 0; x < bmp::width; ++x, ++pix_c, ++pix_f) {
                     if (*pix_f != -1)
                         *pix_c = (*pix_f/max_flux)*(*pix_c);
-                    // std::cout << *pix_f << std::endl;
                 }
             }
             return (rendered = true);
