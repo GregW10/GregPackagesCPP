@@ -110,6 +110,15 @@ namespace gtd {
         static inline const T &&minimum(const T &&first, const T &&second) {
             return first <= second ? std::move(first) : std::move(second);
         }
+        template <typename ...Args>
+        bool contains_id(const unsigned long long &id, const unsigned long long &first, Args... args){
+            if constexpr (sizeof...(args) == 0)
+                return id == first;
+            return id == first || contains_id(id, args...);
+        };
+        /* the (seemingly redundant) function below is used in a fold expression further down (the syntax requires it)*/
+        static inline auto equal =
+                [](const unsigned long long &arg1, const unsigned long long &arg2){return arg1 == arg2;};
     public:
         ray() : vector3D<DirT>{0, 0, -1} {calc();}
         ray(const vector2D<DirT> &direction) noexcept : vector3D<DirT>(direction) {calc();}
@@ -230,11 +239,11 @@ namespace gtd {
         bool intersects(const body<M, R, T> &&bod) {
             return intersects(bod);
         }
-        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, container C>
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, container C, typename ... except>
         requires (std::same_as<typename C::mapped_type, const body<M, R, T>*> ||
                   isConvertible<typename C::mapped_type, const body<M, R, T>*>) &&
-                 std::same_as<typename C::key_type, const unsigned long long>
-        bool intersects(const C &bodies) {
+                  std::same_as<typename C::key_type, const unsigned long long>
+        bool intersects(const C &bodies, except ...ids) {
             /* This method is similar to the other intersects() overloads, but it will set l to the distance between the
              * ray's origin and the closest body, and return true (if the ray intersects with at least one body). This
              * is intuitive, since a ray in real space will "terminate" once it hits an object, and will (in general)
@@ -243,17 +252,38 @@ namespace gtd {
             bool one_intersection = false;
             unsigned long long closest_body_id;
             LenT min_l;
-            for (const auto &[id, ptr] : bodies) {
-                if (this->intersects(*ptr)) {
-                    if (!one_intersection) {
-                        min_l = l;
-                        one_intersection = true;
-                        closest_body_id = id;// ptr->id;
-                        continue;
+            if constexpr (sizeof...(ids) == 0) {
+                for (const auto &[id, ptr] : bodies) {
+                    if (this->intersects(*ptr)) {
+                        if (!one_intersection) {
+                            min_l = l;
+                            one_intersection = true;
+                            closest_body_id = id;// ptr->id;
+                            continue;
+                        }
+                        if (l < min_l) {
+                            min_l = l;
+                            closest_body_id = id;// ptr->id;
+                        }
                     }
-                    if (l < min_l) {
-                        min_l = l;
-                        closest_body_id = id;// ptr->id;
+                }
+            }
+            else {
+                for (const auto &[id, ptr] : bodies) {
+                    // if (contains_id(id, ids...))
+                    if (!(equal(id, ids) || ...)) { //required, as the == and || ops cannot both be used in a fold expr.
+                        if (this->intersects(*ptr)) {
+                            if (!one_intersection) {
+                                min_l = l;
+                                one_intersection = true;
+                                closest_body_id = id;// ptr->id;
+                                continue;
+                            }
+                            if (l < min_l) {
+                                min_l = l;
+                                closest_body_id = id;// ptr->id;
+                            }
+                        }
                     }
                 }
             }
@@ -828,7 +858,6 @@ namespace gtd {
         long double min_clr_brightness_b = 128; // minimum average BGR value for bodies (in default case)
         long double min_clr_brightness_s = 240; // minimum average BGR value for stars (in default case)
         std::function<color()> col_gen_b = [this](){ // default colour generator for bodies
-            srand(time(nullptr));
             std::mt19937 mersenne{(unsigned int) rand()};
             std::uniform_int_distribution dist{0, 255};
             color ret{};
@@ -840,7 +869,6 @@ namespace gtd {
             return ret;
         }; // std::function objects are being used as these are capturing lambdas (cannot assign to function pointers)
         std::function<color()> col_gen_s = [this](){ // default colour generator for bodies
-            srand(time(nullptr));
             std::mt19937 mersenne{(unsigned int) rand()};
             std::uniform_int_distribution dist{0, 255};
             color ret{};
@@ -935,31 +963,31 @@ namespace gtd {
     public:
         astro_scene() :
         bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp")}
-        {alloc();}
+        {alloc(); srand(time(nullptr));}
 
 
         explicit astro_scene(const char *source_bmp) :
         bmp{source_bmp, std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp")}
-        {alloc();}
+        {alloc(); srand(time(nullptr));}
 
 
         astro_scene(unsigned int bmp_width, unsigned int bmp_height) :
         bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp"),
-            colors::black, bmp_width, bmp_height} {alloc();}
+            colors::black, bmp_width, bmp_height} {alloc(); srand(time(nullptr));}
 
 
         astro_scene(unsigned int bmp_width, unsigned int bmp_height, const cam_t &c,
                     const std::vector<bod_t*> &bods) :
                 bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp"),
                     colors::black, bmp_width, bmp_height}, cam{c}
-                    {check_cam(); put_bodies(bods); alloc(); def_cam = false;}
+                    {check_cam(); put_bodies(bods); alloc(); srand(time(nullptr)); def_cam = false;}
 
 
         astro_scene(unsigned int bmp_width, unsigned int bmp_height, const cam_t &c,
                     const std::vector<bod_t*> &bods, color (*bdy_clr_gen)()) :
                 bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp"),
                     colors::black, bmp_width, bmp_height}, cam{c}, col_gen_b{bdy_clr_gen}
-        {check_cam(); put_bodies(bods); alloc(); def_cam = false;}
+        {check_cam(); put_bodies(bods); alloc(); srand(time(nullptr)); def_cam = false;}
 
 
         astro_scene(unsigned int bmp_width, unsigned int bmp_height, const cam_t &c,
@@ -967,16 +995,16 @@ namespace gtd {
                 bmp{std::move(get_home_path<String>() + file_sep() + "AstroScene_" + get_date_and_time() + ".bmp"),
                     colors::black, bmp_width, bmp_height}, cam{c}, col_gen_b{bdy_clr_gen},
                     col_gen_s{star_clr_gen}
-        {check_cam(); put_bodies(bods); alloc(); def_cam = false;}
+        {check_cam(); put_bodies(bods); alloc(); srand(time(nullptr)); def_cam = false;}
 
 
         astro_scene(const String &bmp_path, unsigned int bmp_width, unsigned int bmp_height) :
-                bmp{bmp_path, colors::black, bmp_width, bmp_height} {alloc();}
+                bmp{bmp_path, colors::black, bmp_width, bmp_height} {alloc(); srand(time(nullptr));}
 
 
         astro_scene(String &&bmp_path, unsigned int bmp_width, unsigned int bmp_height) :
                 bmp{std::move(bmp_path), colors::black, bmp_width, bmp_height}
-                {alloc();}
+                {alloc(); srand(time(nullptr));}
 
 
         astro_scene(const astro_scene &other) : bmp{other} {} // not = default, as I will add stuff in body later
@@ -1079,34 +1107,46 @@ namespace gtd {
             return pcam != &cam && (pcam = &cam);
         }
         void generate_body_clrs() {
-            std::for_each(bodies.begin(), bodies.end(), [this](const std::pair<unsigned long long, bod_t*> &p) {
-                body_clrs[p->first] = col_gen_b(); // unfortunately, cannot iterate over keys only
+            std::for_each(bodies.begin(), bodies.end(), [this](const std::pair<const unsigned long long,
+                                                               const bod_t*> &p) {
+                body_clrs[p.first] = col_gen_b(); // unfortunately, cannot iterate over keys only
             });
         }
         void generate_star_clrs() {
-            std::for_each(stars.begin(), stars.end(), [this](const std::pair<unsigned long long, star_t*> &p){
-                star_clrs[p->first] = col_gen_s();
+            std::for_each(stars.begin(), stars.end(), [this](const std::pair<const unsigned long long,
+                                                             const star_t*> &p){
+                star_clrs[p.first] = col_gen_s();
             });
         }
         void generate_clrs() {
             this->generate_body_clrs();
             this->generate_star_clrs();
         }
-        void add_body(const bod_t &bod) {
+        void add_body(const bod_t &bod, color col) {
             try {
                 const star_t &s = dynamic_cast<const star_t&>(bod);
                 stars.emplace(s.id, &s);
-                star_clrs.emplace(s.id, col_gen_s());
+                star_clrs.emplace(s.id, col);
             } catch (const std::bad_cast &e) {
                 bodies.emplace(bod.id, &bod);
-                body_clrs.emplace(bod.id, col_gen_b());
+                body_clrs.emplace(bod.id, col);
             }
+        }
+        void add_body(const bod_t &bod) {
+            this->add_body(bod, col_gen_b());
+        }
+        void add_star(const star_t &s, color col) {
+            stars.emplace(s.id, &s);
+            star_clrs.emplace(s.id, col);
         }
         void add_star(const star_t &s) {
             stars.emplace(s.id, &s);
             star_clrs.emplace(s.id, col_gen_s());
         }
         void add_bodies(const std::vector<bod_t*> &new_bodies) {
+            put_bodies(new_bodies, false);
+        }
+        void add_bodies(const std::vector<bod_t*> &&new_bodies) { // no way to move it, so const
             put_bodies(new_bodies, false);
         }
         void add_stars(const std::vector<star_t*> &new_stars) {
@@ -1116,6 +1156,9 @@ namespace gtd {
                 stars.emplace(s->id, s);
                 star_clrs.emplace(s->id, col_gen_s());
             }
+        }
+        void add_stars(const std::vector<star_t*> &&new_stars) {//with these r-value overloads, init. syntax may be used
+            this->add_stars(new_stars);
         }
         void assign_bodies(const std::vector<bod_t*> &new_bodies) {
             put_bodies(new_bodies, true);
@@ -1150,7 +1193,7 @@ namespace gtd {
                 throw camera_dimensions_error("The camera dimensions do not equal astro_scene dimensions.\n");
             this->create_stars(reset_star_positions);
             this->populate_tot_map();
-            typename std::vector<star_t*>::size_type num_s = /*all_*/stars.size();
+            typename std::vector<star_t*>::size_type num_s = stars.size();
             unsigned int x;
             unsigned int flux_counter;
             color **row_c = bmp::data;
@@ -1175,20 +1218,20 @@ namespace gtd {
                         continue;
                     }
                     // next comes the case of the ray having intersected with a body
-                    *pix_c = colors::forest_green;//body_clrs[cam_ray.ibod_id]; // this was the easy part ;)
+                    *pix_c = body_clrs[cam_ray.ibod_id]; // this was the easy part ;)
                     *pix_f = LumT{0}; // cumulative flux must start out as zero (W m^-2)
                     vector3D<PosT> &&end_point = cam_ray.end_point();
                     auto end_it = stars.end(); // thank goodness for auto ;)
-                    for (auto it = stars.begin(); it != end_it;) {
+                    for (auto it = stars.begin(); it != end_it; ++it) {
                         sptr = it->second;
-                        it = stars.erase(it); // it will now point to pair after erased pair
+                        // it = stars.erase(it); // it will now point to pair after erased pair
                         if (sptr->sources.size() == 1) {
                             ray_t &&src_to_ep = sptr->sources[0].cast_ray(end_point);
-                            if (!src_to_ep.template intersects<M, R, T>(stars) &&
+                            if (!src_to_ep.template intersects<M, R, T>(stars, sptr->id) &&
                                 !src_to_ep.template intersects<M, R, T>(bodies)) // in case of f.p. error
-                                goto bye;
+                                continue; //goto bye;
                             if (cam_ray.ibod_id != src_to_ep.ibod_id) // light ray does not make it to point on body
-                                goto bye;
+                                continue; //goto bye;
                             *pix_f -= sptr->sources[0].flux_at_point(end_point)*
                             ((src_to_ep.normalise()*((end_point - bodies[cam_ray.ibod_id]->curr_pos).normalise())));
                             /* value subtracted since the normal and light ray always have an obtuse angle between */
@@ -1198,7 +1241,7 @@ namespace gtd {
                                 ray_t &&src_to_ep = src.cast_ray(end_point);
                                 if (sptr->normal_at_point(src.pos)*src_to_ep <= 0)
                                     continue;
-                                if (!src_to_ep.template intersects<M, R, T>(stars) &&
+                                if (!src_to_ep.template intersects<M, R, T>(stars, sptr->id) &&
                                     !src_to_ep.template intersects<M, R, T>(bodies))
                                     continue;
                                 if (cam_ray.ibod_id != src_to_ep.ibod_id)
@@ -1207,9 +1250,8 @@ namespace gtd {
                                 ((src_to_ep.normalise()*((end_point - bodies[cam_ray.ibod_id]->curr_pos).normalise())));
                             }
                         }
-                        bye:
-                        // all_stars.push_back(sptr);
-                        stars.insert(it, {sptr->id, sptr}); // is O(1) thanks to valid hint provided
+                        // bye:
+                        // stars.insert(it, {sptr->id, sptr}); // is O(1) thanks to valid hint provided
                     }
                     if (*pix_f > max_flux)
                         max_flux = *pix_f;
@@ -1326,7 +1368,11 @@ namespace gtd {
             static_assert(min <= max, "Min. color value passed must be equal to or less than max. color value.\n");
             static unsigned char val;
             static std::uniform_int_distribution<unsigned short> dist{(unsigned short) min,(unsigned short) max};//[a,b]
-            srand(time(nullptr));
+            static time_t seed_val = 1;
+            static time_t now;
+            now = time(nullptr);
+            seed_val = now == seed_val ? ++seed_val : now;
+            srand(seed_val);
             std::mt19937 mt{(unsigned int) rand()};
             val = dist(mt);
             return {val, val, val};
@@ -1334,7 +1380,11 @@ namespace gtd {
         template <color col>
         color monoscale() {
             static std::uniform_real_distribution<long double> dist{0, 1}; // [a, b)
-            srand(time(nullptr));
+            static time_t seed_val = 1;
+            static time_t now;
+            now = time(nullptr);
+            seed_val = now == seed_val ? ++seed_val : now;
+            srand(seed_val);
             std::mt19937 mt{(unsigned int) rand()};
             return dist(mt)*col;
         }
