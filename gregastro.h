@@ -7,6 +7,8 @@
 
 #include <functional>
 #include <random>
+#include <thread>
+#include <latch>
 
 #include "gregbod.h"
 #include "gregbmp.h"
@@ -841,8 +843,6 @@ namespace gtd {
         unsigned int num_stars = 4*log(bmp::width*bmp::height);
         long double star_radius = sqrt(bmp::width*bmp::width)/1000.0l; // in pixels
         std::vector<point> star_points;
-        // std::vector<const bod_t*> all;
-        // std::deque<const star_t*> all_stars;
         /* indeed, all the std::maps below lead to a larger memory footprint, but, they also allow certain algorithms
          * to be implemented faster */
         std::map<const unsigned long long, const bod_t*> tot_map;
@@ -855,6 +855,17 @@ namespace gtd {
         bool def_cam = true;
         bool rendered = false;
         LumT **fdata = nullptr;
+        /* the five variables below are to support concurrency in the ray-tracing algorithm - they are only needed, in
+         * reality, to ensure brightnesses of pixels are calculated correctly - since the absolute brightness of any
+         * pixel depends on the brightness of the brightest pixel, all brightnesses (for all pixels) must be calculated
+         * first, hence the need to synchronise the different threads */
+        std::mutex max_mutex;
+        std::condition_variable cv;
+        std::latch *thread_latch;
+        LumT max_flux;
+        std::vector<LumT> thread_max_fluxes;
+        bool have_max = false;
+        unsigned int tot_threads;
         long double min_clr_brightness_b = 128; // minimum average BGR value for bodies (in default case)
         long double min_clr_brightness_s = 240; // minimum average BGR value for stars (in default case)
         std::function<color()> col_gen_b = [this](){ // default colour generator for bodies
@@ -959,6 +970,103 @@ namespace gtd {
             if (cam.dims != this->dims)
                 throw camera_dimensions_error("The dimensions of the camera supplied do not equal that of this "
                                               "astro_scene object.\n");
+        }
+        void render_subp(unsigned int start_x, unsigned int end_x, unsigned int start_y, unsigned int end_y) {
+            typename std::vector<const star_t*>::size_type num_s = stars.size();
+            unsigned int x; // inner loop counter
+            unsigned int flux_counter;
+            color **row_c = bmp::data + start_y;
+            LumT **row_f = fdata + start_y;
+            color *pix_c; // a single pixel's colour
+            LumT *pix_f; // a single pixel's cumulative flux - later converted to brightness - only if modBright true
+            const star_t *sptr;
+            LumT thread_max_flux{0}; // maximum flux falling on one of the visible points (in the thread) of any object
+            typename std::map<const unsigned long long, const star_t*>::iterator it;
+            auto end_it = stars.end(); // thank goodness for auto ;)
+            for (unsigned int y = start_y; y < end_y; ++y, ++row_c, ++row_f) {
+                pix_c = *row_c + start_x;
+                pix_f = *row_f + start_x;
+                for (x = start_x; x < end_x; ++x, ++pix_c, ++pix_f) {
+                    ray_t &&cam_ray = pcam->ray_from_pixel(x, y);
+                    if (!cam_ray.template intersects<M, R, T>(tot_map)) {
+                        *pix_c = colors::black; // in case of no intersection, pixel is the black of space
+                        *pix_f = LumT{0}; // not truly necessary, since black multiplied by anything will still be black
+                        continue;
+                    }
+                    if (stars.contains(cam_ray.ibod_id)) {
+                        *pix_c = star_clrs[cam_ray.ibod_id];
+                        *pix_f = LumT{-1}; // only pixels that lie on stars will have a negative cumulative lum.
+                        continue;
+                    }
+                    // next comes the case of the ray having intersected with a body
+                    *pix_c = body_clrs[cam_ray.ibod_id]; // this was the easy part ;)
+                    *pix_f = LumT{0}; // cumulative flux must start out as zero (W m^-2)
+                    vector3D<PosT> &&end_point = cam_ray.end_point();
+                    for (it = stars.begin(); it != end_it; ++it) {
+                        sptr = it->second;
+                        if (sptr->sources.size() == 1) {
+                            ray_t &&src_to_ep = sptr->sources[0].cast_ray(end_point);
+                            if (!src_to_ep.template intersects<M, R, T>(stars, sptr->id) &&
+                                !src_to_ep.template intersects<M, R, T>(bodies)) // in case of f.p. error
+                                continue;
+                            if (cam_ray.ibod_id != src_to_ep.ibod_id) // light ray does not make it to point on body
+                                continue;
+                            *pix_f -= sptr->sources[0].flux_at_point(end_point)*
+                                ((src_to_ep.normalise()*((end_point - bodies[cam_ray.ibod_id]->curr_pos).normalise())));
+                            /* value subtracted since the normal and light ray always have an obtuse angle between */
+                        }
+                        else {
+                            for (const src_t &src : sptr->sources) {
+                                ray_t &&src_to_ep = src.cast_ray(end_point);
+                                if (sptr->normal_at_point(src.pos)*src_to_ep <= 0)
+                                    continue;
+                                if (!src_to_ep.template intersects<M, R, T>(stars, sptr->id) &&
+                                    !src_to_ep.template intersects<M, R, T>(bodies))
+                                    continue;
+                                if (cam_ray.ibod_id != src_to_ep.ibod_id)
+                                    continue;
+                                *pix_f -= src.flux_at_point(end_point)*
+                                ((src_to_ep.normalise()*((end_point - bodies[cam_ray.ibod_id]->curr_pos).normalise())));
+                            }
+                        }
+                    }
+                    if (*pix_f > thread_max_flux)
+                        thread_max_flux = *pix_f;
+                }
+            }
+            /* now the entire arrays of colours and flux quantities have to be gone through again to multiply each
+             * colour by the normalised flux values (i.e., each flux value is divided by the maximum flux value
+             * (to yield a value between 0-1), and then multiplied by the corresponding colour at the given pixel) */
+            thread_latch->count_down(); // reduces the latch's internal counter by 1
+            thread_latch->wait(); // waits until the internal counter is 0 (so once all threads have reached this point)
+            max_mutex.lock(); // ensure that only one thread is accessing the std::vector at a time
+            thread_max_fluxes.push_back(thread_max_flux); // each thread adds its maximum brightness to the std::vector
+            max_mutex.unlock();
+            cv.notify_all(); // notify the running set_max_flux function to continue with the max. calculation
+            std::unique_lock<std::mutex> lock{max_mutex}; // std::condition_variable requires a lock
+            cv.wait(lock, [this](){return have_max;}); // wait for the set_max_flux function having calculated the max
+            row_c = bmp::data + start_y;
+            row_f = fdata + start_y;
+            for (unsigned int y = start_y; y < end_y; ++y, ++row_c, ++row_f) {
+                pix_c = *row_c + start_x;
+                pix_f = *row_f + start_x;
+                for (x = start_x; x < end_x; ++x, ++pix_c, ++pix_f) {
+                    if (*pix_f != -1)
+                        *pix_c = (*pix_f/max_flux)*(*pix_c);
+                }
+            }
+        }
+        void set_max_flux() {
+            std::unique_lock<std::mutex> lock{max_mutex};
+            cv.wait(lock, [this](){return thread_max_fluxes.size() == tot_threads;});
+            max_flux = LumT{0};
+            for (const LumT &t_max : thread_max_fluxes) {
+                if (t_max > max_flux)
+                    max_flux = t_max;
+            }
+            have_max = true;
+            lock.unlock();
+            cv.notify_all();
         }
     public:
         astro_scene() :
@@ -1191,86 +1299,142 @@ namespace gtd {
                  * caller to know that the camera they are providing is of incorrect dimensions and 2. this class
                  * guarantees not to modify a followed camera (hence why pcam points to a const camera) */
                 throw camera_dimensions_error("The camera dimensions do not equal astro_scene dimensions.\n");
+            rendered = true;
             this->create_stars(reset_star_positions);
             this->populate_tot_map();
-            typename std::vector<star_t*>::size_type num_s = stars.size();
-            unsigned int x;
-            unsigned int flux_counter;
-            color **row_c = bmp::data;
-            LumT **row_f = fdata;
-            color *pix_c; // a single pixel's colour
-            LumT *pix_f; // a single pixel's cumulative flux - later converted to brightness - only if modBright true
-            const star_t *sptr;
-            LumT max_flux{0}; // maximum flux falling on one of the visible points of any body
-            for (unsigned int y = 0; y < bmp::height; ++y, ++row_c, ++row_f) {
-                pix_c = *row_c;
-                pix_f = *row_f;
-                for (x = 0; x < bmp::width; ++x, ++pix_c, ++pix_f) {
-                    ray_t &&cam_ray = pcam->ray_from_pixel(x, y);
-                    if (!cam_ray.template intersects<M, R, T>(tot_map)) {
-                        *pix_c = colors::black; // in case of no intersection, pixel is the black of space
-                        *pix_f = LumT{0}; // not truly necessary, since black multiplied by anything will still be black
-                        continue;
+            have_max = false;
+            thread_max_fluxes.clear();
+            std::thread max_calculator{&astro_scene::set_max_flux, this};
+            if ((tot_threads = std::thread::hardware_concurrency()) == 0) {// in case of error - perform single-threaded
+                tot_threads = 1;
+                std::latch once{1};
+                thread_latch = &once;
+                this->render_subp(0, bmp::width, 0, bmp::height);
+                max_calculator.join();
+                return false; // method returns false in case no multithreading was able to be performed
+            }
+            /* my approach to the multithreading is that it should be favoured to split the image up into rows, rather
+             * than columns, to minimise the jumps around in memory (since rows are stored contiguously, whereas
+             * columns are not) - if the number of threads to execute is less than the number of rows (always the case
+             * on my home computer), then the image is only split up rows, which are then dealt with separately in each
+             * thread - however, if threads > height (could only be the case for a really good processing unit), then
+             * the image starts to be split up vertically as well */
+            tot_threads = 2000;
+            std::latch t_latch{tot_threads};
+            thread_latch = &t_latch;
+            std::vector<std::pair<long double, long double>> ranges;
+            std::vector<std::thread> threads;
+            std::cout << "Hello" << std::endl;
+            std::cout << "threads: " << tot_threads << std::endl;
+            long double interval;
+            long double bottom_or_left = 0; // most likely bottom
+            long double top_or_right = 0; // ... and top
+            unsigned int counter = 1;
+            if (tot_threads <= bmp::height) { // on most home computers
+                interval = ((long double) bmp::height)/tot_threads;
+                std::cout << "interval: " << interval << std::endl;
+                while (top_or_right <= bmp::height) {
+                    top_or_right = interval*counter++;
+                    ranges.emplace_back(bottom_or_left, top_or_right);
+                    bottom_or_left = top_or_right;
+                }
+                std::cout << "second time" << std::endl;
+                if (ranges.size() > tot_threads) // in case f.p. error above caused the loop to execute an extra time
+                    ranges.pop_back(), printf("popped\n");
+                ranges.back().second = bmp::height; // again, in case of f.p. error
+                for (const auto &r : ranges)
+                    std::cout << r.first << " " << r.second << std::endl;
+                try {
+                    for (const auto &[y_start, y_end] : ranges) {
+                        threads.emplace_back(&astro_scene::render_subp, this, 0, bmp::width, y_start, y_end);
                     }
-                    if (stars.contains(cam_ray.ibod_id)) {
-                        *pix_c = star_clrs[cam_ray.ibod_id];
-                        *pix_f = LumT{-1}; // only pixels that lie on stars will have a negative cumulative lum.
-                        continue;
+                    for (std::thread &t : threads)
+                        t.join();
+                    max_calculator.join();
+                } catch (const std::system_error &e) {
+                    tot_threads = 1;
+                    std::latch once{1};
+                    thread_latch = &once;
+                    this->render_subp(0, bmp::width, 0, bmp::height);
+                    max_calculator.join();
+                    return false;
+                }
+                return true;
+            }
+            // for a supercomputer or excellent GPU (such as in gaming setup)
+            std::vector<std::pair<long double, long double>> end_ranges;
+            unsigned int intervals = (tot_threads - bmp::height) % bmp::height;
+            bool same = false;
+            if (!intervals)
+                same = intervals = (tot_threads - bmp::height) / bmp::height;
+            interval = ((long double) bmp::width)/(intervals);
+            std::cout << "interval: " << interval << std::endl;
+            bottom_or_left = 0;
+            top_or_right = 0;
+            while (top_or_right <= bmp::width) {
+                top_or_right = interval*counter++;
+                ranges.emplace_back(bottom_or_left, top_or_right);
+                bottom_or_left = top_or_right;
+            }
+            if (ranges.size() > intervals)
+                ranges.pop_back(), printf("popped\n");
+            ranges.back().second = bmp::width;
+            if (!same) {
+                interval = ((long double) bmp::width)/(intervals - 1);
+                bottom_or_left = 0;
+                top_or_right = 0;
+                counter = 1;
+                while (top_or_right <= bmp::width) {
+                    top_or_right = interval*counter++;
+                    end_ranges.emplace_back(bottom_or_left, top_or_right);
+                    bottom_or_left = top_or_right;
+                }
+                if (end_ranges.size() > intervals)
+                    end_ranges.pop_back(), printf("popped\n");
+                end_ranges.back().second = bmp::width;
+            }
+            for (const auto &[x_start, x_end] : ranges) {
+                std::cout << "ranges: " << x_start << " " << x_end << std::endl;
+            }
+            for (const auto &[x_start, x_end] : end_ranges) {
+                std::cout << "end_ranges: " << x_start << " " << x_end << std::endl;
+            }
+            try {
+                for (unsigned int y = 0; y < intervals; ++y) {
+                    for (const auto &[x_start, x_end] : ranges) {
+                        threads.emplace_back(&astro_scene::render_subp, this, x_start, x_end, y, y + 1);
+                        std::cout << "added" << std::endl;
                     }
-                    // next comes the case of the ray having intersected with a body
-                    *pix_c = body_clrs[cam_ray.ibod_id]; // this was the easy part ;)
-                    *pix_f = LumT{0}; // cumulative flux must start out as zero (W m^-2)
-                    vector3D<PosT> &&end_point = cam_ray.end_point();
-                    auto end_it = stars.end(); // thank goodness for auto ;)
-                    for (auto it = stars.begin(); it != end_it; ++it) {
-                        sptr = it->second;
-                        // it = stars.erase(it); // it will now point to pair after erased pair
-                        if (sptr->sources.size() == 1) {
-                            ray_t &&src_to_ep = sptr->sources[0].cast_ray(end_point);
-                            if (!src_to_ep.template intersects<M, R, T>(stars, sptr->id) &&
-                                !src_to_ep.template intersects<M, R, T>(bodies)) // in case of f.p. error
-                                continue; //goto bye;
-                            if (cam_ray.ibod_id != src_to_ep.ibod_id) // light ray does not make it to point on body
-                                continue; //goto bye;
-                            *pix_f -= sptr->sources[0].flux_at_point(end_point)*
-                            ((src_to_ep.normalise()*((end_point - bodies[cam_ray.ibod_id]->curr_pos).normalise())));
-                            /* value subtracted since the normal and light ray always have an obtuse angle between */
+                }
+                if (!same) {
+                    for (unsigned int y = intervals; y < bmp::height; ++y) {
+                        for (const auto &[x_start, x_end] : end_ranges) {
+                            threads.emplace_back(&astro_scene::render_subp, this, x_start, x_end, y, y + 1);
                         }
-                        else {
-                            for (const src_t &src : sptr->sources) {
-                                ray_t &&src_to_ep = src.cast_ray(end_point);
-                                if (sptr->normal_at_point(src.pos)*src_to_ep <= 0)
-                                    continue;
-                                if (!src_to_ep.template intersects<M, R, T>(stars, sptr->id) &&
-                                    !src_to_ep.template intersects<M, R, T>(bodies))
-                                    continue;
-                                if (cam_ray.ibod_id != src_to_ep.ibod_id)
-                                    continue;
-                                *pix_f -= src.flux_at_point(end_point)*
-                                ((src_to_ep.normalise()*((end_point - bodies[cam_ray.ibod_id]->curr_pos).normalise())));
-                            }
-                        }
-                        // bye:
-                        // stars.insert(it, {sptr->id, sptr}); // is O(1) thanks to valid hint provided
                     }
-                    if (*pix_f > max_flux)
-                        max_flux = *pix_f;
+                }
+                for (std::thread &t : threads)
+                    t.join();
+                max_calculator.join();
+            } catch (const std::system_error &e) {
+                threads.clear();
+                try { // if the above raises an exception, here try to revert to row-by-row only
+                    for (unsigned int y = 0; y < bmp::height; ++y) {
+                        threads.emplace_back(&astro_scene::render_subp, this, 0, bmp::width, y, y + 1);
+                    }
+                    for (std::thread &t : threads)
+                        t.join();
+                    max_calculator.join();
+                } catch (const std::system_error &e2) {
+                    tot_threads = 1;
+                    std::latch once{1};
+                    thread_latch = &once;
+                    this->render_subp(0, bmp::width, 0, bmp::height);
+                    max_calculator.join();
+                    return false;
                 }
             }
-            /* now the entire arrays of colours and flux quantities have to be gone through again to multiply each
-             * colour by the normalised flux values (i.e., each flux value is divided by the maximum flux value
-             * (to yield a value between 0-1), and then multiplied by the corresponding colour at the given pixel) */
-            row_c = bmp::data;
-            row_f = fdata;
-            for (unsigned int y = 0; y < bmp::height; ++y, ++row_c, ++row_f) {
-                pix_c = *row_c;
-                pix_f = *row_f;
-                for (x = 0; x < bmp::width; ++x, ++pix_c, ++pix_f) {
-                    if (*pix_f != -1)
-                        *pix_c = (*pix_f/max_flux)*(*pix_c);
-                }
-            }
-            return (rendered = true);
+            return true; // true if multithreading could be performed
         }
         void clear_bodies() noexcept {
             bodies.clear();
