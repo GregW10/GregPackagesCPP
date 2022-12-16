@@ -868,7 +868,7 @@ namespace gtd {
             printf(CYAN_TXT_START "Iteration " BLUE_TXT_START "%llu" RED_TXT_START "/" MAGENTA_TXT_START
                    "%llu\r", step, iterations);
 #else
-            printf("Iteration %llu/%llu\r", steps, iterations);
+            printf("Iteration %llu/%llu\r", step, iterations);
 #endif
         }
         static inline void print_conclusion(const char *method, const time_t &start_time) {
@@ -1428,16 +1428,16 @@ namespace gtd {
             this->clear_evolution();
             return *this;
         }
-        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg>
-        friend std::ostream &operator<<(std::ostream &os, const system<m, r, t, prg> &sys);
+        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg, bool mrg>
+        friend std::ostream &operator<<(std::ostream &os, const system<m, r, t, prg, mrg> &sys);
         template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg1, bool prg2, bool mrg1, bool mrg2>
         friend system<m, r, t, prg1 && prg2, mrg1 && mrg2>operator+(const system<m, r, t, prg1, mrg1> &sys1,
                                                                     const system<m, r, t, prg2, mrg2> &sys2);
         template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool>
         friend class system;
     };
-    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, bool prg>
-    std::ostream &operator<<(std::ostream &os, const system<M, R, T, prg> &sys) {
+    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, bool prg, bool mrg>
+    std::ostream &operator<<(std::ostream &os, const system<M, R, T, prg, mrg> &sys) {
         typename std::vector<body<M, R, T>>::size_type count = sys.bods.size();
         os << "[gtd::system@" << &sys << ",num_bodies=" << count;
         if (count == 0) {

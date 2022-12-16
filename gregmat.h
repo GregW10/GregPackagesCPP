@@ -612,8 +612,8 @@ namespace gtd {
             if (angle_rad == 2*PI) {
                 return matrix<long double>(2, 2).make_identity();
             }
-            return matrix<long double>(2, 2) << std::cosl(angle_rad) << -std::sinl(angle_rad)
-                                             << std::sinl(angle_rad) <<  std::cosl(angle_rad);
+            return matrix<long double>(2, 2) << cosl(angle_rad) << -sinl(angle_rad)
+                                             << sinl(angle_rad) <<  cosl(angle_rad);
         }
         static inline matrix<long double> get_2D_rotation_matrix(const long double &angle_rad = PI) {
             return get_2D_rotation_matrix(angle_rad);
@@ -651,9 +651,9 @@ namespace gtd {
                 if (angle_rad == 2*PI) {
                     return matrix<long double>(3, 3).make_identity();
                 }
-                return matrix<long double>(3, 3) << 1 << 0                    << 0
-                                                 << 0 << std::cosl(angle_rad) << -std::sinl(angle_rad)
-                                                 << 0 << std::sinl(angle_rad) <<  std::cosl(angle_rad);
+                return matrix<long double>(3, 3) << 1 << 0               << 0
+                                                 << 0 << cosl(angle_rad) << -sinl(angle_rad)
+                                                 << 0 << sinl(angle_rad) <<  cosl(angle_rad);
             }
             else if (about == 'y') {
                 if (angle_rad == PI/2) {
@@ -674,9 +674,9 @@ namespace gtd {
                 if (angle_rad == 2*PI) {
                     return matrix<long double>(3, 3).make_identity();
                 }
-                return matrix<long double>(3, 3) <<  std::cosl(angle_rad) << 0 << std::sinl(angle_rad)
-                                                 <<  0                    << 1 << 0
-                                                 << -std::sinl(angle_rad) << 0 << std::cosl(angle_rad);
+                return matrix<long double>(3, 3) <<  cosl(angle_rad) << 0 << sinl(angle_rad)
+                                                 <<  0               << 1 << 0
+                                                 << -sinl(angle_rad) << 0 << cosl(angle_rad);
             }
             if (angle_rad == PI/2) { // returns an exact matrix for the following 4 cases (no f.p. rounding errors)
                 return matrix<long double>(3, 3) << 0 << -1 << 0
@@ -696,9 +696,9 @@ namespace gtd {
             if (angle_rad == 2*PI) {
                 return matrix<long double>(3, 3).make_identity();
             }
-            return matrix<long double>(3, 3) << std::cosl(angle_rad) << -std::sinl(angle_rad) << 0
-                                             << std::sinl(angle_rad) <<  std::cosl(angle_rad) << 0
-                                             << 0                    <<  0                    << 1;
+            return matrix<long double>(3, 3) << cosl(angle_rad) << -sinl(angle_rad) << 0
+                                             << sinl(angle_rad) <<  cosl(angle_rad) << 0
+                                             << 0               <<  0               << 1;
         }
         static inline matrix<T> get_3D_rotation_matrix(const long double &&angle_rad = __PI__, char about = 'z') {
             return get_3D_rotation_matrix(angle_rad, about);
