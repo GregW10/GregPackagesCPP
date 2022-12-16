@@ -204,8 +204,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return {this->x, this->y};
         }
         long double magnitude() const noexcept override {
-            return std::sqrtl(static_cast<long double>(x)*static_cast<long double>(x) + // best to avoid call to
-                              static_cast<long double>(y)*static_cast<long double>(y)); // std::pow() where possible
+            return sqrtl(static_cast<long double>(x)*static_cast<long double>(x) + // best to avoid call to
+                         static_cast<long double>(y)*static_cast<long double>(y)); // std::pow() where possible
         }
         vector2D<long double> unit_vector() const noexcept {
             if (this->is_zero()) { // no place for a division_by_zero exception if x and y are zero themselves
@@ -229,18 +229,15 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return {T{0}, this->y};
         }
         virtual vector2D<T> &rotate(const long double &&angle_in_rad = __PI__) {
-            this->apply(matrix<long double>::get_2D_rotation_matrix(angle_in_rad));
-            return *this;
+            return this->apply(matrix<long double>::get_2D_rotation_matrix(angle_in_rad));
         }
         virtual vector2D<T> &rotate(const long double &angle_in_rad = PI) {
-            this->apply(matrix<long double>::get_2D_rotation_matrix(angle_in_rad));
-            return *this;
+            return this->apply(matrix<long double>::get_2D_rotation_matrix(angle_in_rad));
         }
         // template <isNumWrapper U = T>
         virtual vector2D<T> &rotate_to(const vector2D<T> &new_direction) noexcept {
-            if (this->is_zero()) {
+            if (this->is_zero())
                 return *this;
-            }
             return this->rotate(angle_between(*this, new_direction));
         }
         // template <isNumWrapper U = T>
@@ -251,9 +248,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return this->x == T{0} && this->y == T{0};
         }
         virtual vector2D<T> &apply(const matrix<T> &transform) {
-            if (transform.mat.size() != 2 || transform.mat[0].size() != 2) {
+            if (transform.mat.size() != 2 || transform.mat[0].size() != 2)
                 throw invalid_matrix_format("Only 2x2 matrices can be applied to a vector2D object.");
-            }
             T org_x = this->x;
             T org_y = this->y;
             this->x = transform.mat[0][0]*org_x + transform.mat[0][1]*org_y;
@@ -1948,20 +1944,18 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return {this->x, this->y, this->z};
         }
         long double magnitude() const noexcept override {
-            return std::sqrtl(static_cast<long double>(this->x)*static_cast<long double>(this->x) +
-                              static_cast<long double>(this->y)*static_cast<long double>(this->y) +
-                              static_cast<long double>(this->z)*static_cast<long double>(this->z));
+            return sqrtl(static_cast<long double>(this->x)*static_cast<long double>(this->x) +
+                         static_cast<long double>(this->y)*static_cast<long double>(this->y) +
+                         static_cast<long double>(this->z)*static_cast<long double>(this->z));
         }
-        vector3D<long double> unit_vector() const noexcept {// no way around the method hiding apart from changing the
-            if (this->is_zero()) {                          // function's name
+        vector3D<long double> unit_vector() const noexcept { // no way around the method hiding apart from changing the
+            if (this->is_zero())                             // function's name
                 return {};
-            }
             return *this / this->magnitude();
         }
         vector3D<T> &normalise() noexcept override { // makes the vector a unit vector
-            if (this->is_zero()) {
+            if (this->is_zero())
                 return *this;
-            }
             long double mag = this->magnitude();
             this->x /= mag;
             this->y /= mag;
@@ -1981,60 +1975,46 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return {T{0}, this->y, this->z};
         }
         virtual vector3D<T> &rotate(const long double &&angle_in_rad = __PI__, char about = 'z') {
-            this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
-            return *this;
+            return this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
         }
         virtual vector3D<T> &rotate(const long double &angle_in_rad = PI, char about = 'z') {
-            this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
-            return *this;
+            return this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
         }
-        // template <isNumWrapper U = T>
         virtual vector3D<T> &rodrigues_rotate(const vector3D<T> &about, long double angle = PI) noexcept {
-            if (about.is_zero()) {
+            if (about.is_zero())
                 return *this;
-            }
             vector3D<long double> about_unit = about.unit_vector();
             vector3D<long double> cpy(*this); // this assignment is done in case T is not a long double
-            return *this = std::cosl(angle)*cpy + std::sinl(angle)*cross(about_unit, cpy) +
-                    (about_unit*cpy)*(1 - std::cosl(angle))*about_unit;
+            return *this = cosl(angle)*cpy + sinl(angle)*cross(about_unit, cpy) +
+                    (about_unit*cpy)*(1 - cosl(angle))*about_unit;
         }
-        // template <isNumWrapper U = T>
         virtual vector3D<T> &rodrigues_rotate(const vector3D<T> &&about, long double angle = PI) noexcept {
             return this->rodrigues_rotate(about, angle);
         }
-        // template <isNumWrapper U = T>
         virtual vector3D<T> &rotate_to(const vector3D<T> &new_direction) noexcept {
-            if (this->is_zero()) {
+            if (this->is_zero())
                 return *this;
-            }
             return this->rodrigues_rotate(cross(*this, new_direction), angle_between(*this, new_direction));
         }
-        // template <isNumWrapper U = T>
         virtual vector3D<T> &rotate_to(const vector3D<T> &&new_direction) noexcept {
             return this->rotate_to(new_direction);
         }
-        // template <isNumWrapper U = T>
         virtual vector3D<T> &rodrigues_rotate(const vector2D<T> &about, long double angle = PI) noexcept {
-            if (about.is_zero()) {
+            if (about.is_zero())
                 return *this;
-            }
             vector2D<long double> about_unit = about.unit_vector();
             vector3D<long double> cpy(*this);
-            return *this = std::cosl(angle)*cpy + std::sinl(angle)*cross(about_unit, cpy) +
-                    (about_unit*cpy)*(1 - std::cosl(angle))*about_unit;
+            return *this = cosl(angle)*cpy + sinl(angle)*cross(about_unit, cpy) +
+                    (about_unit*cpy)*(1 - cosl(angle))*about_unit;
         }
-        // template <isNumWrapper U = T>
         virtual vector3D<T> &rodrigues_rotate(const vector2D<T> &&about, long double angle = PI) noexcept {
             return this->rodrigues_rotate(about, angle);
         }
-        // template <isNumWrapper U = T>
         vector3D<T> &rotate_to(const vector2D<T> &new_direction) noexcept override {
-            if (this->is_zero()) {
+            if (this->is_zero())
                 return *this;
-            }
             return this->rodrigues_rotate(cross(*this, new_direction), angle_between(*this, new_direction));
         }
-        // template <isNumWrapper U = T>
         vector3D<T> &rotate_to(const vector2D<T> &&new_direction) noexcept override {
             return this->rotate_to(new_direction);
         }
@@ -2042,9 +2022,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return this->x == T{0} && this->y == T{0} && this->z == T{0};
         }
         vector3D<T> &apply(const matrix<T> &transform) override {
-            if (transform.mat.size() != 3 || transform.mat[0].size() != 3) {
+            if (transform.mat.size() != 3 || transform.mat[0].size() != 3)
                 throw invalid_matrix_format("Only 3x3 matrices can be applied to a vector3D object.");
-            }
             T org_x = this->x;
             T org_y = this->y;
             T org_z = this->z;
@@ -4568,82 +4547,82 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector2D<U> &vec1, const vector2D<V> &vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     } // have to check for less than -1 or greater than 1 because of f. p. rounding errors
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector2D<U> &vec1, const vector2D<V> &&vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     }
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     }
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &&vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     }
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector3D<U> &vec1, const vector2D<V> &vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     }
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector3D<U> &vec1, const vector2D<V> &&vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     }
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     }
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &&vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     }
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector2D<U> &vec1, const vector3D<V> &vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     }
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector2D<U> &vec1, const vector3D<V> &&vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     }
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     }
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &&vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     }
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector3D<U> &vec1, const vector3D<V> &vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     }
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector3D<U> &vec1, const vector3D<V> &&vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     }
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     }
     template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
     long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &&vec2) {
         long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : std::acosl(cosine_of_angle));
+        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
     }
     inline long double rad_to_deg(const long double &radians) {
         return (radians*180)/PI;

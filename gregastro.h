@@ -9,6 +9,7 @@
 #include <random>
 #include <thread>
 #include <latch>
+#include <condition_variable>
 
 #include "gregbod.h"
 #include "gregbmp.h"
@@ -101,6 +102,7 @@ namespace gtd {
         LenT l{0}; // length of the ray
         unsigned long long ibod_id = -1; // intersected body id - a ray stores the id of the body it intersects with
         bool intersected = false;
+        mutable vector3D<DirT> normal; // set during the reaches() method - used internally by astro_scene
         ray<PosT, DirT, LenT> &calc() {
             if (*this == zero)
                 throw no_direction("A ray's direction cannot be a zero vector, "
@@ -297,6 +299,10 @@ namespace gtd {
             l = min_l;
             ibod_id = closest_body_id;
             return (intersected = true);
+        }
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
+        bool reaches(const body<M, R, T>* b, const vector3D<PosT> &point_on_body) const {
+            return ibod_id == b->id && (this->normal = (point_on_body - b->curr_pos))*(*this) <= 0;
         }
         auto end_point() const {
             return pos + (*this)*l;
@@ -1009,10 +1015,10 @@ namespace gtd {
                             if (!src_to_ep.template intersects<M, R, T>(stars, sptr->id) &&
                                 !src_to_ep.template intersects<M, R, T>(bodies)) // in case of f.p. error
                                 continue;
-                            if (cam_ray.ibod_id != src_to_ep.ibod_id) // light ray does not make it to point on body
+                            if (!src_to_ep.reaches(bodies[cam_ray.ibod_id], end_point)) // point is behind light source
                                 continue;
                             *pix_f -= sptr->sources[0].flux_at_point(end_point)*
-                                ((src_to_ep.normalise()*((end_point - bodies[cam_ray.ibod_id]->curr_pos).normalise())));
+                                ((src_to_ep.normalise()*(src_to_ep.normal.normalise())));
                             /* value subtracted since the normal and light ray always have an obtuse angle between */
                         }
                         else {
@@ -1023,10 +1029,10 @@ namespace gtd {
                                 if (!src_to_ep.template intersects<M, R, T>(stars, sptr->id) &&
                                     !src_to_ep.template intersects<M, R, T>(bodies))
                                     continue;
-                                if (cam_ray.ibod_id != src_to_ep.ibod_id)
+                                if (!src_to_ep.reaches(bodies[cam_ray.ibod_id], end_point))
                                     continue;
                                 *pix_f -= src.flux_at_point(end_point)*
-                                ((src_to_ep.normalise()*((end_point - bodies[cam_ray.ibod_id]->curr_pos).normalise())));
+                                ((src_to_ep.normalise()*(src_to_ep.normal.normalise())));
                             }
                         }
                     }
@@ -1305,7 +1311,8 @@ namespace gtd {
             have_max = false;
             thread_max_fluxes.clear();
             std::thread max_calculator{&astro_scene::set_max_flux, this};
-            if ((tot_threads = std::thread::hardware_concurrency()) == 0) {// in case of error - perform single-threaded
+            /* in case of any error below, single-threaded execution will be reverted to */
+            if ((tot_threads = std::thread::hardware_concurrency()) == 0 || tot_threads == 1) {
                 tot_threads = 1;
                 std::latch once{1};
                 thread_latch = &once;
@@ -1319,31 +1326,25 @@ namespace gtd {
              * on my home computer), then the image is only split up rows, which are then dealt with separately in each
              * thread - however, if threads > height (could only be the case for a really good processing unit), then
              * the image starts to be split up vertically as well */
-            tot_threads = 2000;
             std::latch t_latch{tot_threads};
             thread_latch = &t_latch;
             std::vector<std::pair<long double, long double>> ranges;
             std::vector<std::thread> threads;
-            std::cout << "Hello" << std::endl;
-            std::cout << "threads: " << tot_threads << std::endl;
-            long double interval;
             long double bottom_or_left = 0; // most likely bottom
             long double top_or_right = 0; // ... and top
             unsigned int counter = 1;
             if (tot_threads <= bmp::height) { // on most home computers
-                interval = ((long double) bmp::height)/tot_threads;
-                std::cout << "interval: " << interval << std::endl;
+                ranges.reserve(tot_threads);
+                long double y_interval;
+                y_interval = ((long double) bmp::height)/tot_threads;
                 while (top_or_right <= bmp::height) {
-                    top_or_right = interval*counter++;
+                    top_or_right = y_interval*counter++;
                     ranges.emplace_back(bottom_or_left, top_or_right);
                     bottom_or_left = top_or_right;
                 }
-                std::cout << "second time" << std::endl;
                 if (ranges.size() > tot_threads) // in case f.p. error above caused the loop to execute an extra time
-                    ranges.pop_back(), printf("popped\n");
+                    ranges.pop_back();
                 ranges.back().second = bmp::height; // again, in case of f.p. error
-                for (const auto &r : ranges)
-                    std::cout << r.first << " " << r.second << std::endl;
                 try {
                     for (const auto &[y_start, y_end] : ranges) {
                         threads.emplace_back(&astro_scene::render_subp, this, 0, bmp::width, y_start, y_end);
@@ -1362,61 +1363,65 @@ namespace gtd {
                 return true;
             }
             // for a supercomputer or excellent GPU (such as in gaming setup)
-            std::vector<std::pair<long double, long double>> end_ranges;
-            unsigned int intervals = (tot_threads - bmp::height) % bmp::height;
-            bool same = false;
-            if (!intervals)
-                same = intervals = (tot_threads - bmp::height) / bmp::height;
-            interval = ((long double) bmp::width)/(intervals);
-            std::cout << "interval: " << interval << std::endl;
+            unsigned int end_beg_row; // less than
+            unsigned int num_beg_x_intervals;
+            unsigned int num_end_x_intervals;
+            long double beg_x_interval;
+            if ((end_beg_row = tot_threads % bmp::height)) {
+                num_end_x_intervals = tot_threads/bmp::height;
+                num_beg_x_intervals = num_end_x_intervals + 1;
+            }
+            else {
+                num_beg_x_intervals = tot_threads/bmp::height;
+                end_beg_row = bmp::height;
+            }
+            ranges.reserve(num_beg_x_intervals);
+            beg_x_interval = bmp::width/num_beg_x_intervals;
             bottom_or_left = 0;
             top_or_right = 0;
             while (top_or_right <= bmp::width) {
-                top_or_right = interval*counter++;
+                top_or_right = beg_x_interval*counter++;
                 ranges.emplace_back(bottom_or_left, top_or_right);
                 bottom_or_left = top_or_right;
             }
-            if (ranges.size() > intervals)
-                ranges.pop_back(), printf("popped\n");
+            if (ranges.size() > num_beg_x_intervals)
+                ranges.pop_back();
             ranges.back().second = bmp::width;
-            if (!same) {
-                interval = ((long double) bmp::width)/(intervals - 1);
+            std::vector<std::pair<long double, long double>> end_ranges(0); // unlikely not to be used
+            if (end_beg_row < bmp::height) {
+                long double end_x_interval = bmp::width/num_end_x_intervals;
                 bottom_or_left = 0;
                 top_or_right = 0;
                 counter = 1;
                 while (top_or_right <= bmp::width) {
-                    top_or_right = interval*counter++;
+                    top_or_right = end_x_interval*counter++;
                     end_ranges.emplace_back(bottom_or_left, top_or_right);
                     bottom_or_left = top_or_right;
                 }
-                if (end_ranges.size() > intervals)
-                    end_ranges.pop_back(), printf("popped\n");
+                if (end_ranges.size() > num_end_x_intervals)
+                    end_ranges.pop_back();
                 end_ranges.back().second = bmp::width;
             }
-            for (const auto &[x_start, x_end] : ranges) {
-                std::cout << "ranges: " << x_start << " " << x_end << std::endl;
-            }
-            for (const auto &[x_start, x_end] : end_ranges) {
-                std::cout << "end_ranges: " << x_start << " " << x_end << std::endl;
-            }
             try {
-                for (unsigned int y = 0; y < intervals; ++y) {
-                    for (const auto &[x_start, x_end] : ranges) {
-                        threads.emplace_back(&astro_scene::render_subp, this, x_start, x_end, y, y + 1);
-                        std::cout << "added" << std::endl;
+                unsigned int y;
+                unsigned int next_y;
+                for (const auto &[x_start, x_end] : ranges) {
+                    for (y = 0, next_y = 1; y < end_beg_row; ++y, ++next_y) {
+                        threads.emplace_back(&astro_scene::render_subp, this, x_start, x_end, y, next_y);
                     }
                 }
-                if (!same) {
-                    for (unsigned int y = intervals; y < bmp::height; ++y) {
-                        for (const auto &[x_start, x_end] : end_ranges) {
-                            threads.emplace_back(&astro_scene::render_subp, this, x_start, x_end, y, y + 1);
-                        }
+                for (const auto &[x_start, x_end] : end_ranges) { // simply won't execute if end_ranges is empty
+                    for (y = end_beg_row, next_y = end_beg_row + 1; y < bmp::height; ++y, ++next_y) {
+                        threads.emplace_back(&astro_scene::render_subp, this, x_start, x_end, y, next_y);
                     }
                 }
                 for (std::thread &t : threads)
                     t.join();
                 max_calculator.join();
             } catch (const std::system_error &e) {
+                tot_threads = bmp::height;
+                std::latch again{tot_threads};
+                thread_latch = &again;
                 threads.clear();
                 try { // if the above raises an exception, here try to revert to row-by-row only
                     for (unsigned int y = 0; y < bmp::height; ++y) {
