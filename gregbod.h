@@ -1057,9 +1057,8 @@ namespace gtd {
                         if constexpr (prog)
                             this->print_progress(steps);
                     }
-                    if constexpr (prog) {
+                    if constexpr (prog)
                         this->print_conclusion("Euler", start);
-                    }
                 }
             }
             else if ((integration_method & modified_euler) == modified_euler) {
@@ -1096,9 +1095,8 @@ namespace gtd {
                         if constexpr (prog)
                             this->print_progress(steps);
                     }
-                    if constexpr (prog) {
+                    if constexpr (prog)
                         this->print_conclusion("Modified Euler", start);
-                    }
                 }
             }
             else if ((integration_method & midpoint) == midpoint) {
@@ -1133,9 +1131,8 @@ namespace gtd {
                         if constexpr (prog)
                             this->print_progress(steps);
                     }
-                    if constexpr (prog) {
+                    if constexpr (prog)
                         this->print_conclusion("Midpoint method", start);
-                    }
                 }
             }
             else if ((integration_method & leapfrog_kdk) == leapfrog_kdk) {
@@ -1435,6 +1432,9 @@ namespace gtd {
                                                                     const system<m, r, t, prg2, mrg2> &sys2);
         template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool>
         friend class system;
+        template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
+                  isNumWrapper, bool>
+        friend class astro_scene;
     };
     template <isNumWrapper M, isNumWrapper R, isNumWrapper T, bool prg, bool mrg>
     std::ostream &operator<<(std::ostream &os, const system<M, R, T, prg, mrg> &sys) {

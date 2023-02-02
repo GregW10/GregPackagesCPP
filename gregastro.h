@@ -670,12 +670,12 @@ namespace gtd {
         }
         camera<PosT, DirT, DistT> &set_position(const vector3D<PosT> &new_position) {
             pos = new_position;
-            calc_all();
+            this->calc_all();
             return *this;
         }
         camera<PosT, DirT, DistT> &set_direction(const vector3D<DirT> &new_direction) {
             dir = new_direction;
-            calc_all();
+            this->calc_all();
             return *this;
         }
         camera<PosT, DirT, DistT> &set_rotation(const long double &new_rotation) {
@@ -688,16 +688,17 @@ namespace gtd {
         }
         camera<PosT, DirT, DistT> &set_image_dimensions(const image_dimensions &new_dimensions) {
             dims = new_dimensions;
+            this->calc_all();
             return *this;
         }
         camera<PosT, DirT, DistT> &set_position(vector3D<PosT> &&new_position) {
             pos = std::move(new_position);
-            calc_all();
+            this->calc_all();
             return *this;
         }
         camera<PosT, DirT, DistT> &set_direction(vector3D<DirT> &&new_direction) {
             dir = std::move(new_direction);
-            calc_all();
+            this->calc_all();
             return *this;
         }
         camera<PosT, DirT, DistT> &set_rotation(const long double &&new_rotation) {
@@ -710,10 +711,11 @@ namespace gtd {
         }
         camera<PosT, DirT, DistT> &set_image_dimensions(const image_dimensions &&new_dimensions) {
             dims = new_dimensions;
+            this->calc_all();
             return *this;
         }
-        void recalculate() {
-            calc_all();
+        void recalculate() { // useless method, pretty much
+            this->calc_all();
         }
         camera<PosT, DirT, DistT> &invert_rays(bool invert) {
             invert_ray = invert;
@@ -846,7 +848,7 @@ namespace gtd {
         using cam_t = camera<PosT, DirT, DistT>;
         using star_t = star<M, R, T, PosT, DirT, LenT, LumT>;
         image_dimensions dims{bmp::width, bmp::height};
-        unsigned int num_stars = 4*log(bmp::width*bmp::height);
+        unsigned int num_decor_stars = 4*log(bmp::width*bmp::height);
         long double star_radius = sqrt(bmp::width*bmp::width)/1000.0l; // in pixels
         std::vector<point> star_points;
         /* indeed, all the std::maps below lead to a larger memory footprint, but, they also allow certain algorithms
@@ -900,8 +902,8 @@ namespace gtd {
             tot_map.insert(bodies.begin(), bodies.end());
             tot_map.insert(stars.begin(), stars.end());
         }
-        void create_stars(bool reset) {
-            if (!num_stars)
+        void create_decor_stars(bool reset) {
+            if (!num_decor_stars)
                 return;
             sc_clr = colors::white;
             circle c;
@@ -910,7 +912,7 @@ namespace gtd {
             if (reset) {
                 point p;
                 star_points.clear();
-                for (unsigned int i = 0; i < num_stars; ++i) {
+                for (unsigned int i = 0; i < num_decor_stars; ++i) {
                     p.x = r() % bmp::width;
                     p.y = r() % bmp::height;
                     c.set_pos(p);
@@ -925,7 +927,7 @@ namespace gtd {
             }
         }
         void alloc() {
-            if (!modulatedBrightness)
+            if constexpr (!modulatedBrightness)
                 return;
             dealloc();
             fdata = new LumT*[bmp::height];
@@ -1177,6 +1179,12 @@ namespace gtd {
                 return star_clrs[id];
             throw invalid_id_error(id);
         }
+        typename std::map<const unsigned long long, const bod_t*>::size_type num_bodies() {
+            return bodies.size();
+        }
+        typename std::map<const unsigned long long, const star_t*>::size_type num_stars() {
+            return stars.size();
+        }
         bool set_body_clr(const unsigned long long &id, color col) {
             if (!bodies.contains(id))
                 return false;
@@ -1198,11 +1206,11 @@ namespace gtd {
         bool set_num_decor_stars(unsigned int num) {
             if (num*star_radius*star_radius >= bmp::width*bmp::height)
                 return false;
-            num_stars = num;
+            num_decor_stars = num;
             return true;
         }
         bool set_decor_star_rad(long double rad) {
-            if (num_stars*rad*rad >= bmp::width*bmp::height || rad < 0)
+            if (num_decor_stars*rad*rad >= bmp::width*bmp::height || rad < 0)
                 return false;
             star_radius = rad;
             return true;
@@ -1274,6 +1282,13 @@ namespace gtd {
         void add_stars(const std::vector<star_t*> &&new_stars) {//with these r-value overloads, init. syntax may be used
             this->add_stars(new_stars);
         }
+        template <bool progress = false, bool merge_if_overlapping = false>
+        void add_system(const system<M, R, T, progress, merge_if_overlapping> &sy) {
+            for (const bod_t &b : sy.bods) {
+                bodies.emplace(b.id, &b);
+                body_clrs.emplace(b.id, col_gen_b());
+            }
+        }
         void assign_bodies(const std::vector<bod_t*> &new_bodies) {
             put_bodies(new_bodies, true);
         }
@@ -1306,7 +1321,7 @@ namespace gtd {
                  * guarantees not to modify a followed camera (hence why pcam points to a const camera) */
                 throw camera_dimensions_error("The camera dimensions do not equal astro_scene dimensions.\n");
             rendered = true;
-            this->create_stars(reset_star_positions);
+            this->create_decor_stars(reset_star_positions);
             this->populate_tot_map();
             have_max = false;
             thread_max_fluxes.clear();
@@ -1558,6 +1573,13 @@ namespace gtd {
             return dist(mt)*col;
         }
     }
+    typedef ray<long double, long double, long double> ray_t;
+    typedef light_src<long double, long double, long double, long double> src_t;
     typedef star<long double, long double, long double, long double, long double, long double, long double> star_t;
+    typedef camera<long double, long double, long double> cam;
+    typedef astro_scene<long double, long double, long double, long double, long double, long double, long double,
+                        long double, true> asc;
+    typedef astro_scene<long double, long double, long double, long double, long double, long double, long double,
+                        long double, false> asc_f;
 }
 #endif
