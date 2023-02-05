@@ -1162,15 +1162,15 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &vec2);
         template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
         friend long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &&vec2);
-        template <isNumWrapper U>
+        template <isNumWrapper>
         friend class vector2D;
-        template <isNumWrapper U>
+        template <isNumWrapper>
         friend class vector3D;
-        template <isNumWrapper M, isNumWrapper R, isNumWrapper U>
+        template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class body;
-        template <isNumWrapper PosT, isNumWrapper DirT, isNumWrapper LenT>
+        template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class ray;
-        template <isNumWrapper PosT, isNumWrapper DirT, isNumWrapper DistT>
+        template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class camera;
     };
     template <isNumWrapper U>
@@ -3190,17 +3190,17 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &vec2);
         template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
         friend long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &&vec2);
-        template <isNumWrapper U>
+        template <isNumWrapper>
         friend class vector2D;
-        template <isNumWrapper U>
+        template <isNumWrapper>
         friend class vector3D;
-        template <isNumWrapper M, isNumWrapper R, isNumWrapper U>
+        template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class body;
-        template <isNumWrapper PosT, isNumWrapper DirT, isNumWrapper LenT>
+        template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class ray;
-        template <isNumWrapper PosT, isNumWrapper DirT, isNumWrapper DistT>
+        template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class camera;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int>
         friend class system;
     };
     template <isNumWrapper U>

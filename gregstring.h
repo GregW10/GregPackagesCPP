@@ -851,7 +851,7 @@ namespace gtd {
                 }
                 pos = length_w_null - 1;
             }
-            if (pos == 0) {
+            if (!pos) {
                 push_front(ch);
                 return *this;
             }
@@ -867,9 +867,8 @@ namespace gtd {
                 } else {
                     char *beg = string - 1;
                     char *ptr = string;
-                    while (ptr <= to_place) {
+                    while (ptr <= to_place)
                         *beg++ = *ptr++;
-                    }
                     --string;
                     --space_front;
                     *--to_place = ch;
@@ -879,71 +878,50 @@ namespace gtd {
             }
             return *this;
         }
-
         String &to_upper() noexcept {
-            if (is_empty) {
+            if (is_empty)
                 return *this;
-            }
-            char *ptr = string + length_w_null - 2;
-            while (ptr >= string) {
-                if (*ptr >= 97 && *ptr <= 122) {
+            char *ptr = string + length_w_null - 1;
+            while (--ptr >= string)
+                if (*ptr >= 97 && *ptr <= 122)
                     *ptr -= 32;
-                }
-                --ptr;
-            }
             return *this;
         }
-
         String &to_lower() noexcept {
-            if (is_empty) {
+            if (is_empty)
                 return *this;
-            }
-            char *ptr = string + length_w_null - 2;
-            while (ptr >= string) {
-                if (*ptr >= 65 && *ptr <= 90) {
+            char *ptr = string + length_w_null - 1;
+            while (--ptr >= string)
+                if (*ptr >= 65 && *ptr <= 90)
                     *ptr += 32;
-                }
-                --ptr;
-            }
             return *this;
         }
-
         bool isnumeric() const noexcept {
-            if (is_empty) {
+            if (is_empty)
                 return false;
-            }
             char *start = string;
             const char *final = start + length_w_null - 1;
-            while (start != final) {
-                if (!isdigit_c(*start++)) {
+            while (start != final)
+                if (!isdigit_c(*start++))
                     return false;
-                }
-            }
             return true;
         }
-
         bool contains(char ch) const noexcept {
-            if (is_empty) {
+            if (is_empty)
                 return false;
-            }
             char *start = string;
             const char *final = start + length_w_null - 1;
-            while (start != final) {
-                if (*start++ == ch) {
+            while (start != final)
+                if (*start++ == ch)
                     return true;
-                }
-            }
             return false;
         }
-
         bool contains(const char *str) const noexcept {
-            if (is_empty || str == nullptr || *str == 0 || strlen_c(str) > length_w_null - 1) {
-                return false;
-            }
             size_t length = strlen_c(str);
-            if (length == length_w_null - 1) {
+            if (is_empty || str == nullptr || !*str || length > length_w_null - 1)
+                return false;
+            if (length == length_w_null - 1)
                 return *this == str;
-            }
             const char *sptr;
             const char *ptr = string;
             const char *end_ptr = string + length_w_null - length;
@@ -952,30 +930,25 @@ namespace gtd {
             size_t count;
             for (; ptr <= end_ptr; ++ptr) {
                 for (count = 0, i = 0, sptr = str, vptr = ptr; i < length; ++i, ++sptr, ++vptr) {
-                    if (*sptr != *vptr) {
+                    if (*sptr != *vptr)
                         break;
-                    }
                     ++count;
                 }
-                if (count == length) {
+                if (count == length)
                     return true;
-                }
             }
             return false;
         }
-
         size_t strip(char ch = ' ') noexcept { // returns the number of characters removed
-            if (is_empty || !contains(ch) || ch == '\0') {
+            if (is_empty || !contains(ch) || !ch)
                 return 0;
-            }
             char *start = string;
             size_t temp_len = length_w_null - 1;
             size_t count = 0;
             while (*start) {
                 if (*start == ch) {
-                    for (int i = 0; i < temp_len; ++i) {
+                    for (int i = 0; i < temp_len; ++i)
                         *(start + i) = *(start + i + 1);
-                    }
                     --length_w_null;
                     --space_back;
                     start = string;
@@ -986,53 +959,43 @@ namespace gtd {
                 ++start;
                 --temp_len;
             }
-            if (length_w_null < 2) {
+            if (length_w_null < 2)
                 this->clear();
-            }
             return count;
         }
-
         size_t strip(const char *characters) noexcept {
-            if (is_empty) {
+            if (is_empty)
                 return 0;
-            }
             size_t count = 0;
-            while (*characters) {
+            while (*characters)
                 count += strip(*characters++);
-            }
             return count;
         }
-
         size_t remove(char ch) noexcept {
-            if (is_empty || !contains(ch) || ch == '\0') {
+            if (is_empty || !contains(ch) || !ch)
                 return nopos;
-            }
             char *ptr = string;
             size_t pos = 0;
             while (true) {
                 if (*ptr == ch) {
-                    for (; *ptr != '\0'; ++ptr) {
+                    for (; *ptr; ++ptr)
                         *ptr = *(ptr + 1);
-                    }
                     --space_back;
                     --length_w_null;
-                    if (length_w_null == 1) {
+                    if (length_w_null == 1)
                         this->clear();
-                    }
                     return pos;
                 }
                 ++ptr;
                 ++pos;
             }
         }
-
         size_t remove(const char *str) {
             size_t len = strlen_c(str);
-            if (is_empty || str == nullptr || *str == '\0' || length_w_null - 1 < len) {
+            if (is_empty || str == nullptr || !*str || length_w_null - 1 < len)
                 return nopos;
-            }
             if (length_w_null - 1 == len) {
-                if (strcmp_c(string, str) == 0) {
+                if (!strcmp_c(string, str)) {
                     this->clear();
                     return 0;
                 }
@@ -1052,7 +1015,7 @@ namespace gtd {
                 }
                 *sub = 0;
                 sub -= len;
-                if (strcmp_c(str, sub) == 0) {
+                if (!strcmp_c(str, sub)) {
                     for (size_t i = 0; i < len; ++i) {
                         ptr = optr;
                         for (; *ptr; ++ptr) {
@@ -1061,9 +1024,8 @@ namespace gtd {
                         --space_back;
                         --length_w_null;
                     }
-                    if (length_w_null == 1) {
+                    if (length_w_null == 1)
                         this->clear();
-                    }
                     delete[] sub;
                     return pos;
                 }
@@ -1073,88 +1035,70 @@ namespace gtd {
             delete[] sub;
             return nopos;
         }
-
         size_t r_remove(char ch) noexcept {
-            if (is_empty || !contains(ch) || ch == '\0') {
+            if (is_empty || !contains(ch) || !ch)
                 return nopos;
-            }
             char *ptr = string + length_w_null - 2;
             size_t pos = length_w_null - 2;
             while (true) {
                 if (*ptr == ch) {
-                    for (; *ptr != '\0'; ++ptr) {
+                    for (; *ptr; ++ptr)
                         *ptr = *(ptr + 1);
-                    }
                     --space_back;
                     --length_w_null;
-                    if (length_w_null == 1) {
+                    if (length_w_null == 1)
                         this->clear();
-                    }
                     return pos;
                 }
                 --ptr;
                 --pos;
             }
         }
-
         std::vector<String> split(char delim = 32) const {
-            if (is_empty) {
+            if (is_empty)
                 return {};
-            }
-            if (!contains(delim)) {
+            if (!contains(delim))
                 return {string};
-            }
             std::vector<String> retvec;
             char *ptr = string;
-            gtd::String part(true);
+            gtd::String part{true};
             while (*ptr) {
                 while (*ptr != delim && *ptr) {
                     part.push_back(*ptr);
                     ++ptr;
                 }
-                if (!part.empty()) {
+                if (!part.empty())
                     retvec.push_back(part);
-                }
                 part.clear();
                 ++ptr;
             }
             return retvec;
         }
-
         bool startswith(const char *beg) const noexcept {
-            if (!contains(beg)) {
+            if (!contains(beg))
                 return false;
-            }
-            return strncmp_c(string, beg, strlen_c(beg)) == 0;
+            return !strncmp_c(string, beg, strlen_c(beg));
         }
-
         bool endswith(const char *end) const noexcept {
-            if (!contains(end)) {
+            if (!contains(end))
                 return false;
-            }
-            const char *str = string + length_w_null - strlen_c(end) - 1;
-            return strcmp_c(str, end) == 0;
+            return !strcmp_c(string + length_w_null - strlen_c(end) - 1, end);
         }
-
-        int adopt_text(const char *path) noexcept {
-            if (path == nullptr || *path == 0) {
-                return -1;
-            }
+        bool adopt_text(const char *path) noexcept {
+            if (path == nullptr || !*path)
+                return false;
             struct stat buffer{};
             FILE *fp;
-            if (stat(path, &buffer) == -1 || S_ISDIR(buffer.st_mode) || buffer.st_size == 0 ||
-                (fp = fopen(path, "r")) == nullptr || fgetc(fp) == EOF) {
-                return -1;
-            }
+            if (stat(path, &buffer) == -1 || S_ISDIR(buffer.st_mode) || !buffer.st_size ||
+                (fp = fopen(path, "r")) == nullptr || fgetc(fp) == EOF)
+                return false;
             shrunk = false;
-            if (!is_empty) {
+            if (!is_empty)
                 this->clear();
-            }
-            fseek(fp, 0, SEEK_SET);
-            size_t count = 0;
-            while (fgetc(fp) != EOF) { // instead of using struct stat, because st_size would include EOF & others
-                ++count;
-            }
+            fseek(fp, 0, SEEK_END);
+            size_t count = ftell(fp);
+            // while (fgetc(fp) != EOF) // instead of using struct stat, because st_size would include EOF & others
+            //     ++count;
             fseek(fp, 0, SEEK_SET);
             length_w_null = count + 1;
             set_size(false);
@@ -1166,13 +1110,11 @@ namespace gtd {
             memset_c(data, 0, size);
             fread(string, sizeof(char), count, fp);
             fclose(fp);
-            return 0;
+            return true;
         }
-
-        size_t word_count() {
-            if (is_empty) {
+        size_t word_count() const noexcept { // NEEDS WORK
+            if (is_empty)
                 return 0;
-            }
             size_t word_count = 0;
             size_t word_len = 0;
             bool has_backspace = false;
@@ -1182,24 +1124,19 @@ namespace gtd {
                 if (*ptr >= 33 && *ptr <= 126) {
                     word_len = 1;
                     ++word_count;
-                    while (*(++ptr) >= 33 && *ptr <= 126) {
+                    while (*(++ptr) >= 33 && *ptr <= 126)
                         ++word_len;
-                    }
-                    if (*ptr == 0) {
+                    if (!*ptr)
                         return word_count;
-                    }
-                    if (*ptr == '\b' && (*(ptr + 1) >= 33 && *(ptr + 1) <= 126)) {
+                    if (*ptr == '\b' && (*(ptr + 1) >= 33 && *(ptr + 1) <= 126))
                         --word_count;
-                    }
                 }
                 ++ptr;
             }
         }
-
         size_t shift_center() noexcept {
-            if (is_empty || space_back == space_front || space_back == space_front + 1) {
+            if (is_empty || space_back == space_front || space_back == space_front + 1)
                 return 0;
-            }
             size_t move_by = space_back > space_front ? (is_even(length_w_null) ? (space_back - space_front) / 2 :
                     (space_back - space_front - 1) / 2) : (is_even(length_w_null) ? (space_front - space_back) / 2 :
                             (space_front - space_back + 1) / 2);
@@ -1227,9 +1164,8 @@ namespace gtd {
             for (size_t i = 0; i < move_by; ++i) {
                 first_ptr = fixed_first;
                 less_ptr = first_ptr - 1;
-                for (; first_ptr <= last_ptr; ++first_ptr, ++less_ptr) {
+                for (; first_ptr <= last_ptr; ++first_ptr, ++less_ptr)
                     *less_ptr = *first_ptr;
-                }
                 --fixed_first;
                 --last_ptr;
             }
@@ -1238,11 +1174,9 @@ namespace gtd {
             space_back += move_by;
             return move_by;
         }
-
         size_t shift_left() noexcept {
-            if (is_empty || space_front == 0) {
+            if (is_empty || !space_front)
                 return 0;
-            }
             char *less_ptr = string - 1;
             char *fixed_ptr = string;
             char *ptr = string;
@@ -1263,11 +1197,9 @@ namespace gtd {
             string = data;
             return retval;
         }
-
         size_t shift_right() noexcept {
-            if (is_empty || space_back == 0) {
+            if (is_empty || !space_back)
                 return 0;
-            }
             char *fixed_beg = string;
             char *ptr = string + length_w_null - 1;
             char *less_ptr = ptr - 1;
@@ -1288,31 +1220,29 @@ namespace gtd {
             space_front = size - length_w_null;
             return retval;
         }
-
-        size_t transform_chars(std::function<void(char&)> func) { // returns the number of characters altered
-            if (is_empty) { //                 ^^^^^^ func not passed as reference in case of r-value lambda expressions
+        size_t transform_chars(const std::function<void(char&)> &func) { // returns the number of characters altered
+            if (is_empty)
                 return 0;
-            }
             char c;
             size_t transformed_cnt = 0;
             for (char &ch : *this) {
                 c = ch;
                 func(ch);
-                if (ch == 0) {
+                if (!ch) {
                     ch = c;
                     continue;
                 }
-                if (c != ch) {
+                if (c != ch)
                     ++transformed_cnt;
-                }
             }
             return transformed_cnt;
         }
-
-        size_t transform_words(std::function<const char *(char*)> func, bool check_punctuation = true) { // returns the number of words altered
-            if (is_empty || !contains(32)) {
+        size_t transform_chars(const std::function<void(char&)> &&func) { // to allow lambda expressions
+            return transform_chars(func);
+        } // NEEDS LOTS OF WORK (below)
+        size_t transform_words(const std::function<const char *(char*)> &func, bool check_punctuation = true) { // returns the number of words altered
+            if (is_empty || !contains(32))
                 return 0;
-            }
             char *start_ptr = string;
             char *ptr = string;
             char *start_of_word = nullptr;
@@ -1338,9 +1268,8 @@ namespace gtd {
                 start_of_word = ptr;
                 word_len = 0;
                 while (*ptr && *ptr != 32) {
-                    if (is_punc(*ptr)) {
+                    if (is_punc(*ptr))
                         ++num_puncs;
-                    }
                     ++word_len;
                     ++ptr;
                 }
@@ -1376,12 +1305,11 @@ namespace gtd {
                 }
                 word = new char[word_len + 1];
                 word_copy = word;
-                for (size_t i = 0; i < word_len; ++i, ++start_of_word) {
+                for (size_t i = 0; i < word_len; ++i, ++start_of_word)
                     *(word + i) = *start_of_word;
-                }
                 *(word + word_len) = 0;
                 new_word = func(word);
-                if (strcmp_c(new_word, word) == 0) { // same word, so same length
+                if (!strcmp_c(new_word, word)) { // same word, so same length
                     if (new_word != word) {
                         delete[] word;
                         return nopos;
@@ -1391,14 +1319,13 @@ namespace gtd {
                             altered = true;
                             ++words_altered;
                         }
-                        if (*(word + i) == 0) {
+                        if (!*(word + i))
                             *(word + i) = 32;
-                        }
                         *start_ptr = *(word + i);
                     }
-                    if (end_punc) {
+                    if (end_punc)
                         ++ptr;
-                    } else if (tripunc) {
+                    else if (tripunc) {
                         ++ptr;
                         ++ptr;
                     }
@@ -1411,11 +1338,9 @@ namespace gtd {
             }
             return words_altered;
         }
-
         size_t shrink_to_fit() {
-            if (is_empty || space_front == 0 || space_back == 0) {
+            if (is_empty || (!space_front && !space_back))
                 return 0;
-            }
             shrunk = true;
             const char *old_ptr = data;
             data = new char[length_w_null];
@@ -1427,41 +1352,38 @@ namespace gtd {
             space_front = space_back = 0;
             return retval;
         }
-
-        void space() const noexcept {
+        void space() const noexcept { // debugging method - will eventually be removed
             printf("Length w null: %zu, size: %zu, space front: %zu, space back: %zu, string - data: %ld\n",
                    length_w_null, size, space_front, space_back, string - data);
         }
-
         void clear() {
             delete[] data;
             empty_constructor();
         }
+        //void erase() noexcept {
+        //
+        //}
         // erase_chars() shifts the string in whichever direction saves computation
         String &erase_chars(size_t start_pos = 0, size_t end_pos = nopos) noexcept { // erases excluding end_pos
-            if (is_empty || start_pos >= length_w_null - 1 || start_pos >= end_pos) {
+            if (is_empty || start_pos >= length_w_null - 1 || start_pos >= end_pos)
                 return *this;
-            }
-            if (end_pos > length_w_null - 1) {
+            if (end_pos > length_w_null - 1)
                 end_pos = length_w_null - 1;
-            }
             char *str = string + start_pos;
             char *end = string + end_pos - 1;
             char *end_end = string + length_w_null - 1;
             size_t diff = end_pos - start_pos;
-            if (start_pos == 0) { // case for entire beginning-of-string being erased
-                while (string <= end) {
+            if (!start_pos) { // case for entire beginning-of-string being erased
+                while (string <= end)
                     *string++ = 0;
-                }
                 if (end_pos == length_w_null - 1) { // case for entire string being erased
                     is_empty = true;
                     string = nullptr;
                     if (start_left) {
                         space_front = 0;
                         space_back = size;
-                    } else {
+                    } else
                         space_front = space_back = size / 2;
-                    }
                     length_w_null = 0;
                     return *this;
                 }
@@ -1470,9 +1392,8 @@ namespace gtd {
                 return *this;
             }
             if (end_pos == length_w_null - 1) { // case for entire end-of-string being erased
-                while (end >= str) {
+                while (end >= str)
                     *end-- = 0;
-                }
                 space_back += diff;
                 length_w_null -= diff;
                 return *this;
@@ -1480,248 +1401,164 @@ namespace gtd {
             length_w_null -= diff;
             if (str - string >= end_end - end) { // case for end-of-string being shifted left
                 ++end;
-                while (end <= end_end) {
+                while (end <= end_end)
                     *str++ = *end++;
-                }
-                while (str <= end_end) {
+                while (str <= end_end)
                     *str++ = 0;
-                }
                 space_back += diff;
                 return *this;
             } // below: case for end-of-string being shifted right
             --str;
-            while (str >= string) {
+            while (str >= string)
                 *end-- = *str--;
-            }
-            while (end >= string) {
+            while (end >= string)
                 *end-- = 0;
-            }
             string += diff;
             space_front += diff;
             return *this;
         }
-        size_t find(char c) {
-            if (is_empty) {
+        size_t find(char c) const noexcept {
+            if (is_empty)
                 return nopos;
-            }
             const char *str = string;
             const char *end = string + length_w_null - 1;
             size_t count = 0;
             while (str < end) {
-                if (*str++ == c) {
+                if (*str++ == c)
                     return count;
-                }
                 ++count;
             }
             return nopos;
         }
-        size_t r_find(char c) {
-            if (is_empty) {
+        size_t r_find(char c) const noexcept {
+            if (is_empty)
                 return nopos;
-            }
             const char *str = string + length_w_null - 2;
             const char *end = string;
             size_t count = length_w_null - 2;
             while (str >= end) {
-                if (*str-- == c) {
+                if (*str-- == c)
                     return count;
-                }
                 --count;
             }
             return nopos;
         }
-        Iterator begin() const noexcept {
-            if (is_empty) { return {}; }
+        Iterator begin() noexcept {
+            if (is_empty) return {};
             return {string};
         }
-
-        Iterator end() const noexcept {
-            if (is_empty) { return {}; }
+        Iterator end() noexcept {
+            if (is_empty) return {};
             return {string + length_w_null - 1};
         }
-
-        RevIterator rbegin() const noexcept {
-            if (is_empty) { return {}; }
+        RevIterator rbegin() noexcept {
+            if (is_empty) return {};
             return {string + length_w_null - 2};
         }
-
-        RevIterator rend() const noexcept {
-            if (is_empty) { return {}; }
+        RevIterator rend() noexcept {
+            if (is_empty) return {};
             return {string - 1};
         }
-
         ConstIterator cbegin() const noexcept {
-            if (is_empty) { return {}; }
+            if (is_empty) return {};
             return {string};
         }
-
         ConstIterator cend() const noexcept {
-            if (is_empty) { return {}; }
+            if (is_empty) return {};
             return {string + length_w_null - 1};
         }
-
         ConstRevIterator crbegin() const noexcept {
-            if (is_empty) { return {}; }
+            if (is_empty) return {};
             return {string + length_w_null - 2};
         }
-
         ConstRevIterator crend() const noexcept {
-            if (is_empty) { return {}; }
+            if (is_empty) return {};
             return {string - 1};
         }
-
         char &front() const {
-            if (is_empty) {
-                throw EmptyStringError("front() cannot be called on an empty string.");
-            }
+            if (is_empty)
+                throw EmptyStringError("front() cannot be called on an empty string.\n");
             return *string;
         }
-
         char &back() const {
-            if (is_empty) {
-                throw EmptyStringError("back() cannot be called on an empty string.");
-            }
+            if (is_empty)
+                throw EmptyStringError("back() cannot be called on an empty string.\n");
             return *(string + length_w_null - 2);
         }
-
         size_t get_size() const noexcept {
             return size;
         }
-
         size_t get_length() const noexcept {
             return length_w_null == 0 ? 0 : length_w_null - 1;
         }
-
         bool empty() const noexcept {
             return is_empty;
         }
-
         const char *const c_str() const noexcept {
-            if (is_empty) {
+            if (is_empty)
                 return nullptr; // perhaps change this
-            }
             return string;
         }
-
-        std::string str() const noexcept {
+        std::string str() const {
             return {string};
         }
-
         ~String() {
             delete[] data;
         }
-
-        friend std::ostream &operator>>(const String &str, std::ostream &os);
-
         char &operator[](size_t index) const {
-            if (is_empty) {
-                throw std::out_of_range("No characters to be accessed in an empty string.");
-            }
-            if (index > length_w_null - 2) {
-                throw std::out_of_range("You are indexing a character that is out of range.");
-            }
+            if (is_empty)
+                throw std::out_of_range("No characters to be accessed in an empty string.\n");
+            if (index > length_w_null - 2)
+                throw std::out_of_range("You are indexing a character that is out of range.\n");
             return *(string + index);
         }
-
-        bool operator==(const char *str) const noexcept {
-            if (str == nullptr) {
-                return false;
-            }
-            size_t length = strlen_c(str);
-            if (is_empty) {
-                return length == 0;
-            }
-            if (length != length_w_null - 1) {
-                return false;
-            }
-            const char *copy_string = string;
-            while (*str) {
-                if (*str != *copy_string) {
-                    return false;
-                }
-                ++str;
-                ++copy_string;
-            }
-            return true;
-        }
-
-        bool operator==(const String &str) const {
-            return *this == str.c_str();
-        }
-
-        bool operator==(const std::string &str) const {
-            return *this == str.c_str();
-        }
-
         String operator+(const char *str) {
-            String retstr = *this;
-            retstr.append_back(str);
-            return retstr;
+            return String{*this}.append_back(str);
         }
-
         String operator+(const String &str) {
-            String retstr = *this;
-            retstr.append_back(str);
-            return retstr;
+            return String{*this}.append_back(str);
         }
-
         String operator+(const std::string &str) {
-            String retstr = *this;
-            retstr.append_back(str);
-            return retstr;
+            return String{*this}.append_back(str);
         }
-
         String &operator+=(const char *str) {
-            *this = *this + str;
-            return *this;
+            return this->append_back(str);
         }
-
         String &operator+=(const std::string &str) {
-            *this = *this + str;
-            return *this;
+            return this->append_back(str);
         }
-
         String &operator+=(const String &str) {
-            *this = *this + str;
-            return *this;
+            return this->append_back(str);
         }
-
         String &operator=(const char *str) {
-            if (str == nullptr) {
+            if (str == nullptr)
                 throw NullPointerError();
-            }
-            if (*this == str) {
+            if (*this == str)
                 return *this;
-            }
             if (is_empty) {
                 constructor(str, true);
                 return *this;
             }
             this->clear();
-            if (strlen_c(str) == 0) {
+            if (!strlen_c(str))
                 return *this;
-            }
             this->constructor(str);
             return *this;
         }
-
-        String &operator=(const std::string &str) noexcept { // std::string::c_str() is guaranteed to be no-throw
+        String &operator=(const std::string &str) {
             this->clear();
-            if (str.empty()) {
+            if (str.empty())
                 return *this;
-            }
             return *this = str.c_str();
         }
         String &operator=(const String &str) {
-            if (this == &str) {
+            if (this == &str)
                 return *this;
-            }
-            return *this = str.str();
+            return *this = str.c_str();
         }
         String &operator=(String &&str) noexcept {
-            if (this == &str) {
+            if (this == &str)
                 return *this;
-            }
             this->string = str.string;
             str.string = nullptr;
             this->data = str.data;
@@ -1743,180 +1580,168 @@ namespace gtd {
             return *this;
         }
         String &operator++() {
-            if (is_empty) {
+            if (is_empty)
                 return *this;
-            }
-            for (char &ch : *this) {
-                if (ch < 127) {
+            for (char &ch : *this)
+                if (ch < 127)
                     ++ch;
-                }
-            }
             return *this;
         }
         String operator++(int) {
-            if (is_empty) {
+            if (is_empty)
                 return {};
-            }
-            for (char &ch : *this) {
-                if (ch < 127) {
-                    ++ch;
-                }
-            }
             String new_str = *this;
+            for (char &ch : *this)
+                if (ch < 127)
+                    ++ch;
             return new_str;
         }
         String &operator--() {
-            if (is_empty) {
+            if (is_empty)
                 return *this;
-            }
-            for (char &ch : *this) {
-                if (ch > 1) {
+            for (char &ch : *this)
+                if (ch > 1)
                     --ch;
-                }
-            }
             return *this;
         }
         String operator--(int) {
-            if (is_empty) {
+            if (is_empty)
                 return {};
-            }
-            for (char &ch : *this) {
-                if (ch > 1) {
-                    --ch;
-                }
-            }
             String new_str = *this;
+            for (char &ch : *this)
+                if (ch > 1)
+                    --ch;
             return new_str;
         }
-        friend std::istream &operator>>(std::istream &is, String &str);
-        friend std::istream &getline(std::istream &is, String &str, char delim);
+        friend bool operator==(const String&, const char*) noexcept;
+        friend std::ostream &operator<<(std::ostream&, const String&);
+        friend std::istream &operator>>(std::istream&, String&);
+        friend std::istream &getline(std::istream&, String&, char);
     };
-    std::istream &operator>>(std::istream &is, String &str) {
-        if (!is.good()) {
-            return is;
+    bool operator==(const String &g_str, const char *str) noexcept {
+        if (str == nullptr)
+            return false;
+        if (g_str.is_empty)
+            return !*str;
+        const char *cpy_str = g_str.string;
+        size_t count = 0;
+        while (*cpy_str && *str) {
+            if (*cpy_str++ != *str++)
+                return false;
+            ++count;
         }
+        return count == g_str.length_w_null - 1 && !*str;
+    }
+    bool operator==(const String &str1, const String &str2) {
+        return str1 == str2.c_str();
+    }
+    bool operator==(const String &g_str, const std::string &str) {
+        return g_str == str.c_str();
+    }
+    std::ostream &operator<<(std::ostream &os, const String &str) {
+        return os << str.string;
+    }
+    std::istream &operator>>(std::istream &is, String &str) {
+        if (!is.good())
+            return is;
         if (is.peek() == EOF) {
             is.setstate(std::ios::failbit);
             return is;
         }
         bool org_s_left = str.start_left;
-        if (!org_s_left) {
+        if (!org_s_left)
             str.start_left = true;
-        }
-        if (!str.is_empty) {
+        if (!str.is_empty)
             str.clear();
-        }
         int c;
-        while ((c = is.get()) != 32 && c != '\n' && is.good()) {
+        while ((c = is.get()) != 32 && c != '\n' && is.good())
             str.push_back((char) c);
-        }
         is.clear();
         str.start_left = org_s_left;
         return is;
     }
     std::istream &getline(std::istream &is, String &str, char delim = '\n') {
-        if (!is.good() || is.peek() == EOF) {
+        if (!is.good() || is.peek() == EOF)
             return is;
-        }
         bool org_s_left = str.start_left;
-        if (!org_s_left) {
+        if (!org_s_left)
             str.start_left = true;
-        }
-        if (!str.is_empty) {
+        if (!str.is_empty)
             str.clear();
-        }
         int ch;
-        while ((ch = is.get()) != delim && is.good()) {
+        while ((ch = is.get()) != delim && is.good())
             str.push_back((char) ch);
-        }
         str.start_left = org_s_left;
         return is;
     }
     // called for Iterator, RevIterator, ConstIterator and ConstRevIterator
     bool operator==(const String::Iterator &A, const String::Iterator &B) {
-        if (A.ptr == nullptr || B.ptr == nullptr) {
+        if (A.ptr == nullptr || B.ptr == nullptr)
             return false;
-        }
         return A.ptr == B.ptr;
     }
     bool operator!=(const String::Iterator &A, const String::Iterator &B) {
-        if (A.ptr == nullptr || B.ptr == nullptr) {
+        if (A.ptr == nullptr || B.ptr == nullptr)
             return false;
-        }
         return A.ptr != B.ptr;
     }
     // called for Iterator and ConstIterator
     bool operator<(const String::Iterator &A, const String::Iterator &B) {
-        if (A.ptr == nullptr || B.ptr == nullptr) {
+        if (A.ptr == nullptr || B.ptr == nullptr)
             return false;
-        }
         return A.ptr < B.ptr;
     }
     bool operator>(const String::Iterator &A, const String::Iterator &B) {
-        if (A.ptr == nullptr || B.ptr == nullptr) {
+        if (A.ptr == nullptr || B.ptr == nullptr)
             return false;
-        }
         return A.ptr > B.ptr;
     }
     bool operator<=(const String::Iterator &A, const String::Iterator &B) {
-        if (A.ptr == nullptr || B.ptr == nullptr) {
+        if (A.ptr == nullptr || B.ptr == nullptr)
             return false;
-        }
         return A.ptr <= B.ptr;
     }
     bool operator>=(const String::Iterator &A, const String::Iterator &B) {
-        if (A.ptr == nullptr || B.ptr == nullptr) {
+        if (A.ptr == nullptr || B.ptr == nullptr)
             return false;
-        }
         return A.ptr >= B.ptr;
     }
     std::ptrdiff_t operator-(const String::Iterator &A, const String::Iterator &B) {
         return A.ptr - B.ptr;
     }
     std::ostream &operator<<(std::ostream &out, const String::Iterator &A) {
-        out << static_cast<void *>(A.ptr);
-        return out;
+        return out << static_cast<void *>(A.ptr);
     }
-    std::ostream &operator>>(const String &str, std::ostream &os) {
-        if (str.is_empty) {
-            return os;
-        }
-        os << str.string;
-        return os;
-    }
+    // std::ostream &operator>>(const String &str, std::ostream &os) {
+    //     if (str.is_empty)
+    //         return os;
+    //     return os << str.string;
+    // }
     // called for RevIterator and ConstRevIterator
     bool operator<(const String::RevIterator &A, const String::RevIterator &B) {
-        if (A.ptr == nullptr || B.ptr == nullptr) {
+        if (A.ptr == nullptr || B.ptr == nullptr)
             return false;
-        }
         return A.ptr > B.ptr;
     }
     bool operator>(const String::RevIterator &A, const String::RevIterator &B) {
-        if (A.ptr == nullptr || B.ptr == nullptr) {
+        if (A.ptr == nullptr || B.ptr == nullptr)
             return false;
-        }
         return A.ptr < B.ptr;
     }
     bool operator<=(const String::RevIterator &A, const String::RevIterator &B) {
-        if (A.ptr == nullptr || B.ptr == nullptr) {
+        if (A.ptr == nullptr || B.ptr == nullptr)
             return false;
-        }
         return A.ptr >= B.ptr;
     }
     bool operator>=(const String::RevIterator &A, const String::RevIterator &B) {
-        if (A.ptr == nullptr || B.ptr == nullptr) {
+        if (A.ptr == nullptr || B.ptr == nullptr)
             return false;
-        }
         return A.ptr <= B.ptr;
     }
     std::ptrdiff_t operator-(const String::RevIterator &A, const String::RevIterator &B) {
-        if (A.ptr == nullptr || B.ptr == nullptr) {
+        if (A.ptr == nullptr || B.ptr == nullptr)
             return 0;
-        }
         return B.ptr - A.ptr;
-    }
-    std::ostream &operator<<(std::ostream &out, const String &str) {
-        return str >> out;
     }
     bool operator==(const char *str, const String &string) {
         return string == str;
@@ -1925,78 +1750,59 @@ namespace gtd {
         return string == str;
     }
     String operator+(const char *str, const String &string) {
-        String retstr = string;
-        retstr.append_front(str);
-        return retstr;
+        return String{string}.append_front(str);
     }
     String operator+(const std::string &str, const String &string) {
-        String retstr = string;
-        retstr.append_front(str);
-        return retstr;
+        return String{string}.append_front(str);
     }
     size_t strlen_c(const char *str) {
-        if (str == nullptr) {
-            throw NullPointerError();
-        }
+        if (str == nullptr)
+            return 0;
         size_t length_c = 0;
-        while (*str) {
-            ++length_c;
-            ++str;
-        }
+        while (*str++) ++length_c;
         return length_c;
     }
     char *memset_c(char *str, char ch, size_t n_chars) {
-        if (str == nullptr) {
+        if (str == nullptr)
             return nullptr;
-        }
-        for (int i = 0; i < n_chars; i++) {
+        for (size_t i = 0; i < n_chars; i++)
             *(str + i) = ch;
-        }
         return str;
     }
     char *strcpy_c(char *dest, const char *source) {
-        if (dest == nullptr || source == nullptr) {
+        if (dest == nullptr || source == nullptr)
             return nullptr;
-        }
         char *ptr = dest;
         while ((*(dest++) = *(source++)));
         return ptr;
     }
     int strcmp_c(const char *str1, const char *str2) {
-        if (str1 == nullptr || str2 == nullptr) {
+        if (str1 == nullptr || str2 == nullptr)
             return -128;
-        }
-        if (strlen_c(str1) != strlen_c(str2)) {
-            return -128;
-        }
         while (*str1 && *str2) {
-            if (*str1 != *str2) {
+            if (*str1 != *str2)
                 return *str1 - *str2;
-            }
             ++str1;
             ++str2;
         }
-        return 0;
+        return *str1 - *str2;
     }
     int strncmp_c(const char *str1, const char *str2, size_t n) {
-        if (str1 == nullptr || str2 == nullptr) {
+        if (str1 == nullptr || str2 == nullptr)
             return -128;
-        }
         size_t count = 0;
-        while (*str1 && *str2 && count < n) {
-            if (*str1 != *str2) {
+        while (*str1 && *str2 && count++ < n) {
+            if (*str1 != *str2)
                 return *str1 - *str2;
-            }
             ++str1;
             ++str2;
-            ++count;
+            // ++count;
         }
         return 0;
     }
     inline char *setchr_c(char *str, const char ch, size_t pos) {
-        if (str == nullptr) {
+        if (str == nullptr)
             return nullptr;
-        }
         *(str + pos) = ch;
         return str;
     }
@@ -2016,9 +1822,8 @@ namespace gtd {
     std::string to_upper(const std::string &str) {
         size_t length = str.length();
         std::string ret_string;
-        for (const char &ch: str) {
+        for (const char &ch: str)
             ret_string.push_back((char) to_upper(ch));
-        }
         return ret_string;
     }
     void string_upper(std::string &str) {
@@ -2038,9 +1843,10 @@ namespace gtd {
             ch = (char) to_lower(ch);
     }
     void string_lower(char *str) {
-        size_t length = strlen_c(str);
-        for (int i = 0; i < length; i++)
-            *(str + i) = (char) to_lower(*(str + i));
+        if (str == nullptr)
+            return;
+        for (; *str; ++str)
+            *str = (char) to_lower(*str);
     }
     inline bool isdigit_c(char ch) {
         return ch >= 48 && ch <= 57;

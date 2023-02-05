@@ -87,7 +87,7 @@ namespace gtd {
             return msg.c_str();
         }
     };
-    template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool>
+    template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int>
     class system;
     /* body_counter was created because each instantiation of the body subclass with different template parameters is
      * actually a different class, so the count of bodies for each different class template instantiation would be
@@ -95,35 +95,36 @@ namespace gtd {
     class body_counter {
         static inline unsigned long long count = 0;
         static inline std::set<unsigned long long> ids;
-        void set_id() {
-            unsigned long long prev = 0;
-            for (const auto &i : ids) {
-                if (i - prev > 1) {
-                    id = prev + 1;
-                    return;
-                }
-            }
-            id = *(ids.end()--) + 1;
-        }
+        // void set_id() {
+        //     unsigned long long prev = 0;
+        //     for (const auto &i : ids) {
+        //         if (i - prev > 1) {
+        //             id = prev + 1;
+        //             return;
+        //         }
+        //     }
+        //     id = *(ids.end()--) + 1;
+        // }
     protected:
         unsigned long long id; // is immutable after the object has been constructed
     public:
         body_counter() {
-            id = count;
-            if (ids.contains(id)) {
-                set_id();
-            }
+            // id = count;
+            // if (ids.contains(id))
+            //     set_id();
+            id = 0;
+            while (ids.contains(id)) ++id;
             ids.insert(id);
             ++count;
         }
         body_counter(body_counter &&other) noexcept {
             this->id = other.id;
-            other.id = -1; // would never, ever be reached
-            while (ids.contains(other.id)) {
+            other.id = -1; // would never, ever be reached (normally)
+            while (ids.contains(other.id))
                 --other.id;
-            }
-            ++count; // this will cause count to actually be the same as before the call to the constructor, since
-        } // ... "other" is destroyed at the end of the call, reducing count by 1, so count must be incremented.
+            ids.insert(other.id); // important in case other is not actually destroyed after this call
+            ++count; // this will prob. cause count to actually be the same as before the call to the constructor, since
+        } // ... "other" is likely destroyed at the end of the call, reducing count by 1, so count must be incremented.
         body_counter(const body_counter &other) : body_counter() {} // as if constructing an empty object, since all
         unsigned long long get_id() const noexcept {                // ... ids must be unique
             return id;
@@ -131,35 +132,42 @@ namespace gtd {
         static unsigned long long get_tot_bc() noexcept {
             return count;
         }
+        static std::vector<unsigned long long> get_all_ids() {
+            return {ids.begin(), ids.end()};
+        }
         body_counter &operator=(const body_counter &other) { // again, takes no effect as id must be unique
             return *this;
         }
-        static void print() {
-            for (const unsigned long long &i : ids) {
+        static void print_all_ids() {
+            for (const unsigned long long &i : ids)
                 printf("Id: %llu\n", i);
-            }
         }
         ~body_counter() {
             --count;
             ids.erase(id);
         }
-        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool>
+        friend std::ostream &operator<<(std::ostream&, const body_counter&);
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int>
         friend class system;
     };
+    std::ostream &operator<<(std::ostream &os, const body_counter &bc) {
+        return os << "[gtd::body_counter@" << &bc << ":id=" << bc.id << ",total_count=" << body_counter::count << ']';
+    }
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double>
     class body : public body_counter {
     public:
         static inline bool allow_self_addition = false;
     protected:
-        R radius;
-        vector3D<T> curr_pos; // current position
+        R radius{1};
+        vector3D<T> curr_pos{}; // current position
     private:
-        M mass_;
-        vector3D<T> curr_vel; // current velocity - have not included acc. as this should always be det. externally
-        vector3D<T> acc; // current acceleration of the body - only used within system class
-        T pe; // current potential energy of the body - only used in system class since requires other bodies to calc.
+        M mass_{1};
+        vector3D<T> curr_vel{}; // current velocity - have not included acc. as this should always be det. externally
+        vector3D<T> acc{}; // current acceleration of the body - only used within system class
+        T pe{}; // current potential energy of the body - only used in system class since requires other bodies to calc.
         using K = decltype(0.5*mass_*curr_vel.magnitude()*curr_vel.magnitude());
-        K curr_ke; // current kinetic energy
+        K curr_ke{}; // current kinetic energy
+        long double rest_c{1}; // coefficient of restitution
         /* Only quantities that represent the state of a body on its own are stored (below) - position, velocity, and
          * kinetic energy - whilst quantities that depend on the states of other bodies are not stored - acceleration
          * and potential energy. */
@@ -193,17 +201,17 @@ namespace gtd {
             }
         }
     public:
-        body() : mass_{1}, radius{1}, curr_ke{0}, curr_pos{}, curr_vel{}
-        {add_pos_vel_ke(); check_mass(); check_radius();}
-        body(M &&body_mass, R &&body_radius) : mass_{std::move(body_mass)}, radius{std::move(body_radius)}, curr_ke{0},
-        curr_pos{}, curr_vel{} {add_pos_vel(); check_mass(); check_radius();}
-        body(const M &body_mass, const R &body_radius) : mass_{body_mass}, radius{body_radius}, curr_ke{0}, curr_pos{},
-        curr_vel{} {add_pos_vel(); check_mass(); check_radius();}
+        body() {add_pos_vel_ke(); check_mass(); check_radius();}
+        body(M &&body_mass, R &&body_radius) : mass_{std::move(body_mass)}, radius{std::move(body_radius)}
+        {add_pos_vel(); check_mass(); check_radius();}
+        body(const M &body_mass, const R &body_radius) : mass_{body_mass}, radius{body_radius}
+        {add_pos_vel(); check_mass(); check_radius();}
         body(M &&body_mass, R &&body_radius, vector3D<T> &&pos, vector3D<T> &&vel) :
         mass_{std::move(body_mass)}, radius{std::move(body_radius)}, curr_pos{std::move(pos)}, curr_vel{std::move(vel)}
         {add_pos_vel_ke(); check_mass(); check_radius();}
         body(const M &body_mass, const R &body_radius, const vector3D<T> &pos, const vector3D<T> &vel) :
-        mass_{body_mass}, radius{body_radius}, curr_pos{}, curr_vel{} {add_pos_vel_ke(); check_mass(); check_radius();}
+        mass_{body_mass}, radius{body_radius}, curr_pos{pos}, curr_vel{vel}
+        {add_pos_vel_ke(); check_mass(); check_radius();}
         template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t>
         body(const body<m, r, t> &other) : mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos},
         curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc} {add_pos_vel();}
@@ -234,6 +242,9 @@ namespace gtd {
         const T &potential_energy() const noexcept {
             return pe;
         }
+        long double restitution() const noexcept {
+            return rest_c;
+        }
         const vector3D<T> &prev_pos_at(vec_s_t index) const {
             if (index >= positions.size()) {
                 throw std::out_of_range("Requested position does not exist (index out of range).\n");
@@ -252,19 +263,29 @@ namespace gtd {
             }
             return energies[index];
         }
-        void set_mass(const M &new_mass) {
+        bool set_mass(const M &new_mass) {
+            if (new_mass < 0)
+                return false;
             mass_ = new_mass;
-            check_mass();
+            return true;
         }
-        void set_radius(const R &new_radius) {
+        bool set_mass(M &&new_mass) noexcept {
+            if (new_mass < 0)
+                return false;
+            mass_ = std::move(new_mass);
+            return true;
+        }
+        bool set_radius(const R &new_radius) {
+            if (new_radius < 0)
+                return false;
             radius = new_radius;
-            check_radius();
+            return true;
         }
-        void set_mass(const M &&new_mass) {
-            set_mass(new_mass);
-        }
-        void set_radius(const R &&new_radius) {
-            set_radius(new_radius);
+        bool set_radius(R &&new_radius) noexcept {
+            if (new_radius < 0)
+                return false;
+            radius = std::move(new_radius);
+            return true;
         }
         void set_acc(const vector3D<T> &new_acc) {
             acc = new_acc;
@@ -272,11 +293,29 @@ namespace gtd {
         void set_acc(vector3D<T> &&new_acc) noexcept {
             acc = std::move(new_acc);
         }
-        void set_pe(const T &new_pe) {
+        bool set_pe(const T &new_pe) {
+            if (new_pe < 0)
+                return false;
             pe = new_pe;
+            return true;
         }
-        void set_pe(T &&new_pe) noexcept {
+        bool set_pe(T &&new_pe) noexcept {
+            if (new_pe < 0)
+                return false;
             pe = std::move(new_pe);
+            return true;
+        }
+        bool set_restitution(const long double &new_restitution_coefficient) noexcept {
+            if (new_restitution_coefficient < 0 || new_restitution_coefficient > 1)
+                return false;
+            rest_c = new_restitution_coefficient;
+            return true;
+        }
+        bool set_restitution(const long double &&new_restitution_coefficient) noexcept {
+            if (new_restitution_coefficient < 0 || new_restitution_coefficient > 1)
+                return false;
+            rest_c = new_restitution_coefficient;
+            return true;
         }
         void update(const vector3D<T> &new_position, const vector3D<T> &new_velocity) noexcept {
             curr_pos = new_position; // no checks to be performed, these new vecs can be anything
@@ -289,7 +328,9 @@ namespace gtd {
             add_pos_vel_ke();
         }
         void update(vector3D<T> &&new_position, vector3D<T> &&new_velocity) noexcept {
-            update(new_position, new_velocity);
+            curr_pos = std::move(new_position);
+            curr_vel = std::move(new_velocity);
+            add_pos_vel_ke();
         }
         void shift(vector3D<T> &&position_shift, vector3D<T> &&velocity_shift) noexcept {
             shift(position_shift, velocity_shift);
@@ -306,10 +347,16 @@ namespace gtd {
         void apply_vel_transform(const matrix<T> &&transform) {
             curr_vel.apply(transform);
         }
-        auto momentum() const noexcept {
+        void apply_acc_transform(const matrix<T> &transform) {
+            acc.apply(transform);
+        }
+        void apply_acc_transform(const matrix<T> &&transform) {
+            acc.apply(transform);
+        }
+        auto momentum() const {
             return mass_*curr_vel;
         }
-        void reset_acc() noexcept {
+        void reset_acc() {
             acc = T{0};
         }
         void reset(bool clear_trajectory = true) { // resets the body to initial setup and clears traj. if specified
@@ -484,7 +531,7 @@ namespace gtd {
                 return *this; // clearly, for self-addition, position and velocity remain unchanged
             }
             this->curr_pos = com(*this, other);
-            this->curr_vel = avg_vel(*this, other);
+            this->curr_vel = vel_com(*this, other);
             this->mass_ += other.mass_;
             this->radius = cbrtl(this->radius*this->radius*this->radius + other.radius*other.radius*other.radius);
             this->add_pos_vel_ke();
@@ -496,24 +543,25 @@ namespace gtd {
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
         friend inline auto com(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2);
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
-        friend inline auto avg_vel(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2);
+        friend inline auto vel_com(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2);
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
-        friend auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2);
+        friend inline auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2);
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
-        friend auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &&b2);
+        friend inline auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &&b2);
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
-        friend auto operator+(const body<m1, r1, t1> &&b1, const body<m2, r2, t2> &b2);
+        friend inline auto operator+(const body<m1, r1, t1> &&b1, const body<m2, r2, t2> &b2);
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
-        friend auto operator+(const body<m1, r1, t1> &&b1, const body<m2, r2, t2> &&b2);
-        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg1, bool prg2, bool mrg1, bool mrg2>
-        friend system<m, r, t, prg1 && prg2, mrg1 && mrg2>operator+(const system<m, r, t, prg1, mrg1> &sys1,
-                                                                    const system<m, r, t, prg2, mrg2> &sys2);
+        friend inline auto operator+(const body<m1, r1, t1> &&b1, const body<m2, r2, t2> &&b2);
+        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg1, bool prg2, bool mrg1, bool mrg2,
+                  int c1, int c2>
+        friend system<m, r, t, prg1 & prg2, mrg1 & mrg2, c1 & c2>operator+(const system<m, r, t, prg1, mrg1, c1> &sys1,
+                                                                           const system<m, r, t, prg2, mrg2, c2> &sys2);
         template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class ray;
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
                   isNumWrapper, bool>
         friend class astro_scene;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int>
         friend class system;
     };
     template <isNumWrapper m, isNumWrapper r, isNumWrapper t>
@@ -527,32 +575,33 @@ namespace gtd {
         return (b1.mass_*b1.curr_pos + b2.mass_*b2.curr_pos)/(b1.mass_ + b2.mass_);
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
-    inline auto avg_vel(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) { /* average weighted velocity, taking
+    inline auto vel_com(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) { /* average weighted velocity, taking
         conservation of momentum into account */
         return (b1.momentum() + b2.momentum())/(b1.mass_ + b2.mass_);
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
-    auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) { /* performs a "merging" of two bodies, with
-        the new body having the sum of both masses, being at the centre-of-mass of both bodies, having a volume equal
-        to the sum of both volumes (using the radii), and a new velocity such that momentum is conserved */
+    inline auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) {
+        /* performs a "merging" of two bodies, with the new body having the sum of both masses, being at the
+         * centre-of-mass of both bodies, having a volume equal to the sum of both volumes (using the radii), and a new
+         * velocity such that momentum is conserved (i.e., COM velocity) */
         /* self-addition is not considered here as the returned body is new (body has not been added onto itself) */
         return body<decltype(b1.mass_ + b2.mass_), long double, decltype(com(b1, b2))>(b1.mass_ + b2.mass_,
-        cbrtl(b1.radius*b1.radius*b1.radius + b2.radius*b2.radius*b2.radius), com(b1, b2), avg_vel(b1, b2));
+        cbrtl(b1.radius*b1.radius*b1.radius + b2.radius*b2.radius*b2.radius), com(b1, b2), vel_com(b1, b2));
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
-    auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &&b2) {
+    inline auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &&b2) {
         return b1 + b2;
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
-    auto operator+(const body<m1, r1, t1> &&b1, const body<m2, r2, t2> &b2) {
+    inline auto operator+(const body<m1, r1, t1> &&b1, const body<m2, r2, t2> &b2) {
         return b1 + b2;
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
-    auto operator+(const body<m1, r1, t1> &&b1, const body<m2, r2, t2> &&b2) {
+    inline auto operator+(const body<m1, r1, t1> &&b1, const body<m2, r2, t2> &&b2) {
         return b1 + b2;
     }
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
-              bool prog = false, bool merge_overlapping_bodies = false>
+              bool prog = false, bool mergeOverlappingBodies = false, int collisions = 0>
     class system { // G, below, has not been made static as it varies between objects, depending on units passed
     public:
         static constexpr int two_body = 1; // static constants to determine which integration method to perform
@@ -566,20 +615,27 @@ namespace gtd {
         static constexpr int barnes_hut = 65536; // static constants to determine the force approx. method to use
         static constexpr int fast_multipole = 131072;
         // static inline bool merge_if_overlapped = false;
+        static constexpr int no_coll_check = 0;
+        static constexpr int overlap_coll_check = 3;
+        static constexpr int pred_coll_check = 7;
     private:
         long double G = 66743; // Newtonian constant of Gravitation (* 10^15 m^3 kg^-1 s^-2)
         using vec_size_t = typename std::vector<body<M, R, T>>::size_type;
         using bod_t = body<M, R, T>;
-        using sys_t = system<M, R, T, prog, merge_overlapping_bodies>;
+        using sys_t = system<M, R, T, prog, mergeOverlappingBodies, collisions>;
+        using mom_t = decltype(M{}*T{});
         std::vector<bod_t> bods;
+        std::map<unsigned long long, bod_t> del_bods; // map to store bodies removed from system after collision mergers
         long double dt = 1;
         long double half_dt = dt/2; // I gave it its own variable, since it is a commonly used quantity
         unsigned long long iterations = 1000;
         long double prev_dt{}; // used in methods called after evolve(), since could be changed by setter
         unsigned long long prev_iterations{}; // same here
+        mom_t min_tot_com_mom{pow(10, 16)}; // minimum sum of magnitudes of COM momenta for two bodies to merge
         // using P = decltype((G*std::declval<M>()*std::declval<M>())/std::declval<T>()); // will be long double
-        std::vector<std::vector<T>> pe; // to store potential energies of bodies
-        std::vector<std::vector<T>> energy; // total energy for each body at each iteration (KE + PE)
+        std::map<unsigned long long, std::vector<T>> pe; // to store potential energies of bodies
+        std::map<unsigned long long, std::vector<T>> energy; // total energy for each body at each iteration (KE + PE)
+        std::map<unsigned long long, std::vector<T>> del_ke; // map to store KE vectors of deleted bodies from mergers
         /* it would have been nice to use std::maps to store potential and total energies for all bodies, as it would
          * have allowed lookup by body_id, but its lookup complexity is O(log(N)), whereas accessing an element in a
          * std::vector by index is O(1) */
@@ -587,7 +643,6 @@ namespace gtd {
         std::vector<T> tot_ke; // total kinetic energy for the entire system at each iteration
         std::vector<T> tot_e; // total energy for the entire system at each iteration (KE + PE)
         bool evolved = false;
-        // bool prog = false; // whether to show the progress of the evolution of the system
         static inline String def_path = get_home_path<String>() + FILE_SEP + "System_Trajectories_";
         static inline unsigned long long to_ull(String &&str) {
             if (!str.isnumeric()) {
@@ -656,7 +711,7 @@ namespace gtd {
                 for (j = i + 1; j < size; ++j) {
                     inner = &bods[j];
                     if ((outer->curr_pos - inner->curr_pos).magnitude() < outer->radius + inner->radius) {
-                        if constexpr (!merge_overlapping_bodies) {
+                        if constexpr (!mergeOverlappingBodies) {
                             String str = "The bodies with id=";
                             str.append_back(outer->id).append_back(" and id=").append_back(inner->id);
                             str.append_back(" that were added to this system object overlap.\n");
@@ -715,20 +770,24 @@ namespace gtd {
                 bod.add_pos_vel_ke();
             }
         }
-        void create_energy_vectors(const vec_size_t &bods_size) {
+        void create_energy_vectors() {
             unsigned long long iters_p1 = iterations + 1;
-            pe.resize(bods_size);
-            energy.resize(bods_size);
-            for (vec_size_t i = 0; i < bods_size; ++i) {
-                pe[i].reserve(iters_p1);
-                energy[i].reserve(iters_p1);
-                bods[i].positions.reserve(iters_p1);
-                bods[i].velocities.reserve(iters_p1);
-                bods[i].energies.reserve(iters_p1);
-                tot_pe.reserve(iters_p1);
-                tot_ke.reserve(iters_p1);
-                tot_e.reserve(iters_p1);
+            // pe.resize(bods_size);
+            // energy.resize(bods_size);
+            pe.clear();
+            energy.clear();
+            for (bod_t &bod : bods) {
+                // pe[i].reserve(iters_p1);
+                // energy[i].reserve(iters_p1);
+                pe[bod.id].reserve(iters_p1);
+                energy[bod.id].reserve(iters_p1);
+                bod.positions.reserve(iters_p1);
+                bod.velocities.reserve(iters_p1);
+                bod.energies.reserve(iters_p1);
             }
+            tot_pe.reserve(iters_p1);
+            tot_ke.reserve(iters_p1);
+            tot_e.reserve(iters_p1);
         }
         void calc_acc_and_e() {
             static T total_pe;
@@ -749,8 +808,8 @@ namespace gtd {
                     cumulative_acc_and_pe(ref, bods[inner]);
                 }
                 ref.pe /= T{2};
-                pe[outer].push_back(ref.pe);
-                energy[outer].push_back(ref.curr_ke + ref.pe);
+                pe[ref.id].push_back(ref.pe);
+                energy[ref.id].push_back(ref.curr_ke + ref.pe);
                 total_pe += ref.pe;
                 total_ke += ref.curr_ke;
             }
@@ -780,8 +839,8 @@ namespace gtd {
                 /* KICK for half a step */
                 ref.curr_vel += half_dt*ref.acc;
                 ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
-                pe[outer].push_back(ref.pe);
-                energy[outer].push_back(ref.curr_ke + ref.pe);
+                pe[ref.id].push_back(ref.pe);
+                energy[ref.id].push_back(ref.curr_ke + ref.pe);
                 total_pe += ref.pe;
                 total_ke += ref.curr_ke;
             }
@@ -824,8 +883,8 @@ namespace gtd {
                     cumulative_pe(ref, bods[inner]);
                 }
                 ref.pe /= T{2};
-                pe[outer].push_back(ref.pe);
-                energy[outer].push_back(ref.curr_ke + ref.pe);
+                pe[ref.id].push_back(ref.pe);
+                energy[ref.id].push_back(ref.curr_ke + ref.pe);
                 total_pe += ref.pe;
             }
             tot_pe.push_back(total_pe);
@@ -848,8 +907,8 @@ namespace gtd {
                     cumulative_pe(ref, bods[inner]);
                 }
                 ref.pe /= T{2};
-                pe[outer].push_back(ref.pe);
-                energy[outer].push_back(ref.curr_ke + ref.pe);
+                pe[ref.id].push_back(ref.pe);
+                energy[ref.id].push_back(ref.curr_ke + ref.pe);
                 total_pe += ref.pe;
                 total_ke += ref.curr_ke;
             }
@@ -857,11 +916,65 @@ namespace gtd {
             tot_ke.push_back(total_ke);
             tot_e.push_back(total_pe + total_ke);
         }
+        void s_coll() { // "simple" (ahem, ahem) collision detection and evolution
+            static unsigned long long inner;
+            static unsigned long long outer;
+            static vec_size_t num_bods;
+            outer = 0;
+            num_bods = bods.size();
+            std::vector<bod_t*> overlapping;
+            bod_t *bod_i;
+            bod_t *merging_bod;
+            bod_t *most_overlap_bod;
+            R rad_dist{};
+            mom_t max_mom{min_tot_com_mom};
+            mom_t curr_mom{};
+            long double min_dist = HUGE_VALL; // usually expands to infinity
+            T o_norm_vel;
+            T i_norm_vel;
+            for (; outer < num_bods; ++outer) {
+                merging_bod = nullptr;
+                most_overlap_bod = nullptr;
+                overlapping.clear();
+                bod_t &bod_o = bods[outer];
+                // min_mom = min_tot_com_mom - bod.mass*()
+                for (inner = outer + 1; inner < num_bods; ++inner) {
+                    bod_i = bods.data() + inner;
+                    rad_dist = bod_o.radius + bod_i->radius;
+                    vector3D<T> &&r12 = bod_i->curr_pos - bod_o.curr_pos;
+                    auto &&dist = r12.magnitude();
+                    if (rad_dist > dist) {
+                        if ((o_norm_vel = bod_o.curr_vel*r12) > 0 || (i_norm_vel = bod_i->curr_vel*r12) <= 0) {
+                            vector3D<T> &&com_vel = vel_com(bod_o, *bod_i);
+                            if ((curr_mom = bod_o.mass_*(o_norm_vel - com_vel*r12) -
+                                            bod_i->mass_*(i_norm_vel - com_vel*r12)) >= max_mom) {
+                                max_mom = curr_mom;
+                                merging_bod = bod_i;
+                                continue;
+                            }
+                            if (merging_bod == nullptr) {
+                                if (dist < min_dist) {
+                                    dist = min_dist;
+                                    most_overlap_bod = bod_i;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (merging_bod != nullptr) {
+
+                }
+            }
+        }
         static inline bool check_option(int option) noexcept {
             unsigned short loword = option & 0x0000ffff;
             unsigned short hiword = option >> 16;
-            return (loword & (loword - 1)) == 0 || loword == 0 || loword > rk4 ||
-                   (hiword & (hiword - 1)) == 0 || hiword > 2;
+            return !(loword & (loword - 1)) || !loword || loword > rk4 ||
+                   !(hiword & (hiword - 1)) || hiword > 2;
+        }
+        constexpr void check_coll() {
+            static_assert(collisions <= 7 && !(collisions & (collisions + 1)),
+                          "Invalid collision-checking option.");
         }
         void print_progress(const unsigned long long &step) const noexcept {
 #ifndef _WIN32
@@ -885,20 +998,23 @@ namespace gtd {
         }
     public:
         system(const std::initializer_list<bod_t> &list) : bods{list} {
+            check_overlap();
+            check_coll();
             parse_units_format("M1:1,D1:1,T1:1");
             clear_bodies();
-            check_overlap();
         }
         system(std::initializer_list<bod_t> &&list) : bods{std::move(list)} {
+            check_overlap();
+            check_coll();
             parse_units_format("M1:1,D1:1,T1:1");
             clear_bodies();
-            check_overlap();
         }
         explicit system(long double timestep = 1, unsigned long long num_iterations = 1000,
                         const char *units_format = "M1:1,D1:1,T1:1") :
                         dt{timestep}, iterations{num_iterations} {
             /* units_format is a string with 3 ratios: it specifies the ratio of the units used for mass, distance and
              * time to kg, metres and seconds (SI units), respectively. This means any units can be used. */
+            check_coll();
             parse_units_format(units_format);
         }
         system(const std::vector<body<M, R, T>> &bodies, long double timestep = 1,
@@ -906,28 +1022,34 @@ namespace gtd {
                bods{bodies}, dt{timestep}, iterations{num_iterations} {
             /* units_format is a string with 3 ratios: it specifies the ratio of the units used for mass, distance and
              * time to kg, metres and seconds (SI units), respectively. This means any units can be used. */
+            check_overlap();
+            check_coll();
             parse_units_format(units_format);
             clear_bodies();
-            check_overlap();
         }
         system(std::vector<body<M, R, T>> &&bodies, long double timestep = 1,
                unsigned long long num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
                bods{std::move(bodies)}, dt{timestep}, iterations{num_iterations} {
+            check_overlap();
+            check_coll();
             parse_units_format(units_format);
             clear_bodies();
-            check_overlap();
         }
         /* copy constructors are made to only copy the variables seen below: it does not make sense for a new system
          * object (even when copy-constructed) to be "evolved" if it has not gone through the evolution itself */
-        system(const system<M, R, T> &other) :
+        template <bool prg, bool mrg, int coll> // so a system can be constructed from another without same checks
+        system(const system<M, R, T, prg, mrg, coll> &other) :
         bods{other.bods}, dt{other.dt}, iterations{other.iterations}, G{other.G} {
-            clear_bodies();
             check_overlap();
+            check_coll();
+            clear_bodies();
         }
-        system(system<M, R, T> &&other) : bods{std::move(other.bods)}, dt{other.dt}, iterations{other.iterations},
-        G{other.G} {
-            clear_bodies();
+        template <bool prg, bool mrg, int coll>
+        system(system<M, R, T, prg, mrg, coll> &&other) :
+        bods{std::move(other.bods)}, dt{other.dt}, iterations{other.iterations}, G{other.G} {
             check_overlap();
+            check_coll();
+            clear_bodies();
         }
         vec_size_t num_bodies() {
             return bods.size();
@@ -964,9 +1086,8 @@ namespace gtd {
             return *this;
         }
         sys_t &add_bodies(const std::vector<bod_t> &bodies) {
-            if (bodies.size() == 0) {
+            if (!bodies.size())
                 return *this;
-            }
             vec_size_t index = bods.size();
             bods.insert(bods.end(), bodies.begin(), bodies.end());
             clear_bodies(index);
@@ -974,9 +1095,8 @@ namespace gtd {
             return *this;
         }
         sys_t &add_bodies(std::vector<bod_t> &&bodies) {
-            if (bodies.size() == 0) {
+            if (!bodies.size())
                 return *this;
-            }
             for (auto &b : bodies) {
                 b.clear();
                 bods.push_back(std::move(b));
@@ -985,11 +1105,9 @@ namespace gtd {
             return *this;
         }
         const bod_t &get_body(unsigned long long id) {
-            for (const auto &b : *this) {
-                if (b.id == id) {
+            for (const auto &b : *this)
+                if (b.id == id)
                     return b;
-                }
-            }
             throw std::invalid_argument("The id passed does not correspond to any body present in this system "
                                         "object.\n");
         }
@@ -1034,7 +1152,7 @@ namespace gtd {
             if (evolved)
                 this->clear_evolution();
             vec_size_t num_bods = bods.size();
-            this->create_energy_vectors(num_bods);
+            this->create_energy_vectors();
 #ifndef _WIN32
             if constexpr (prog)
                 std::cout << BOLD_TXT_START;
@@ -1050,10 +1168,16 @@ namespace gtd {
                 }
                 else {
                     while (steps++ < iterations) {
+                        if constexpr (collisions == 7) {
+
+                        }
                         this->calc_acc_and_e();
                         this->take_euler_step();
                         /* by having "prog" as a template parameter, it avoids having to re-evaluate whether it is true
                          * or not within the loop, since the "if constexpr ()" branches get rejected at compile-time */
+                        if constexpr (collisions == 3) {
+
+                        }
                         if constexpr (prog)
                             this->print_progress(steps);
                     }
@@ -1365,8 +1489,8 @@ namespace gtd {
                 for (i = 0; i <= prev_iterations; ++i) {
                     out << i*prev_dt << ',' << bod.positions[i].x << ',' << bod.positions[i].y << ','
                         << bod.positions[i].z << ',' << bod.velocities[i].x << ',' << bod.velocities[i].y << ','
-                        << bod.velocities[i].z << ',' << bod.energies[i] << ',' << pe[count][i] << ','
-                        << energy[count][i] << "\r\n";
+                        << bod.velocities[i].z << ',' << bod.energies[i] << ',' << pe[bod.id][i] << ','
+                        << energy[bod.id][i] << "\r\n";
                 }
                 out << ",,,,,,,,,\r\n";
                 ++count;
@@ -1427,10 +1551,11 @@ namespace gtd {
         }
         template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg, bool mrg>
         friend std::ostream &operator<<(std::ostream &os, const system<m, r, t, prg, mrg> &sys);
-        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg1, bool prg2, bool mrg1, bool mrg2>
-        friend system<m, r, t, prg1 && prg2, mrg1 && mrg2>operator+(const system<m, r, t, prg1, mrg1> &sys1,
-                                                                    const system<m, r, t, prg2, mrg2> &sys2);
-        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool>
+        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg1, bool prg2, bool mrg1, bool mrg2,
+                  int c1, int c2>
+        friend system<m, r, t, prg1 & prg2, mrg1 & mrg2, c1 & c2>operator+(const system<m, r, t, prg1, mrg1, c1> &sys1,
+                                                                           const system<m, r, t, prg2, mrg2, c2> &sys2);
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int>
         friend class system;
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
                   isNumWrapper, bool>
@@ -1451,9 +1576,9 @@ namespace gtd {
         os << ']';
         return os;
     }
-    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, bool prg1, bool prg2, bool mrg1, bool mrg2>
-    system<M, R, T, prg1 && prg2, mrg1 && mrg2> operator+(const system<M, R, T, prg1, mrg1> &sys1,
-                                                          const system<M, R, T, prg2, mrg2> &sys2) {
+    template<isNumWrapper M, isNumWrapper R, isNumWrapper T, bool prg1, bool prg2, bool mrg1, bool mrg2, int c1, int c2>
+    system<M, R, T, prg1 & prg2, mrg1 & mrg2, c1 & c2> operator+(const system<M, R, T, prg1, mrg1, c1> &sys1,
+                                                                 const system<M, R, T, prg2, mrg2, c2> &sys2) {
         typename std::vector<body<M, R, T>>::size_type size1 = sys1.bods.size();
         typename std::vector<body<M, R, T>>::size_type size2 = sys2.bods.size();
         if ((size1 == 0 && size2 == 0) || sys1.G != sys2.G) {
@@ -1465,7 +1590,7 @@ namespace gtd {
         if (size2 == 0) {
             return {sys1};
         }
-        system<M, R, T, prg1 && prg2, mrg1 && mrg2>
+        system<M, R, T, prg1 & prg2, mrg1 & mrg2, c1 & c2>
                ret_sys(sys1.bods, (sys1.dt + sys2.dt)/2.0l, (sys1.iterations + sys2.iterations)/2);
         // for (typename std::vector<body<M, R, T>>::size_type i = 0; i < size1; ++i) {
         //     for (typename std::vector<body<M, R, T>>::size_type j = 0; j < size2; ++j) {
@@ -1486,6 +1611,14 @@ namespace gtd {
     typedef system<long double, long double, long double> sys;
     typedef system<long double, long double, long double, true> sys_p;
     typedef system<long double, long double, long double, false, true> sys_m;
+    typedef system<long double, long double, long double, false, false, 3> sys_c;
+    typedef system<long double, long double, long double, false, false, 7> sys_C;
     typedef system<long double, long double, long double, true, true> sys_pm;
+    typedef system<long double, long double, long double, true, false, 3> sys_pc;
+    typedef system<long double, long double, long double, true, false, 7> sys_pC;
+    typedef system<long double, long double, long double, false, true, 3> sys_mc;
+    typedef system<long double, long double, long double, false, true, 7> sys_mC;
+    typedef system<long double, long double, long double, true, true, 3> sys_pmc;
+    typedef system<long double, long double, long double, true, true, 7> sys_pmC;
 }
 #endif
