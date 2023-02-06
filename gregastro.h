@@ -862,6 +862,7 @@ namespace gtd {
         const cam_t *pcam = &cam;
         bool def_cam = true;
         bool rendered = false;
+        bool cleared = false;
         LumT **fdata = nullptr;
         /* the five variables below are to support concurrency in the ray-tracing algorithm - they are only needed, in
          * reality, to ensure brightnesses of pixels are calculated correctly - since the absolute brightness of any
@@ -934,6 +935,8 @@ namespace gtd {
             LumT **ptr = fdata;
             for (unsigned int j = 0; j < bmp::height; ++j, ++ptr)
                 *ptr = new LumT[bmp::width];
+            if (bmp::data == nullptr)
+                bmp::reallocate();
         }
         void dealloc() {
             if (fdata == nullptr)
@@ -1282,8 +1285,8 @@ namespace gtd {
         void add_stars(const std::vector<star_t*> &&new_stars) {//with these r-value overloads, init. syntax may be used
             this->add_stars(new_stars);
         }
-        template <bool progress = false, bool merge_if_overlapping = false>
-        void add_system(const system<M, R, T, progress, merge_if_overlapping> &sy) {
+        template <bool progress = false, bool merge_if_overlapping = false, int coll = 0>
+        void add_system(const system<M, R, T, progress, merge_if_overlapping, coll> &sy) {
             for (const bod_t &b : sy.bods) {
                 bodies.emplace(b.id, &b);
                 body_clrs.emplace(b.id, col_gen_b());
@@ -1307,6 +1310,8 @@ namespace gtd {
             return pcam == &cam; // returns true only if internal camera is being used
         }
         bool render(bool reset_star_positions = true) {
+            if (cleared)
+                this->alloc();
             if (rendered) {
                 bmp::sc_clr = colors::black;
                 bmp::fill_bg();
@@ -1471,6 +1476,7 @@ namespace gtd {
         void clear() override {
             bmp::clear();
             this->dealloc();
+            cleared = true;
         }
         void reallocate() override {
             bmp::reallocate();
