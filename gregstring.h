@@ -2012,37 +2012,8 @@ namespace gtd {
     template <typename T, typename... types>
     void print(T arg, types... args) {
         print(arg);
-        if constexpr (sizeof...(args) > 0) {
+        if constexpr (sizeof...(args))
             print(args...);
-        }
-    }
-    template<typename T>
-    inline void swap(T &A, T &B) {
-        T C{A};
-        A = B;
-        B = C;
-    }
-    template<class BiDirectionalIterator>
-    void reverse(BiDirectionalIterator begin, BiDirectionalIterator end) {
-        end--;
-        if (begin == end) {
-            return;
-        }
-        while (begin < end) {
-            swap(*begin, *end);
-            ++begin;
-            --end;
-        }
-    }
-    template<class ForwardIterator, typename T>
-    void fill(ForwardIterator begin, ForwardIterator end, T value) {
-        if (begin == end && begin == end - 1) {
-            return;
-        }
-        while (begin != end) {
-            *begin = value;
-            ++begin;
-        }
     }
     namespace word_transforms {
         typedef const char *(*WT)(char *);

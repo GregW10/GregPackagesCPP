@@ -2,68 +2,9 @@
 #define GREGMAT_H
 
 #include <sstream>
-#include <cmath>
-
-#ifdef __PI__
-#undef __PI__
-#endif
-
-#define __PI__ (3.14159265358979323846264338327950288419716939937510582097494459230)
-
-template <typename From, typename To>
-concept isConvertible = std::is_convertible<From, To>::value;
-
-template <typename T>
-concept isIntegral = std::is_integral<T>::value;
-// isNumWrapper is also used for the vector, vector2D and vector3D classes
-template <typename T> // any primitive type, or any class acting as a numerical wrapper type which implements...
-concept isNumWrapper = requires (T val, T val2, size_t l, long double f, std::ostream out) {
-    T{1}; // ...a constructor which accepts numerical types
-    T{T{}}; // a constructor which accepts another type T, and a default (empty) constructor (should ideally construct
-    // an object corresponding to the number zero, or else numerous methods within matrix<T> do not make sense)
-    {val + val2} -> isConvertible<T>; // must be overloaded for addition onto itself
-    {val + l} -> isConvertible<T>; // must be overloaded for addition onto integer type
-    {l + val} -> isConvertible<T>; // ... and vice versa
-    {val += val2} -> isConvertible<T>;
-    {val += l} -> isConvertible<T>;
-    {val - val2} -> isConvertible<T>; // same for subtraction
-    {val - l} -> isConvertible<T>;
-    {l - val} -> isConvertible<T>;
-    {val -= val2} -> isConvertible<T>;
-    {val -= l} -> isConvertible<T>;
-    {val*val2} -> isConvertible<T>; // multiplication
-    {val*l} -> isConvertible<T>;
-    {l*val} -> isConvertible<T>;
-    {val *= val2} -> isConvertible<T>;
-    {val *= l} -> isConvertible<T>;
-    {val/val2} -> isConvertible<T>; // same for division
-    {val/l} -> isConvertible<T>;
-    {l/val} -> isConvertible<T>;
-    {val /= val2} -> isConvertible<T>;
-    {val /= l} -> isConvertible<T>;
-    {val == l} -> std::same_as<bool>; // must have the comparison operators overloaded
-    {val != l} -> std::same_as<bool>;
-    {val + f} -> isConvertible<T>; // must be overloaded for addition onto float type
-    {f + val} -> isConvertible<T>; // ... and vice versa
-    {val += f} -> isConvertible<T>;
-    {val - f} -> isConvertible<T>;
-    {f - val} -> isConvertible<T>;
-    {val -= f} -> isConvertible<T>;
-    {val*f} -> isConvertible<T>;
-    {f*val} -> isConvertible<T>;
-    {val *= f} -> isConvertible<T>;
-    {val/f} -> isConvertible<T>;
-    {f/val} -> isConvertible<T>;
-    {val /= f} -> isConvertible<T>;
-    {val == f} -> std::same_as<bool>; // must have the comparison operators overloaded
-    {val != f} -> std::same_as<bool>;
-    {val == val2} -> std::same_as<bool>;
-    {val != val2} -> std::same_as<bool>;
-    {out << val}; // must have the insertion operator overloaded for outputting to a std::ostream object
-}; // see isIntegralNumWrapper concept in gregvec.h for modulo requirements
+#include "gregalg.h"
 
 namespace gtd {
-    constexpr long double PI = 3.14159265358979323846264338327950288419716939937510582097494459230;
     class empty_matrix_error : public std::invalid_argument {
     public:
         empty_matrix_error() : std::invalid_argument("A matrix cannot have a size of zero.\n") {}
@@ -78,76 +19,20 @@ namespace gtd {
     public:
         invalid_matrix_format() : std::invalid_argument("The requested matrix has an invalid format.\n") {}
         explicit invalid_matrix_format(const char *message) : std::invalid_argument(message) {}
-    }; // the below 3 functions emulate 'zip()' from Python (I really like what I've done here if I may say so myself)
-    template <typename... pack> // first: creates copies of all the elements in the vectors passed
-    std::vector<std::tuple<pack...>> zip_cpy(const std::vector<pack>&... vectors) {
-        if constexpr (sizeof...(pack) == 0) {
-            return std::vector<std::tuple<>>();
-        }
-        else { // to reject branches at compile time
-            std::vector<std::tuple<pack...>> zipped;
-            std::vector<size_t> sizes = {(vectors.size())...};
-            size_t size = sizes[0];
-            if (!std::all_of(sizes.begin(), sizes.end(), [&size](size_t s) { return s == size; })) {
-                return zipped;
-            }
-            for (size_t i = 0; i < size; ++i) {
-                zipped.push_back(std::tuple<pack...>(vectors[i]...));
-            }
-            return zipped;
-        }
-    }
-    template <typename... pack> // second: with references
-    std::vector<std::tuple<pack&...>> zip_ref(std::vector<pack>&... vectors) {
-        if constexpr (sizeof...(pack) == 0) {
-            return std::vector<std::tuple<>>();
-        }
-        else {
-            std::vector<std::tuple<pack&...>> zipped;
-            std::vector<size_t> sizes = {(vectors.size())...};
-            size_t size = sizes[0];
-            if (!std::all_of(sizes.begin(), sizes.end(), [&size](size_t s) { return s == size; })) {
-                return zipped;
-            }
-            for (size_t i = 0; i < size; ++i) {
-                zipped.push_back(std::move(std::tie(vectors[i]...)));
-            }
-            return zipped;
-        }
-    }
-    template <typename... pack> // third: with const references
-    std::vector<std::tuple<const pack&...>> zip_cref(const std::vector<pack>&... vectors) {
-        if constexpr (sizeof...(pack) == 0) {
-            return std::vector<std::tuple<>>();
-        }
-        else {
-            std::vector<std::tuple<const pack&...>> zipped;
-            std::vector<size_t> sizes = {(vectors.size())...};
-            size_t size = sizes[0];
-            if (!std::all_of(sizes.begin(), sizes.end(), [&size](size_t s) {return s == size;})) {
-                return zipped;
-            }
-            for (size_t i = 0; i < size; ++i) {
-                zipped.push_back(std::tie(std::as_const(vectors[i])...));
-            }
-            return zipped;
-        }
-    }
+    };
     template <isNumWrapper T, size_t rows1, size_t rows2, size_t columns1, size_t columns2> // matrix multiplication for
     std::vector<std::vector<T>> matmul(T mat1[rows1][columns1], T mat2[rows2][columns2]) { // matrices represented as
         std::vector<std::vector<T>> ret_matrix; //                                            2D arrays
-        if constexpr (columns1 != rows2 || rows1 == 0 || columns1 == 0 || rows2 == 0 || columns2 == 0) {
+        if constexpr (columns1 != rows2 || rows1 == 0 || columns1 == 0 || rows2 == 0 || columns2 == 0)
             return ret_matrix;
-        }
         std::vector<T> sub;
         size_t total;
         for (size_t i = 0; i < rows1; ++i) {
             sub.clear();
             for (size_t j = 0; j < columns2; ++j) {
                 total = 0;
-                for (size_t k = 0; k < columns1; ++k) {
+                for (size_t k = 0; k < columns1; ++k)
                     total += mat1[i][k]*mat2[k][j];
-                }
                 sub.push_back(total); // single element in final matrix
             }
             ret_matrix.push_back(sub); // row in final matrix
@@ -159,9 +44,8 @@ namespace gtd {
                 const std::vector<std::vector<U>> &mat2) ->
     std::vector<std::vector<decltype(std::declval<T>()*std::declval<U>())>> {
         std::vector<std::vector<T>> ret_matrix;
-        if (mat1.empty() || mat2.empty() || mat1[0].empty() || mat2[0].empty()) {
+        if (mat1.empty() || mat2.empty() || mat1[0].empty() || mat2[0].empty())
             return ret_matrix;
-        }
         const size_t rows1 = mat1.size();
         const size_t columns1 = mat1[0].size();
         const size_t rows2 = mat2.size();
@@ -177,9 +61,8 @@ namespace gtd {
             sub.clear();
             for (size_t j = 0; j < columns2; ++j) {
                 total = 0;
-                for (size_t k = 0; k < columns1; ++k) {
+                for (size_t k = 0; k < columns1; ++k)
                     total += mat1[i][k]*mat2[k][j];
-                }
                 sub.push_back(total);
             }
             ret_matrix.push_back(sub);

@@ -900,6 +900,7 @@ namespace gtd {
             return ret;
         };
         void populate_tot_map() {
+            tot_map.clear();
             tot_map.insert(bodies.begin(), bodies.end());
             tot_map.insert(stars.begin(), stars.end());
         }

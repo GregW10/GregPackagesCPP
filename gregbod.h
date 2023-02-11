@@ -95,6 +95,9 @@ namespace gtd {
     class body_counter {
         static inline unsigned long long count = 0;
         static inline std::set<unsigned long long> ids;
+        /* the below mutex is present to allow body_counter objects to be created concurrently in different threads,
+         * without two IDs ever being the same */
+        static inline std::mutex id_mutex;
         // void set_id() {
         //     unsigned long long prev = 0;
         //     for (const auto &i : ids) {
@@ -106,20 +109,22 @@ namespace gtd {
         //     id = *(ids.end()--) + 1;
         // }
     protected:
-        unsigned long long id; // is immutable after the object has been constructed
+        unsigned long long id; // is immutable after the object has been constructed - unless the object is moved
     public:
         body_counter() {
             // id = count;
             // if (ids.contains(id))
             //     set_id();
-            id = 0;
-            while (ids.contains(id)) ++id;
-            ids.insert(id);
+            this->id = 0;
+            std::lock_guard<std::mutex> lock{id_mutex};
+            while (ids.contains(id)) ++this->id;
+            ids.insert(this->id);
             ++count;
         }
         body_counter(body_counter &&other) noexcept {
             this->id = other.id;
             other.id = -1; // would never, ever be reached (normally)
+            std::lock_guard<std::mutex> lock{id_mutex};
             while (ids.contains(other.id))
                 --other.id;
             ids.insert(other.id); // important in case other is not actually destroyed after this call
@@ -135,29 +140,28 @@ namespace gtd {
         static std::vector<unsigned long long> get_all_ids() {
             return {ids.begin(), ids.end()};
         }
-        // body_counter &operator=(const body_counter &other) { // again, takes no effect as id must be unique
-        //     return *this;
-        // }
         static void print_all_ids() {
             for (const unsigned long long &i : ids)
                 printf("Id: %llu\n", i);
         }
         ~body_counter() {
+            std::lock_guard<std::mutex> lock{id_mutex};
             --count;
-            ids.erase(id);
+            ids.erase(this->id);
         }
         body_counter &operator=(const body_counter&) = delete; // all IDs must be unique
         body_counter &operator=(body_counter &&other) noexcept {
             this->id = other.id;
             other.id = -1;
+            std::lock_guard<std::mutex> lock{id_mutex};
             while (ids.contains(other.id))
                 --other.id;
             ids.insert(other.id);
             return *this;
         }
-        /* the first three overloads (for <) are essential as they allow a transparent comparator to be used within
-         * the std::set used to store bodies in the gtd::system class (so that lookup can be performed based on ID and
-         * not on a body itself - thus allowing a std::set to be used instead of a std::map) */
+        /* the first three overloads (for <) are essential as they allow a transparent comparator to be used within any
+         * std::set used to store bodies (so that lookup can be performed based on ID and not on a body itself, thus
+         * allowing a std::set to be used instead of a std::map) */
         friend bool operator<(const body_counter&, const body_counter&);
         friend bool operator<(const unsigned long long&, const body_counter&);
         friend bool operator<(const body_counter&, const unsigned long long&);
@@ -235,7 +239,7 @@ namespace gtd {
         return bc.id != ID;
     }
     std::ostream &operator<<(std::ostream &os, const body_counter &bc) {
-        return os << "[gtd::body_counter@" << &bc << ":id=" << bc.id << ",total_count=" << body_counter::count << ']';
+        return os << "[gtd::body_counter@" << &bc << ":id=" << bc.id << ']';
     }
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double>
     class body : public body_counter {
@@ -271,19 +275,23 @@ namespace gtd {
             energies.push_back(curr_ke);
         }
         void set_ke() {
-            auto mag = curr_vel.magnitude(); // best to push var. onto stack rather than call func. twice
-            curr_ke = 0.5*mass_*mag*mag; // this avoids the call to pow(mag, 2)
-        } // luckily, ^^^ 0.5 can be represented exactly in binary (although mag probably won't be exact)
+            auto &&mag = curr_vel.magnitude(); // best to push var. onto stack rather than call func. twice
+            curr_ke = 0.5*mass_*mag*mag;
+        }
         void check_mass() { // I prefer to throw an exception, rather than simply taking no action, to make it clear
             if (mass_ < M{0}) { // ... where a negative quantity has attempted to be set
                 throw negative_mass_error();
             }
         }
-        void check_radius() {
-            if (radius < R{0}) {
+        void check_radius() const {
+            if (radius < R{0})
                 throw negative_radius_error();
-            }
         }
+        body(M &&body_mass, R &&body_radius, vector3D<T> &&pos, vector3D<T> &&vel, vector3D<T> &&acceleration,
+             const long double &&restitution) :
+        mass_{std::move(body_mass)}, radius{std::move(body_radius)}, curr_pos{std::move(pos)}, curr_vel{std::move(vel)},
+        acc{acceleration}, rest_c{restitution}
+        {add_pos_vel_ke(); check_mass(); check_radius();} // private ctor as only needed for 1 func.
     public:
         body() {add_pos_vel_ke(); check_mass(); check_radius();}
         body(M &&body_mass, R &&body_radius) : mass_{std::move(body_mass)}, radius{std::move(body_radius)}
@@ -298,13 +306,14 @@ namespace gtd {
         {add_pos_vel_ke(); check_mass(); check_radius();}
         template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t>
         body(const body<m, r, t> &other) : mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos},
-        curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc} {add_pos_vel();}
+        curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc}, rest_c{other.rest_c} {add_pos_vel();}
         body(const body<M, R, T> &other) : mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos},
-        curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc} {add_pos_vel();}
+        curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc}, rest_c{other.rest_c}  {add_pos_vel();}
         body(body<M, R, T> &&other) noexcept : body_counter{std::move(other)}, mass_{std::move(other.mass_)},
         radius{std::move(other.radius)}, curr_pos{std::move(other.curr_pos)}, curr_vel{std::move(other.curr_vel)},
         curr_ke{std::move(other.curr_ke)}, acc{std::move(other.acc)}, positions{std::move(other.positions)},
-        velocities{std::move(other.velocities)}, energies{std::move(other.energies)}, cref{std::move(other.cref)} {}
+        velocities{std::move(other.velocities)}, energies{std::move(other.energies)}, cref{std::move(other.cref)},
+        rest_c{other.rest_c} {}
         const M &mass() const noexcept {
             return mass_;
         }
@@ -569,6 +578,7 @@ namespace gtd {
             this ->curr_ke = other.curr_ke;
             this->acc = other.acc;
             this->pe = other.pe;
+            this->rest_c = other.rest_c;
             clear();
             return *this;
         }
@@ -583,6 +593,7 @@ namespace gtd {
             this ->curr_ke = other.curr_ke;
             this->acc = other.acc;
             this->pe = other.pe;
+            this->rest_c = other.rest_c;
             clear();
             return *this;
         }
@@ -597,6 +608,7 @@ namespace gtd {
             this ->curr_ke = std::move(other.curr_ke);
             this->acc = std::move(other.acc);
             this->pe = std::move(other.pe);
+            this->rest_c = other.rest_c; // is long double, so not moved
             this->positions = std::move(other.positions);
             this->velocities = std::move(other.velocities);
             this->energies = std::move(other.energies);
@@ -615,10 +627,12 @@ namespace gtd {
                     return *this;
                 this->mass_ *= M{2};
                 this->radius = cbrtl(2*this->radius*this->radius*this->radius);
-                return *this; // clearly, for self-addition, position and velocity remain unchanged
+                return *this; // clearly, for self-addition, position, velocity & acceleration remain unchanged
             }
             this->curr_pos = com(*this, other);
             this->curr_vel = vel_com(*this, other);
+            this->acc = acc_com(*this, other);
+            this->rest_c = MEAN_AVG(this->rest_c, other.rest_c); // average coefficient of restitution
             this->mass_ += other.mass_;
             this->radius = cbrtl(this->radius*this->radius*this->radius + other.radius*other.radius*other.radius);
             this->add_pos_vel_ke();
@@ -631,6 +645,8 @@ namespace gtd {
         friend inline auto com(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2);
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
         friend inline auto vel_com(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2);
+        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
+        friend inline auto acc_com(const body<m1, r1, t1>&, const body<m2, r2, t2>&);
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
         friend inline auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2);
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
@@ -662,18 +678,23 @@ namespace gtd {
         return (b1.mass_*b1.curr_pos + b2.mass_*b2.curr_pos)/(b1.mass_ + b2.mass_);
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
-    inline auto vel_com(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) { /* average weighted velocity, taking
+    inline auto vel_com(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) { /* centre-of-mass velocity, taking
         conservation of momentum into account */
         return (b1.momentum() + b2.momentum())/(b1.mass_ + b2.mass_);
+    }
+    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
+    inline auto acc_com(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) {
+        return (b1.mass_*b1.acc + b2.mass_*b2.acc)/(b1.mass_ + b2.mass_);
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
     inline auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &b2) {
         /* performs a "merging" of two bodies, with the new body having the sum of both masses, being at the
          * centre-of-mass of both bodies, having a volume equal to the sum of both volumes (using the radii), and a new
-         * velocity such that momentum is conserved (i.e., COM velocity) */
+         * velocity & acceleration such that momentum is conserved (i.e., COM velocity and acceleration) */
         /* self-addition is not considered here as the returned body is new (body has not been added onto itself) */
         return body<decltype(b1.mass_ + b2.mass_), long double, decltype(m1{}*t2{}/m2{})>(b1.mass_ + b2.mass_,
-        cbrtl(b1.radius*b1.radius*b1.radius + b2.radius*b2.radius*b2.radius), com(b1, b2), vel_com(b1, b2));
+        cbrtl(b1.radius*b1.radius*b1.radius + b2.radius*b2.radius*b2.radius), com(b1, b2), vel_com(b1, b2),
+        acc_com(b1, b2), MEAN_AVG(b1.rest_c, b2.rest_c));
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, isNumWrapper m2, isNumWrapper r2, isNumWrapper t2>
     inline auto operator+(const body<m1, r1, t1> &b1, const body<m2, r2, t2> &&b2) {
@@ -1018,8 +1039,6 @@ namespace gtd {
             mom_t max_mom{min_tot_com_mom};
             mom_t curr_mom{};
             long double min_dist = HUGE_VALL; // usually expands to infinity
-            T o_norm_vel;
-            T i_norm_vel;
             mom_t axis_mom_o;
             mom_t axis_mom_i;
             vec_size_t merging_index;
@@ -1027,7 +1046,6 @@ namespace gtd {
                 merging_bod = nullptr;
                 overlapping.clear();
                 bod_t &bod_o = bods[outer];
-                // min_mom = min_tot_com_mom - bod.mass*()
                 for (inner = outer + 1; inner < num_bods; ++inner) {
                     bod_i = bods.data() + inner;
                     rad_dist = bod_o.radius + bod_i->radius;
@@ -1036,8 +1054,6 @@ namespace gtd {
                     r12.x /= dist; r12.y /= dist; r12.z /= dist; // more efficient than calling normalise()
                     if (rad_dist > dist) {
                         vector3D<T> &&com_vel = vel_com(bod_o, *bod_i);
-                        o_norm_vel = bod_o.curr_vel*r12;
-                        i_norm_vel = -bod_i->curr_vel*r12;
                         axis_mom_o = bod_o.momentum()*r12;
                         axis_mom_i = bod_i->momentum()*r12;
                         if ((curr_mom = axis_mom_o - axis_mom_i - (bod_o.mass_ - bod_i->mass_)*(com_vel*r12))>=max_mom){
@@ -1063,7 +1079,7 @@ namespace gtd {
                     energy.emplace(merged.id, std::vector<T>{}); // same for its total energy (as it stores its own KE)
                     del_bods.emplace(std::move(bod_o)); // move the merged bodies into the deleted bodies std::set
                     del_bods.emplace(std::move(*bod_i));
-                    bods.erase(bods.begin() + --outer); // erase the merged bodies from the std::vector
+                    bods.erase(bods.begin() + outer--); // erase the merged bodies from the std::vector
                     bods.erase(bods.begin() + merging_index - 1); // -1 because outer body was just deleted
                     bods.emplace_back(std::move(merged)); // move the new body into the std::vector storing all bodies
                     --num_bods; // there is a net loss of 1 body
@@ -1077,8 +1093,8 @@ namespace gtd {
                     T new_i_vel;
                     long double avg_rest;
                     for (const auto &[_, tup] : overlapping) {
-                        o_vel = std::get<1>(tup)/bod_o.mass_; // recalculating these is cheaper than adding them to the
-                        i_vel = std::get<2>(tup)/bod_i->mass_; // tuple up above
+                        o_vel = std::get<1>(tup)/bod_o.mass_; // recalculating is cheaper than adding them to the tuple
+                        i_vel = std::get<2>(tup)/bod_i->mass_; // up above
                         o_minus_i = o_vel - i_vel; // v1 - v2
                         avg_rest = (bod_o.rest_c + std::get<0>(tup)->rest_c)/2;
                         if (o_vel > 0 || i_vel < 0) {
@@ -1430,10 +1446,9 @@ namespace gtd {
                 else {
                     this->calc_energy();
                     while (steps++ < iterations) {
-                        for (bod_t &bod : bods) {
+                        for (bod_t &bod : bods)
                             /* DRIFT for half a step */
                             bod.curr_pos += half_dt*bod.curr_vel;
-                        }
                         /* update accelerations, then KICK for a full step and DRIFT for half a step, then update E */
                         this->leapfrog_dkd_acc_e_and_step();
                         if constexpr (prog)
