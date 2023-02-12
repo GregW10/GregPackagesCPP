@@ -1613,6 +1613,9 @@ namespace gtd {
                     --ch;
             return new_str;
         }
+        explicit operator bool() const noexcept {
+            return !this->is_empty;
+        }
         friend bool operator==(const String&, const char*) noexcept;
         friend std::ostream &operator<<(std::ostream&, const String&);
         friend std::istream &operator>>(std::istream&, String&);
@@ -2019,9 +2022,8 @@ namespace gtd {
         typedef const char *(*WT)(char *);
         const char *reverse(char *word) {
             size_t length = strlen_c(word);
-            if (word == nullptr || length == 0 || length == 1) {
+            if (word == nullptr || !length || length == 1)
                 return word;
-            }
             char *beg = word;
             char *end = word + strlen_c(word) - 1;
             char temp;
@@ -2033,9 +2035,8 @@ namespace gtd {
             return word;
         }
         const char *cap_first_letter(char *word) {
-            if (word == nullptr || *word == 0) {
+            if (word == nullptr || !*word)
                 return word;
-            }
             *word = *word <= 122 && *word >= 97 ? *word - 32 : *word;
             return word;
         }

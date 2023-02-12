@@ -121,13 +121,13 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
     template <isNumWrapper T>
     class vector {
     public:
-        vector() noexcept = default;
-        vector(const vector<T> &other) noexcept {}
-        vector(const vector<T> &&other) noexcept {}
+        constexpr vector() noexcept = default;
+        constexpr vector(const vector<T> &other) noexcept {}
+        constexpr vector(const vector<T> &&other) noexcept {}
         template <typename U> requires isNumWrapper<U>
-        vector(const vector<U> &other) noexcept {}
+        constexpr vector(const vector<U> &other) noexcept {}
         template <typename U> requires isNumWrapper<U>
-        vector(const vector<U> &&other) noexcept {}
+        constexpr vector(const vector<U> &&other) noexcept {}
         virtual String str(unsigned char f_p_dec_places = 5) const = 0;
         virtual long double magnitude() const noexcept = 0;
         virtual T &operator[](unsigned char index) = 0;
@@ -149,15 +149,16 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         T x{0};
         T y{0};
     public:
-        vector2D() noexcept = default;
-        vector2D(const vector2D<T> &other) : x{other.x}, y{other.y} {}
-        vector2D(vector2D<T> &&other) noexcept : x{std::move(other.x)}, y{std::move(other.y)} {}
+        constexpr vector2D() noexcept = default;
+        constexpr vector2D(const vector2D<T> &other) : x{other.x}, y{other.y} {}
+        constexpr vector2D(vector2D<T> &&other) noexcept : x{std::move(other.x)}, y{std::move(other.y)} {}
         template <typename U> requires isConvertible<U, T>
-        vector2D(const vector2D<U> &other) noexcept : x{(T) other.x}, y{(T) other.y} {}
+        constexpr vector2D(const vector2D<U> &other) noexcept : x{(T) other.x}, y{(T) other.y} {}
         template <typename U> requires isConvertible<U, T>
-        vector2D(const vector2D<U> &&other) noexcept : x{(T) other.x}, y{(T) other.y} {}
-        vector2D(const T &x_component, const T &y_component) noexcept : x{x_component}, y{y_component} {}
-        vector2D(T &&x_component, T &&y_component) noexcept : x{std::move(x_component)}, y{std::move(y_component)} {}
+        constexpr vector2D(const vector2D<U> &&other) noexcept : x{(T) other.x}, y{(T) other.y} {}
+        constexpr vector2D(const T &x_component, const T &y_component) noexcept : x{x_component}, y{y_component} {}
+        constexpr vector2D(T &&x_component, T &&y_component) noexcept :
+        x{std::move(x_component)}, y{std::move(y_component)} {}
         String str(unsigned char f_p_dec_places = 5) const override {
             String s;
             s.append_back(x, f_p_dec_places);
@@ -534,152 +535,155 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->y = std::move(other.y);
             return *this;
         }
+        virtual operator bool() const noexcept { // to allow a vector object to be used as a boolean
+            return this->x != T{0} || this->y != T{0};
+        }
         template <isNumWrapper U>
-        friend std::ostream &operator<<(std::ostream &out, const vector2D<U> &vec);
+        friend std::ostream &operator<<(std::ostream&, const vector2D<U>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator==(const vector2D<U> &vec1, const vector2D<V> &vec2);
+        friend bool operator==(const vector2D<U>&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator==(const vector2D<U> &vec1, const vector2D<V> &&vec2);
+        friend bool operator==(const vector2D<U>&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator==(const vector2D<U> &&vec1, const vector2D<V> &vec2);
+        friend bool operator==(const vector2D<U>&&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator==(const vector2D<U> &&vec1, const vector2D<V> &&vec2);
+        friend bool operator==(const vector2D<U>&&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator!=(const vector2D<U> &vec1, const vector2D<V> &vec2);
+        friend bool operator!=(const vector2D<U>&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator!=(const vector2D<U> &vec1, const vector2D<V> &&vec2);
+        friend bool operator!=(const vector2D<U>&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator!=(const vector2D<U> &&vec1, const vector2D<V> &vec2);
+        friend bool operator!=(const vector2D<U>&&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator!=(const vector2D<U> &&vec1, const vector2D<V> &&vec2);
+        friend bool operator!=(const vector2D<U>&&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<(const vector2D<U> &vec1, const vector2D<V> &vec2);
+        friend bool operator<(const vector2D<U>&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<(const vector2D<U> &vec1, const vector2D<V> &&vec2);
+        friend bool operator<(const vector2D<U>&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<(const vector2D<U> &&vec1, const vector2D<V> &vec2);
+        friend bool operator<(const vector2D<U>&&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<(const vector2D<U> &&vec1, const vector2D<V> &&vec2);
+        friend bool operator<(const vector2D<U>&&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>(const vector2D<U> &vec1, const vector2D<V> &vec2);
+        friend bool operator>(const vector2D<U>&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>(const vector2D<U> &vec1, const vector2D<V> &&vec2);
+        friend bool operator>(const vector2D<U>&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>(const vector2D<U> &&vec1, const vector2D<V> &vec2);
+        friend bool operator>(const vector2D<U>&&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>(const vector2D<U> &&vec1, const vector2D<V> &&vec2);
+        friend bool operator>(const vector2D<U>&&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<=(const vector2D<U> &vec1, const vector2D<V> &vec2);
+        friend bool operator<=(const vector2D<U>&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<=(const vector2D<U> &vec1, const vector2D<V> &&vec2);
+        friend bool operator<=(const vector2D<U>&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<=(const vector2D<U> &&vec1, const vector2D<V> &vec2);
+        friend bool operator<=(const vector2D<U>&&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<=(const vector2D<U> &&vec1, const vector2D<V> &&vec2);
+        friend bool operator<=(const vector2D<U>&&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>=(const vector2D<U> &vec1, const vector2D<V> &vec2);
+        friend bool operator>=(const vector2D<U>&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>=(const vector2D<U> &vec1, const vector2D<V> &&vec2);
+        friend bool operator>=(const vector2D<U>&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>=(const vector2D<U> &&vec1, const vector2D<V> &vec2);
+        friend bool operator>=(const vector2D<U>&&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>=(const vector2D<U> &&vec1, const vector2D<V> &&vec2);
+        friend bool operator>=(const vector2D<U>&&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator==(const vector2D<U> &vec1, const vector3D<V> &vec2);
+        friend bool operator==(const vector2D<U>&, const vector3D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator==(const vector2D<U> &vec1, const vector3D<V> &&vec2);
+        friend bool operator==(const vector2D<U>&, const vector3D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator==(const vector2D<U> &&vec1, const vector3D<V> &vec2);
+        friend bool operator==(const vector2D<U>&&, const vector3D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator==(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
+        friend bool operator==(const vector2D<U>&&, const vector3D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator!=(const vector2D<U> &vec1, const vector3D<V> &vec2);
+        friend bool operator!=(const vector2D<U>&, const vector3D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator!=(const vector2D<U> &vec1, const vector3D<V> &&vec2);
+        friend bool operator!=(const vector2D<U>&, const vector3D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator!=(const vector2D<U> &&vec1, const vector3D<V> &vec2);
+        friend bool operator!=(const vector2D<U>&&, const vector3D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator!=(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
+        friend bool operator!=(const vector2D<U>&&, const vector3D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<(const vector2D<U> &vec1, const vector3D<V> &vec2);
+        friend bool operator<(const vector2D<U>&, const vector3D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<(const vector2D<U> &vec1, const vector3D<V> &&vec2);
+        friend bool operator<(const vector2D<U>&, const vector3D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<(const vector2D<U> &&vec1, const vector3D<V> &vec2);
+        friend bool operator<(const vector2D<U>&&, const vector3D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
+        friend bool operator<(const vector2D<U>&&, const vector3D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>(const vector2D<U> &vec1, const vector3D<V> &vec2);
+        friend bool operator>(const vector2D<U>&, const vector3D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>(const vector2D<U> &vec1, const vector3D<V> &&vec2);
+        friend bool operator>(const vector2D<U>&, const vector3D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>(const vector2D<U> &&vec1, const vector3D<V> &vec2);
+        friend bool operator>(const vector2D<U>&&, const vector3D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
+        friend bool operator>(const vector2D<U>&&, const vector3D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<=(const vector2D<U> &vec1, const vector3D<V> &vec2);
+        friend bool operator<=(const vector2D<U>&, const vector3D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<=(const vector2D<U> &vec1, const vector3D<V> &&vec2);
+        friend bool operator<=(const vector2D<U>&, const vector3D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<=(const vector2D<U> &&vec1, const vector3D<V> &vec2);
+        friend bool operator<=(const vector2D<U>&&, const vector3D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<=(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
+        friend bool operator<=(const vector2D<U>&&, const vector3D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>=(const vector2D<U> &vec1, const vector3D<V> &vec2);
+        friend bool operator>=(const vector2D<U>&, const vector3D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>=(const vector2D<U> &vec1, const vector3D<V> &&vec2);
+        friend bool operator>=(const vector2D<U>&, const vector3D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>=(const vector2D<U> &&vec1, const vector3D<V> &vec2);
+        friend bool operator>=(const vector2D<U>&&, const vector3D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>=(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
+        friend bool operator>=(const vector2D<U>&&, const vector3D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator==(const vector3D<U> &vec1, const vector2D<V> &vec2);
+        friend bool operator==(const vector3D<U>&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator==(const vector3D<U> &vec1, const vector2D<V> &&vec2);
+        friend bool operator==(const vector3D<U>&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator==(const vector3D<U> &&vec1, const vector2D<V> &vec2);
+        friend bool operator==(const vector3D<U>&&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator==(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
+        friend bool operator==(const vector3D<U>&&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator!=(const vector3D<U> &vec1, const vector2D<V> &vec2);
+        friend bool operator!=(const vector3D<U>&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator!=(const vector3D<U> &vec1, const vector2D<V> &&vec2);
+        friend bool operator!=(const vector3D<U>&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator!=(const vector3D<U> &&vec1, const vector2D<V> &vec2);
+        friend bool operator!=(const vector3D<U>&&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator!=(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
+        friend bool operator!=(const vector3D<U>&&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<(const vector3D<U> &vec1, const vector2D<V> &vec2);
+        friend bool operator<(const vector3D<U>&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<(const vector3D<U> &vec1, const vector2D<V> &&vec2);
+        friend bool operator<(const vector3D<U>&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<(const vector3D<U> &&vec1, const vector2D<V> &vec2);
+        friend bool operator<(const vector3D<U>&&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
+        friend bool operator<(const vector3D<U>&&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>(const vector3D<U> &vec1, const vector2D<V> &vec2);
+        friend bool operator>(const vector3D<U>&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>(const vector3D<U> &vec1, const vector2D<V> &&vec2);
+        friend bool operator>(const vector3D<U>&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>(const vector3D<U> &&vec1, const vector2D<V> &vec2);
+        friend bool operator>(const vector3D<U>&&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
+        friend bool operator>(const vector3D<U>&&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<=(const vector3D<U> &vec1, const vector2D<V> &vec2);
+        friend bool operator<=(const vector3D<U>&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<=(const vector3D<U> &vec1, const vector2D<V> &&vec2);
+        friend bool operator<=(const vector3D<U>&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<=(const vector3D<U> &&vec1, const vector2D<V> &vec2);
+        friend bool operator<=(const vector3D<U>&&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator<=(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
+        friend bool operator<=(const vector3D<U>&&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>=(const vector3D<U> &vec1, const vector2D<V> &vec2);
+        friend bool operator>=(const vector3D<U>&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>=(const vector3D<U> &vec1, const vector2D<V> &&vec2);
+        friend bool operator>=(const vector3D<U>&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>=(const vector3D<U> &&vec1, const vector2D<V> &vec2);
+        friend bool operator>=(const vector3D<U>&&, const vector2D<V>&);
         template <isNumWrapper U, isNumWrapper V>
-        friend bool operator>=(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
+        friend bool operator>=(const vector3D<U>&&, const vector2D<V>&&);
         template <isNumWrapper U, isNumWrapper V>
         friend auto operator+(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector2D<decltype(vec1.x + vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
@@ -1166,7 +1170,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend class vector2D;
         template <isNumWrapper>
         friend class vector3D;
-        template <isNumWrapper, isNumWrapper, isNumWrapper>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, ull_t>
         friend class body;
         template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class ray;
@@ -1866,25 +1870,25 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
     protected:
         T z{0};
     public:
-        vector3D() noexcept = default;
-        vector3D(const vector2D<T> &other) noexcept : vector2D<T>(other) {}
-        vector3D(vector2D<T> &&other) noexcept : vector2D<T>(std::move(other)) {}
-        vector3D(const vector3D<T> &other) noexcept : vector2D<T>(other), z{other.z} {}
-        vector3D(vector3D<T> &&other) noexcept : vector2D<T>(std::move(other)), z{std::move(other.z)} {}
-        template <typename U> requires isConvertible<U, T>
-        vector3D(const vector2D<U> &other) noexcept : vector2D<T>(other) {}
-        template <typename U> requires isConvertible<U, T>
-        vector3D(const vector2D<U> &&other) noexcept : vector2D<T>(other) {}
-        template <typename U> requires isConvertible<U, T>
-        vector3D(const vector3D<U> &other) noexcept : vector2D<T>(other), z{(T) other.z} {}
-        template <typename U> requires isConvertible<U, T>
-        vector3D(const vector3D<U> &&other) noexcept : vector2D<T>(other), z{(T) other.z} {}
-        vector3D(const T &x_component, const T &y_component, const T &z_component) noexcept :
+        constexpr vector3D() noexcept = default;
+        constexpr vector3D(const vector2D<T> &other) noexcept : vector2D<T>(other) {}
+        constexpr vector3D(vector2D<T> &&other) noexcept : vector2D<T>(std::move(other)) {}
+        constexpr vector3D(const vector3D<T> &other) noexcept : vector2D<T>(other), z{other.z} {}
+        constexpr vector3D(vector3D<T> &&other) noexcept : vector2D<T>(std::move(other)), z{std::move(other.z)} {}
+        template <isConvertible<T> U>
+        constexpr vector3D(const vector2D<U> &other) noexcept : vector2D<T>(other) {}
+        template <isConvertible<T> U>
+        constexpr vector3D(const vector2D<U> &&other) noexcept : vector2D<T>(other) {}
+        template <isConvertible<T> U>
+        constexpr vector3D(const vector3D<U> &other) noexcept : vector2D<T>(other), z{(T) other.z} {}
+        template <isConvertible<T> U>
+        constexpr vector3D(const vector3D<U> &&other) noexcept : vector2D<T>(other), z{(T) other.z} {}
+        constexpr vector3D(const T &x_component, const T &y_component, const T &z_component) noexcept :
         vector2D<T>{x_component, y_component}, z{z_component} {}
-        vector3D(T &&x_component, T &&y_component, T &&z_component) noexcept :
+        constexpr vector3D(T &&x_component, T &&y_component, T &&z_component) noexcept :
         vector2D<T>{std::move(x_component), std::move(y_component)}, z{std::move(z_component)} {}
-        vector3D(const T &x_component, const T &y_component) noexcept : vector2D<T>{x_component, y_component} {}
-        vector3D(T &&x_component, T &&y_component) noexcept :
+        constexpr vector3D(const T &x_component, const T &y_component) noexcept : vector2D<T>{x_component,y_component}{}
+        constexpr vector3D(T &&x_component, T &&y_component) noexcept :
         vector2D<T>{std::move(x_component), std::move(y_component)} {}
         String str(unsigned char f_p_dec_places = 5) const override {
             String s;
@@ -2562,6 +2566,9 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->z = std::move(other.z);
             return *this;
         }
+        operator bool() const noexcept override {
+            return this->x != T{0} || this->y != T{0} || this->z != T{0};
+        }
         template <isNumWrapper U>
         friend std::ostream &operator<<(std::ostream &out, const vector3D<U> &vec);
         template <isNumWrapper U, isNumWrapper V>
@@ -3194,13 +3201,13 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend class vector2D;
         template <isNumWrapper>
         friend class vector3D;
-        template <isNumWrapper, isNumWrapper, isNumWrapper>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, ull_t>
         friend class body;
         template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class ray;
         template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class camera;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t>
         friend class system;
     };
     template <isNumWrapper U>

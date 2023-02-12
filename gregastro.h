@@ -11,7 +11,7 @@
 #include <latch>
 #include <condition_variable>
 
-#include "gregbod.h"
+#include "gregsys.h"
 #include "gregbmp.h"
 
 namespace gtd {

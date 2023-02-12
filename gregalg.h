@@ -13,7 +13,9 @@
 
 #define __PI__ 3.14159265358979323846264338327950288419716939937510582097494459230
 
-#define MEAN_AVG(a, b) ((a + b)/2)
+#define MEAN_AVG(a, b) (((a) + (b))/2)
+
+typedef unsigned long long ull_t; // I know there is a typedef in stdint.h (or cstdint), but I like this one!
 
 template <typename From, typename To>
 concept isConvertible = std::is_convertible<From, To>::value;
@@ -69,6 +71,18 @@ template <typename T>
 concept isPrintable = requires (const T &a) {
     {std::declval<std::ostream>() << a} -> std::same_as<std::ostream&>;
 };
+template <typename F, typename T>
+concept binaryPredicate = requires (F f, T a, T b) {
+    {f(a, b)} -> std::same_as<bool>;
+};
+template <typename IT>
+concept forwardIterator = requires (IT it, IT other) {
+    {it++} -> std::same_as<IT>;
+    {++it} -> std::same_as<IT&>;
+    {*it};
+    {*it = *other};
+    {it != other} -> std::same_as<bool>;
+};
 namespace gtd {
     constexpr long double PI = 3.14159265358979323846264338327950288419716939937510582097494459230;
     template<typename T>
@@ -82,6 +96,10 @@ namespace gtd {
         T C{*A};
         *A = *B;
         *B = C;
+    }
+    template <typename T> requires requires (T a, T b) {{a <= b} -> std::same_as<bool>;}
+    inline bool le(const T &a, const T &b) {
+        return a <= b;
     }
     // the below 3 functions emulate 'zip()' from Python (I really like what I've done here if I may say so myself)
     template <typename... pack> // first: creates copies of all the elements in the vectors passed
@@ -129,23 +147,47 @@ namespace gtd {
             return zipped;
         }
     }
+    template <forwardIterator IT>
+    auto mean_avg(IT begin, IT end) -> typename std::remove_reference<decltype(*(std::declval<IT>()))>::type {
+        if (begin == end)
+            return typename std::remove_reference<decltype(*(std::declval<IT>()))>::type{};
+        typename std::remove_reference<decltype(*(std::declval<IT>()))>::type total{0};
+        ull_t count = 0;
+        while (begin != end) {
+            total += *begin++;
+            ++count;
+        }
+        return total/count;
+    }
+    template <forwardIterator IT, isNumWrapper OUT>
+    void mean_avg(IT begin, IT end, OUT &out) {
+        if (begin == end)
+            return;
+        out = 0;
+        ull_t count = 0;
+        while (begin != end) {
+            out += *begin++;
+            ++count;
+        }
+        out /= count;
+    }
     /* lots of compile-time magic below */
     template <isNumWrapper ...Args>
-    inline auto mean_avg(const Args& ...args) {
+    constexpr inline auto mean_avg(const Args& ...args) {
         static_assert(sizeof...(args), "mean_avg cannot be called with zero arguments.\n");
         return (args + ...)/sizeof...(args);
     }
     template <isNumWrapper ...Args>
-    inline auto sd(const Args& ...args) {
+    constexpr inline auto sd(const Args& ...args) {
         static_assert(sizeof...(args), "sd cannot be called with zero arguments.\n");
         auto &&mean = mean_avg(args...);
         return std::sqrtl(mean_avg(args*args...) - mean*mean);
     }
-    template <typename T> requires requires (T first, T second) {{first < second} -> std::same_as<bool>;}
-    void sort(std::vector<T> &array, const std::function<bool(const T&, const T&)> &compare =
-              [](const T& t1, const T& t2){return t1 <= t2;}) {
+    template <typename T, binaryPredicate<const T&> F>
+    requires requires (T first, T second) {{first < second} -> std::same_as<bool>;}
+    void bubble_sort(std::vector<T> &array, const F &compare = [](const T& t1, const T& t2){return t1 <= t2;}) {
         using vec_size_t = typename std::vector<T>::size_type;
-        const vec_size_t size = array.size();
+        vec_size_t size = array.size();
         if (!size || size == 1)
             return;
         T *data = array.data();
@@ -158,15 +200,55 @@ namespace gtd {
             count = 1;
             first = data;
             second = first + 1;
-            for (; second < end; ++first, ++second) {
+            --end; // discard last element from consideration after each sort
+            for (; second <= end; ++first, ++second) {
                 if (!compare(*first, *second)) {
                     swap(first, second);
                     continue;
                 }
                 ++count;
             }
-            sorted = (count == size);
+            sorted = (count == size--);
         }
+    }
+    template <typename T, binaryPredicate<const T&> F = bool (*)(const T&, const T&)>
+    requires requires (T first, T second) {{first < second} -> std::same_as<bool>;}
+    void n_sort(std::vector<T> &array, const F &compare = le) {
+        using vec_size_t = typename std::vector<T>::size_type;
+        vec_size_t size = array.size();
+        if (!size || size == 1)
+            return;
+        std::vector<T> sorted(size);
+        T *a_ptr;
+        T *s_ptr = sorted.data();
+        T extreme;
+        vec_size_t extreme_index;
+        vec_size_t outer = 0;
+        vec_size_t inner;
+        vec_size_t new_size = size;
+        while (outer++ < size) {
+            a_ptr = array.data();
+            extreme = *a_ptr++;
+            extreme_index = 0;
+            for (inner = 1; inner < new_size; ++inner, ++a_ptr) {
+                if (!compare(extreme, *a_ptr)) {
+                    extreme = *a_ptr;
+                    extreme_index = inner;
+                }
+            }
+            *s_ptr++ = extreme;
+            array.erase(array.begin() + extreme_index);
+            --new_size;
+        }
+        array.swap(sorted);
+    }
+    template <typename T>
+    void quick_sort(std::vector<T> &array) {
+        using vec_size_t = typename std::vector<T>::size_type;
+        vec_size_t size = array.size();
+        if (!size || size == 1)
+            return;
+        // remains to be seen - might have to write a pivot or sorter class
     }
     template<class BiDirectionalIterator>
     void reverse(BiDirectionalIterator begin, BiDirectionalIterator end) {
