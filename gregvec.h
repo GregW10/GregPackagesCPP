@@ -1899,7 +1899,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             else {
                 s.append_back("i + ").append_back(this->y, f_p_dec_places).append_back("j");
             }
-            if (z < 0) {
+            if (this->z < 0) {
                 s.append_back(" - ").append_back(-this->z, f_p_dec_places).append_back("k");
             }
             else {
@@ -3207,7 +3207,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend class ray;
         template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class camera;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool>
         friend class system;
     };
     template <isNumWrapper U>

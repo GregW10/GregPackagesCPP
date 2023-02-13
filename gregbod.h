@@ -87,7 +87,7 @@ namespace gtd {
             return msg.c_str();
         }
     };
-    template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t>
+    template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool>
     class system;
     /* body_counter was created because each instantiation of the body subclass with different template parameters is
      * actually a different class, so the count of bodies for each different class template instantiation would be
@@ -185,7 +185,7 @@ namespace gtd {
         friend bool operator!=(const unsigned long long&, const body_counter&);
         friend bool operator!=(const body_counter&, const unsigned long long&);
         friend std::ostream &operator<<(std::ostream&, const body_counter&);
-        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool>
         friend class system;
     };
     bool operator<(const body_counter &bc1, const body_counter &bc2) {
@@ -362,17 +362,24 @@ namespace gtd {
             }
         }
         body(body<M, R, T, recFreq> &&other) noexcept :
-        body_counter{std::move(other)}, mass_{std::move(other.mass_)},
-        radius{std::move(other.radius)}, curr_pos{std::move(other.curr_pos)}, curr_vel{std::move(other.curr_vel)},
-        curr_ke{std::move(other.curr_ke)}, acc{std::move(other.acc)}, positions{std::move(other.positions)},
-        velocities{std::move(other.velocities)}, energies{std::move(other.energies)}, cref{std::move(other.cref)},
+             body_counter{std::move(other)}, mass_{std::move(other.mass_)},
+             radius{std::move(other.radius)}, curr_pos{std::move(other.curr_pos)}, curr_vel{std::move(other.curr_vel)},
+             curr_ke{std::move(other.curr_ke)}, acc{std::move(other.acc)}, positions{std::move(other.positions)},
+             velocities{std::move(other.velocities)}, energies{std::move(other.energies)}, cref{std::move(other.cref)},
         rest_c{other.rest_c}, pe{other.pe}, rec_counter{other.rec_counter} {
-            if constexpr (recFreq) {
+            if constexpr (recFreq)
                 if (rec_counter == recFreq) {
                     this->add_pos_vel_ke();
                     rec_counter = 0;
                 }
-            }
+        }
+        template <ull_t rF>
+        body(body<M, R, T, rF> &&other) noexcept :
+             body_counter{std::move(other)}, mass_{std::move(other.mass_)},
+             radius{std::move(other.radius)}, curr_pos{std::move(other.curr_pos)}, curr_vel{std::move(other.curr_vel)},
+             curr_ke{std::move(other.curr_ke)}, acc{std::move(other.acc)}, rest_c{other.rest_c}, pe{other.pe} {
+            if constexpr (recFreq)
+                this->add_pos_vel_ke();
         }
         const M &mass() const noexcept {
             return mass_;
@@ -531,7 +538,7 @@ namespace gtd {
             acc = T{0};
         } // resets the body to initial setup and clears trajectory if specified:
         void reset(bool clear_trajectory = true) requires (recFreq != 0) {
-            static_assert(recFreq, "reset cannot be called on body objects with recFrec == 0 (no history)\n");
+            // static_assert(recFreq, "reset cannot be called on body objects with recFrec == 0 (no history)\n");
             curr_pos = positions.front(); // if recFreq is not zero, there is guaranteed to be at least 1 element
             curr_vel = velocities.front();
             curr_ke = energies.front();
@@ -610,7 +617,7 @@ namespace gtd {
         bool trajectory_to_txt(std::ofstream &out, bool full_csv_style = true) const requires (recFreq != 0) {
             if (!out.good())
                 return false;
-            unsigned long long count = 0;
+            ull_t count = 0;
             if (full_csv_style) {
                 out << "body_id,mass,radius\r\n" << body_counter::id << ',' << mass_ << ',' << radius << "\r\n"
                     << "iteration,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,kinetic_energy\r\n";
@@ -755,16 +762,18 @@ namespace gtd {
                   isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
         friend inline auto operator+(const body<m1, r1, t1, rF1>&&, const body<m2, r2, t2, rF2>&&);
         template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg1, bool prg2, bool mrg1, bool mrg2,
-                  int c1, int c2, ull_t mF1, ull_t mF2, ull_t fF1, ull_t fF2>
-        friend system<m, r, t, prg1 & prg2, mrg1 & mrg2, c1 & c2, MEAN_AVG(mF1, mF2), MEAN_AVG(fF1, fF2)>
-        operator+(const system<m, r, t, prg1, mrg1, c1, mF1, fF1> &sys1,
-                  const system<m, r, t, prg2, mrg2, c2, mF2, fF2> &sys2);
+                  int c1, int c2, ull_t mF1, ull_t mF2, ull_t fF1, ull_t fF2, bool bF1, bool bF2>
+        friend system<m, r, t, prg1 & prg2, mrg1 & mrg2, c1 & c2, MEAN_AVG(mF1, mF2), MEAN_AVG(fF1, fF2), bF1 & bF2>
+        operator+(const system<m, r, t, prg1, mrg1, c1, mF1, fF1, bF1> &sys1,
+                  const system<m, r, t, prg2, mrg2, c2, mF2, fF2, bF2> &sys2);
         template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class ray;
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
                   isNumWrapper, bool>
         friend class astro_scene;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, ull_t>
+        friend class body;
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool>
         friend class system;
     };
     template <isNumWrapper m, isNumWrapper r, isNumWrapper t, ull_t rF>
@@ -817,6 +826,9 @@ namespace gtd {
         return b1 + b2;
     }
     typedef body<long double, long double, long double> bod;
-    typedef body<long double, long double, long double, 0> bod_n;
+    typedef body<long double, long double, long double, 0> bod_nf;
+    typedef body<long double, long double, long double, 10> bod_10f;
+    typedef body<long double, long double, long double, 100> bod_100f;
+    typedef body<long double, long double, long double, 1000> bod_1000f;
 }
 #endif

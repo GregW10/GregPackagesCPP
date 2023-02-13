@@ -84,8 +84,8 @@ namespace gtd {
         unsigned int x;
         unsigned int y;
     };
-    template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper PosT, isNumWrapper, isNumWrapper, isNumWrapper>
-    requires isConvertible<long double, PosT>
+    template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper PosT, isNumWrapper, isNumWrapper, isNumWrapper,
+              ull_t> requires isConvertible<long double, PosT>
     class star;
     template <isNumWrapper PosT = long double, isNumWrapper DirT = long double, isNumWrapper LenT = long double>
     class ray : public vector3D<DirT> {
@@ -216,8 +216,8 @@ namespace gtd {
                 throw no_intersection();
             return ibod_id;
         }
-        template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
-        bool intersects(const body<M, R, T> &bod) {
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, ull_t recFreq>
+        bool intersects(const body<M, R, T, recFreq> &bod) {
             /* This method calculates whether the ray intersects with a given body, and if it does, stores the
              * intersection distance in l. The 'b' and 'c' variables below are quadratic formula coefficients - the 'a'
              * coefficient is always equal to 1 (since a = (*this)*(*this)), so has been inlined. */
@@ -239,13 +239,13 @@ namespace gtd {
             ibod_id = bod.id;
             return (intersected = true);
         }
-        template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
-        bool intersects(const body<M, R, T> &&bod) {
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, ull_t recFreq>
+        bool intersects(const body<M, R, T, recFreq> &&bod) {
             return intersects(bod);
         }
-        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, container C, typename ... except>
-        requires (std::same_as<typename C::mapped_type, const body<M, R, T>*> ||
-                  isConvertible<typename C::mapped_type, const body<M, R, T>*>) &&
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, ull_t recFreq, container C, typename ... except>
+        requires (std::same_as<typename C::mapped_type, const body<M, R, T, recFreq>*> ||
+                  isConvertible<typename C::mapped_type, const body<M, R, T, recFreq>*>) &&
                   std::same_as<typename C::key_type, const unsigned long long>
         bool intersects(const C &bodies, except ...ids) {
             /* This method is similar to the other intersects() overloads, but it will set l to the distance between the
@@ -765,10 +765,9 @@ namespace gtd {
     };
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
               isNumWrapper PosT = long double, isNumWrapper DirT = long double, isNumWrapper LenT = long double,
-              isNumWrapper LumT = long double>
-                      requires isConvertible<long double, PosT>
-    class star : public body<M, R, T> {
-        using bod_t = body<M, R, T>;
+              isNumWrapper LumT = long double, ull_t recFreq = 0> requires isConvertible<long double, PosT>
+    class star : public body<M, R, T, recFreq> {
+        using bod_t = body<M, R, T, recFreq>;
         using src_t = light_src<PosT, DirT, LenT, LumT>;
         using us = unsigned short;
         LumT lum{1};
@@ -812,10 +811,12 @@ namespace gtd {
         star(const M &star_mass, const R &star_radius, const vector3D<T> &pos, const vector3D<T> &vel,
              const LumT &luminosity, us num_light_sources = 1) :
         bod_t{star_mass, star_radius, pos, vel}, lum{luminosity} {create_sources(num_light_sources);}
-        template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t>
-        explicit star(const body<m, r, t> &other) : bod_t{other} {}
-        explicit star(const body<M, R, T> &other) : bod_t{other} {}
-        explicit star(body<M, R, T> &&other) noexcept : bod_t{std::move(other)} {}
+        template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t, ull_t rF>
+        explicit star(const body<m, r, t, rF> &other) : bod_t{other} {}
+        template <ull_t rF>
+        explicit star(const body<M, R, T, rF> &other) : bod_t{other} {}
+        template <ull_t rF>
+        explicit star(body<M, R, T, rF> &&other) noexcept : bod_t{std::move(other)} {}
         const std::vector<src_t> &light_sources() const {
             return sources;
         }
@@ -834,19 +835,20 @@ namespace gtd {
             return (pnt - bod_t::curr_pos).normalise();
         }
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
-                  isNumWrapper, bool>
+                  isNumWrapper, bool, ull_t, ull_t>
         friend class astro_scene;
     };
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
               isNumWrapper PosT = long double, isNumWrapper DirT = long double, isNumWrapper DistT = long double,
-              isNumWrapper LenT = long double, isNumWrapper LumT = long double, bool modulatedBrightness = true>
+              isNumWrapper LenT = long double, isNumWrapper LumT = long double, bool modulatedBrightness = true,
+              ull_t brF = 1, ull_t srF = 0>
     class astro_scene : public bmp {
     private:
-        using bod_t = body<M, R, T>;
+        using bod_t = body<M, R, T, brF>;
         using ray_t = ray<PosT, DirT, LenT>;
         using src_t = light_src<PosT, DirT, LenT, LumT>;
         using cam_t = camera<PosT, DirT, DistT>;
-        using star_t = star<M, R, T, PosT, DirT, LenT, LumT>;
+        using star_t = star<M, R, T, PosT, DirT, LenT, LumT, srF>;
         image_dimensions dims{bmp::width, bmp::height};
         unsigned int num_decor_stars = 4*log(bmp::width*bmp::height);
         long double star_radius = sqrt(bmp::width*bmp::width)/1000.0l; // in pixels
@@ -1000,7 +1002,7 @@ namespace gtd {
                 pix_f = *row_f + start_x;
                 for (x = start_x; x < end_x; ++x, ++pix_c, ++pix_f) {
                     ray_t &&cam_ray = pcam->ray_from_pixel(x, y);
-                    if (!cam_ray.template intersects<M, R, T>(tot_map)) {
+                    if (!cam_ray.template intersects<M, R, T, brF & srF>(tot_map)) {
                         *pix_c = colors::black; // in case of no intersection, pixel is the black of space
                         *pix_f = LumT{0}; // not truly necessary, since black multiplied by anything will still be black
                         continue;
@@ -1018,8 +1020,8 @@ namespace gtd {
                         sptr = it->second;
                         if (sptr->sources.size() == 1) {
                             ray_t &&src_to_ep = sptr->sources[0].cast_ray(end_point);
-                            if (!src_to_ep.template intersects<M, R, T>(stars, sptr->id) &&
-                                !src_to_ep.template intersects<M, R, T>(bodies)) // in case of f.p. error
+                            if (!src_to_ep.template intersects<M, R, T, srF>(stars, sptr->id) &&
+                                !src_to_ep.template intersects<M, R, T, brF>(bodies)) // in case of f.p. error
                                 continue;
                             if (!src_to_ep.reaches(bodies[cam_ray.ibod_id], end_point)) // point is behind light source
                                 continue;
@@ -1032,8 +1034,8 @@ namespace gtd {
                                 ray_t &&src_to_ep = src.cast_ray(end_point);
                                 if (sptr->normal_at_point(src.pos)*src_to_ep <= 0)
                                     continue;
-                                if (!src_to_ep.template intersects<M, R, T>(stars, sptr->id) &&
-                                    !src_to_ep.template intersects<M, R, T>(bodies))
+                                if (!src_to_ep.template intersects<M, R, T, srF>(stars, sptr->id) &&
+                                    !src_to_ep.template intersects<M, R, T, brF>(bodies))
                                     continue;
                                 if (!src_to_ep.reaches(bodies[cam_ray.ibod_id], end_point))
                                     continue;
@@ -1286,8 +1288,8 @@ namespace gtd {
         void add_stars(const std::vector<star_t*> &&new_stars) {//with these r-value overloads, init. syntax may be used
             this->add_stars(new_stars);
         }
-        template <bool progress = false, bool merge_if_overlapping = false, int coll = 0>
-        void add_system(const system<M, R, T, progress, merge_if_overlapping, coll> &sy) {
+        template <bool progress, bool merge_if_overlapping, int coll, ull_t mF, ull_t fF, bool bF>
+        void add_system(const system<M, R, T, progress, merge_if_overlapping, coll, mF, fF, bF> &sy) {
             for (const bod_t &b : sy.bods) {
                 bodies.emplace(b.id, &b);
                 body_clrs.emplace(b.id, col_gen_b());

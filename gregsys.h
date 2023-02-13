@@ -6,8 +6,24 @@
 namespace gtd {
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
               bool prog = false, bool mergeOverlappingBodies = false, int collisions = 0,
-              ull_t memFreq = 0, ull_t fileFreq = 1>
-    class system { // G, below, has not been made static as it varies between objects, depending on units passed
+              ull_t memFreq = 0, ull_t fileFreq = 1, bool binaryFile = true>
+    class system {
+        /* The system class represents a system in 3D space that is composed of bodies which interact with each other
+         * gravitationally (and through contact force in case of collisions - if this option is specified using the
+         * collisions template parameter (3 or 7)). The bodies in the system are represented by gtd::body objects. */
+        /* A system object is capable of evolving, in time, the positions, velocities & energies of the bodies via
+         * various different integration methods, each specified by an integral constant (just below). */
+        /* The 'M', 'R' & 'T' template parameters are the data types used to represent the bodies' masses, radii, &
+         * positions and velocities, respectively. The other (non-type) template parameters are present in order to
+         * avoid a small runtime overhead in checking which have been set and/or to avoid duplication of code. The
+         * 'prog' parameter determines whether progress is printed to standard output during the main evolution of the
+         * bodies. 'mergeOverlappingBodies' determines whether bodies that are added to a system object are merged
+         * together if they overlap, or whether an exception is thrown instead. 'collisions' determines how collisions
+         * should be predicted and how they should be dealt with (0 = not at all, 3 = simple - based on overlap, 7 =
+         * advanced (predictive) collision checking). 'memFreq' represents the frequency with which position, velocity
+         * and energy data values should be stored in memory (on the heap) and, similarly, fileFreq represents the
+         * frequency with which they should be written to a file. Finally, 'binaryFile' represents whether the data
+         * being written to a file is in binary format or text (.csv) format (if fileFreq is non-zero). */
     public:
         static constexpr int two_body = 1; // static constants to determine which integration method to perform
         static constexpr int euler = 2;
@@ -19,15 +35,15 @@ namespace gtd {
         static constexpr int rk3_8 = 128;
         static constexpr int barnes_hut = 65536; // static constants to determine the force approx. method to use
         static constexpr int fast_multipole = 131072;
-        // static inline bool merge_if_overlapped = false;
         static constexpr int no_coll_check = 0;
         static constexpr int overlap_coll_check = 3;
         static constexpr int pred_coll_check = 7;
-    private:
-        long double G = 66743; // Newtonian constant of Gravitation (* 10^15 m^3 kg^-1 s^-2)
+        static constexpr long double G_SI = 0.00000000006743; // G in SI units (m^3 kg^-1 s^-2)
+    private: // G, below, has not been made a static constant as it varies between objects, depending on units passed
+        long double G = 66743; // Newtonian constant of Gravitation (10^(-15) m^3 kg^-1 s^-2)
         using bod_t = body<M, R, T, memFreq>;
         using vec_size_t = typename std::vector<bod_t>::size_type;
-        using sys_t = system<M, R, T, prog, mergeOverlappingBodies, collisions, memFreq, fileFreq>;
+        using sys_t = system<M, R, T, prog, mergeOverlappingBodies, collisions, memFreq, fileFreq, binaryFile>;
         using mom_t = decltype(M{}*T{});
         std::vector<bod_t> bods; // not using set or map as need fast random access to bodies
         std::set<bod_t, std::less<>> del_bods; // set to store bodies removed from system after collision mergers
@@ -49,11 +65,11 @@ namespace gtd {
         std::vector<T> tot_e; // total energy for the entire system at each iteration (KE + PE)
         bool evolved = false;
         static inline String def_path = get_home_path<String>() + FILE_SEP + "System_Trajectories_";
-        static inline unsigned long long to_ull(String &&str) {
+        static inline ull_t to_ull(String &&str) {
             if (!str.isnumeric())
                 return -1;
             // str.strip();
-            unsigned long long total = 0;
+            ull_t total = 0;
             for (const char &c : str) {
                 total *= 10;
                 total += c - 48;
@@ -420,7 +436,7 @@ namespace gtd {
                    !(hiword & (hiword - 1)) || hiword > 2;
         }
         constexpr void check_coll() {
-            static_assert(collisions <= 7 && !(collisions & (collisions + 1)),
+            static_assert(collisions <= pred_coll_check && !(collisions & (collisions + 1)),
                           "Invalid collision-checking option.");
         }
         void print_progress(const unsigned long long &step) const noexcept {
@@ -444,29 +460,28 @@ namespace gtd {
 #endif
         }
     public:
-        system(const std::initializer_list<bod_t> &list) : bods{list} {
+        constexpr system() : G{G_SI} {this->check_coll();}
+        system(const std::initializer_list<bod_t> &list) : bods{list}, G{G_SI} {
             check_overlap();
             check_coll();
-            parse_units_format("M1:1,D1:1,T1:1");
             clear_bodies();
         }
-        system(std::initializer_list<bod_t> &&list) : bods{std::move(list)} {
+        system(std::initializer_list<bod_t> &&list) : bods{std::move(list)}, G{G_SI} {
             check_overlap();
             check_coll();
-            parse_units_format("M1:1,D1:1,T1:1");
             clear_bodies();
         }
-        explicit system(long double timestep = 1, unsigned long long num_iterations = 1000,
-                        const char *units_format = "M1:1,D1:1,T1:1") :
+        explicit system(long double timestep, ull_t num_iterations, const char *units_format) :
                 dt{timestep}, iterations{num_iterations} {
             /* units_format is a string with 3 ratios: it specifies the ratio of the units used for mass, distance and
              * time to kg, metres and seconds (SI units), respectively. This means any units can be used. */
             check_coll();
             parse_units_format(units_format);
         }
-        system(const std::vector<body<M, R, T>> &bodies, long double timestep = 1,
-               unsigned long long num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
-                bods{bodies}, dt{timestep}, iterations{num_iterations} {
+        template <ull_t mF>
+        system(const std::vector<body<M, R, T, mF>> &bodies, long double timestep = 1,
+               ull_t num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
+               bods{bodies.begin(), bodies.end()}, dt{timestep}, iterations{num_iterations} {
             /* units_format is a string with 3 ratios: it specifies the ratio of the units used for mass, distance and
              * time to kg, metres and seconds (SI units), respectively. This means any units can be used. */
             check_overlap();
@@ -474,9 +489,20 @@ namespace gtd {
             parse_units_format(units_format);
             clear_bodies();
         }
-        system(std::vector<body<M, R, T>> &&bodies, long double timestep = 1,
-               unsigned long long num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
-                bods{std::move(bodies)}, dt{timestep}, iterations{num_iterations} {
+        system(std::vector<bod_t> &&bodies, long double timestep = 1,
+               ull_t num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
+               bods{std::move(bodies)}, dt{timestep}, iterations{num_iterations} {
+            check_overlap();
+            check_coll();
+            parse_units_format(units_format);
+            clear_bodies();
+        }
+        template <ull_t mF>
+        system(std::vector<body<M, R, T, mF>> &&bodies, long double timestep = 1,
+               ull_t num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
+               dt{timestep}, iterations{num_iterations} {
+            std::for_each(bodies.begin(), bodies.end(),
+                          [this](body<M, R, T, mF> &b){bods.emplace_back(std::move(b));});
             check_overlap();
             check_coll();
             parse_units_format(units_format);
@@ -484,16 +510,26 @@ namespace gtd {
         }
         /* copy constructors are made to only copy the variables seen below: it does not make sense for a new system
          * object (even when copy-constructed) to be "evolved" if it has not gone through the evolution itself */
-        template <bool prg, bool mrg, int coll> // so a system can be constructed from another without same checks
-        system(const system<M, R, T, prg, mrg, coll> &other) :
-                bods{other.bods}, dt{other.dt}, iterations{other.iterations}, G{other.G} {
+        template <bool prg, bool mrg, int coll, ull_t mF, ull_t fF, bool bF>
+        // so a system can be constructed from another without same checks
+        system(const system<M, R, T, prg, mrg, coll, mF, fF, bF> &other) :
+               bods{other.bods.begin(), other.bods.end()}, dt{other.dt}, iterations{other.iterations}, G{other.G} {
             check_overlap();
             check_coll();
             clear_bodies();
         }
-        template <bool prg, bool mrg, int coll>
-        system(system<M, R, T, prg, mrg, coll> &&other) :
-                bods{std::move(other.bods)}, dt{other.dt}, iterations{other.iterations}, G{other.G} {
+        template <bool prg, bool mrg, int coll, ull_t fF, bool bF>
+        system(system<M, R, T, prg, mrg, coll, memFreq, fF, bF> &&other) :
+               bods{std::move(other.bods)}, dt{other.dt}, iterations{other.iterations}, G{other.G} {
+            check_overlap();
+            check_coll();
+            clear_bodies();
+        }
+        template <bool prg, bool mrg, int coll, ull_t mF, ull_t fF, bool bF>
+        system(system<M, R, T, prg, mrg, coll, mF, fF, bF> &&other) :
+               dt{other.dt}, iterations{other.iterations}, G{other.G} {
+            std::for_each(other.bods.begin(), other.bods.end(),
+                          [this](body<M, R, T, mF> &b){bods.emplace_back(std::move(b));});
             check_overlap();
             check_coll();
             clear_bodies();
@@ -501,13 +537,13 @@ namespace gtd {
         vec_size_t num_bodies() {
             return bods.size();
         }
-        bool set_iterations(const unsigned long long &number) noexcept {
+        bool set_iterations(const ull_t &number) noexcept {
             if (!number) // cannot have zero iterations
                 return false;
             iterations = number;
             return true;
         }
-        bool set_iterations(const unsigned long long &&number) noexcept {
+        bool set_iterations(const ull_t &&number) noexcept {
             return set_iterations(number);
         }
         bool set_timestep(const long double &delta_t) noexcept {
@@ -565,12 +601,11 @@ namespace gtd {
         }
         bool remove_body(unsigned long long id) {
             auto end_it = bods.cend();
-            for (typename std::vector<bod_t>::const_iterator it = bods.cbegin(); it < end_it; ++it) {
+            for (typename std::vector<bod_t>::const_iterator it = bods.cbegin(); it < end_it; ++it)
                 if ((*it).id == id) {
                     bods.erase(it);
                     return true;
                 }
-            }
             return false;
         }
         void reset() {
@@ -622,14 +657,14 @@ namespace gtd {
                 }
                 else {
                     while (steps++ < iterations) {
-                        if constexpr (collisions == 7) {
+                        if constexpr (collisions == pred_coll_check) {
 
                         }
                         this->calc_acc_and_e();
                         this->take_euler_step();
                         /* by having "prog" as a template parameter, it avoids having to re-evaluate whether it is true
                          * or not within the loop, since the "if constexpr ()" branches get rejected at compile-time */
-                        if constexpr (collisions == 3)
+                        if constexpr (collisions == overlap_coll_check)
                             this->s_coll();
                         if constexpr (prog)
                             this->print_progress(steps);
@@ -669,6 +704,8 @@ namespace gtd {
                         this->take_modified_euler_step(predicted);
                         for (std::tuple<vector3D<T>, vector3D<T>, vector3D<T>> &tup : predicted)
                             std::get<2>(tup).make_zero();
+                        if constexpr (collisions == overlap_coll_check)
+                            this->s_coll();
                         if constexpr (prog)
                             this->print_progress(steps);
                     }
@@ -705,6 +742,8 @@ namespace gtd {
                         this->take_midpoint_step(predicted);
                         for (std::tuple<vector3D<T>, vector3D<T>, vector3D<T>> &tup : predicted)
                             std::get<2>(tup).make_zero();
+                        if constexpr (collisions == overlap_coll_check)
+                            this->s_coll();
                         if constexpr (prog)
                             this->print_progress(steps);
                     }
@@ -727,7 +766,7 @@ namespace gtd {
                         }
                         /* update accelerations and energies based on new positions and KICK for half a step */
                         this->leapfrog_kdk_acc_e_and_step();
-                        if constexpr (collisions == 3)
+                        if constexpr (collisions == overlap_coll_check)
                             this->s_coll();
                         if constexpr (prog)
                             this->print_progress(steps);
@@ -749,6 +788,8 @@ namespace gtd {
                             bod.curr_pos += half_dt*bod.curr_vel;
                         /* update accelerations, then KICK for a full step and DRIFT for half a step, then update E */
                         this->leapfrog_dkd_acc_e_and_step();
+                        if constexpr (collisions == overlap_coll_check)
+                            this->s_coll();
                         if constexpr (prog)
                             this->print_progress(steps);
                     }
@@ -923,6 +964,7 @@ namespace gtd {
             return bods.crend();
         }
         bool write_trajectories(const String &path = def_path, bool binary = false) {
+            /* This method can only be called if memFreq is non-zero, or else there would be no history to output. */
             /* Writes the trajectories (historically) of all the bodies to a file, including all the energy values. For
              * text files, units are not written as these will depend entirely on the units_format string passed to the
              * system<M, R, T> object in its constructor. */
@@ -980,8 +1022,9 @@ namespace gtd {
                 throw std::out_of_range("The requested body does not exist (index out of range).\n");
             return bods[index];
         }
-        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg, bool mrg, int coll, ull_t mF, ull_t fF>
-        sys_t &operator=(const system<m, r, t, prg, mrg, coll, mF, fF> &other) {
+        template <isNumWrapper m, isNumWrapper r, isNumWrapper t,
+                  bool prg, bool mrg, int coll, ull_t mF, ull_t fF, bool bF>
+        sys_t &operator=(const system<m, r, t, prg, mrg, coll, mF, fF, bF> &other) {
             if (this == &other)
                 return *this;
             this->dt = other.dt;
@@ -1001,21 +1044,22 @@ namespace gtd {
             this->clear_evolution();
             return *this;
         }
-        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg, bool mrg, int coll, ull_t mF, ull_t fF>
-        friend std::ostream &operator<<(std::ostream&, const system<m, r, t, prg, mrg, coll, mF, fF>&);
+        template <isNumWrapper m, isNumWrapper r, isNumWrapper t,
+                  bool prg, bool mrg, int coll, ull_t mF, ull_t fF, bool bF>
+        friend std::ostream &operator<<(std::ostream&, const system<m, r, t, prg, mrg, coll, mF, fF, bF>&);
         template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg1, bool prg2, bool mrg1, bool mrg2,
-                  int c1, int c2, ull_t mF1, ull_t mF2, ull_t fF1, ull_t fF2>
-        friend system<m, r, t, prg1 & prg2, mrg1 & mrg2, c1 & c2, MEAN_AVG(mF1, mF2), MEAN_AVG(fF1, fF2)>
-        operator+(const system<m, r, t, prg1, mrg1, c1, mF1, fF1>&,
-                  const system<m, r, t, prg2, mrg2, c2, mF2, fF2>&);
-        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t>
+                  int c1, int c2, ull_t mF1, ull_t mF2, ull_t fF1, ull_t fF2, bool bF1, bool bF2>
+        friend system<m, r, t, prg1 & prg2, mrg1 & mrg2, c1 & c2, MEAN_AVG(mF1, mF2), MEAN_AVG(fF1, fF2), bF1 & bF2>
+        operator+(const system<m, r, t, prg1, mrg1, c1, mF1, fF1, bF1>&,
+                  const system<m, r, t, prg2, mrg2, c2, mF2, fF2, bF2>&);
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool>
         friend class system;
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
                 isNumWrapper, bool>
         friend class astro_scene;
     }; // all these template parameters are driving me coocoo
-    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, bool prg, bool mrg, int coll, ull_t mF, ull_t fF>
-    std::ostream &operator<<(std::ostream &os, const system<M, R, T, prg, mrg, coll, mF, fF> &sys) {
+    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, bool prg, bool mrg, int coll, ull_t mF, ull_t fF, bool bF>
+    std::ostream &operator<<(std::ostream &os, const system<M, R, T, prg, mrg, coll, mF, fF, bF> &sys) {
         typename std::vector<body<M, R, T, mF>>::size_type count = sys.bods.size();
         os << "[gtd::system@" << &sys << ",num_bodies=" << count;
         if (!count)
@@ -1027,10 +1071,10 @@ namespace gtd {
         return os << ']';
     }
     template<isNumWrapper M, isNumWrapper R, isNumWrapper T, bool prg1, bool prg2, bool mrg1, bool mrg2, int c1, int c2,
-            ull_t mF1, ull_t mF2, ull_t fF1, ull_t fF2>
-    system<M, R, T, prg1 & prg2, mrg1 & mrg2, c1 & c2, MEAN_AVG(mF1, mF2), MEAN_AVG(fF1, fF2)>
-    operator+(const system<M, R, T, prg1, mrg1, c1, mF1, fF1> &sys1,
-              const system<M, R, T, prg2, mrg2, c2, mF2, fF2> &sys2) {
+             ull_t mF1, ull_t mF2, ull_t fF1, ull_t fF2, bool bF1, bool bF2>
+    system<M, R, T, prg1 & prg2, mrg1 & mrg2, c1 & c2, MEAN_AVG(mF1, mF2), MEAN_AVG(fF1, fF2), bF1 & bF2>
+    operator+(const system<M, R, T, prg1, mrg1, c1, mF1, fF1, bF1> &sys1,
+              const system<M, R, T, prg2, mrg2, c2, mF2, fF2, bF2> &sys2) {
         typename std::vector<body<M, R, T, mF1>>::size_type size1 = sys1.bods.size();
         typename std::vector<body<M, R, T, mF2>>::size_type size2 = sys2.bods.size();
         if ((!size1 && !size2) || sys1.G != sys2.G)
@@ -1039,7 +1083,7 @@ namespace gtd {
             return {sys2};
         if (!size2)
             return {sys1};
-        system<M, R, T, prg1 & prg2, mrg1 & mrg2, c1 & c2, MEAN_AVG(mF1, mF2), MEAN_AVG(fF1, fF2)>
+        system<M, R, T, prg1 & prg2, mrg1 & mrg2, c1 & c2, MEAN_AVG(mF1, mF2), MEAN_AVG(fF1, fF2), bF1 & bF2>
                 ret_sys(sys1.bods, (sys1.dt + sys2.dt)/2.0l, (sys1.iterations + sys2.iterations)/2);
         // for (typename std::vector<body<M, R, T>>::size_type i = 0; i < size1; ++i) {
         //     for (typename std::vector<body<M, R, T>>::size_type j = 0; j < size2; ++j) {
@@ -1068,6 +1112,30 @@ namespace gtd {
     typedef system<long double, long double, long double, false, true, 7> sys_mC;
     typedef system<long double, long double, long double, true, true, 3> sys_pmc;
     typedef system<long double, long double, long double, true, true, 7> sys_pmC;
+    typedef system<long double, long double, long double, false, false, 0, 0, 0, false> sys_n;
+    typedef system<long double, long double, long double, true, false, 0, 0, 0, false> sys_p_n;
+    typedef system<long double, long double, long double, false, true, 0, 0, 0, false> sys_m_n;
+    typedef system<long double, long double, long double, false, false, 3, 0, 0, false> sys_c_n;
+    typedef system<long double, long double, long double, false, false, 7, 0, 0, false> sys_C_n;
+    typedef system<long double, long double, long double, true, true, 0, 0, 0, false> sys_pm_n;
+    typedef system<long double, long double, long double, true, false, 3, 0, 0, false> sys_pc_n;
+    typedef system<long double, long double, long double, true, false, 7, 0, 0, false> sys_pC_n;
+    typedef system<long double, long double, long double, false, true, 3, 0, 0, false> sys_mc_n;
+    typedef system<long double, long double, long double, false, true, 7, 0, 0, false> sys_mC_n;
+    typedef system<long double, long double, long double, true, true, 3, 0, 0, false> sys_pmc_n;
+    typedef system<long double, long double, long double, true, true, 7, 0, 0, false> sys_pmC_n;
+    typedef system<long double, long double, long double, false, false, 0, 0, 1, false> sys_txt;
+    typedef system<long double, long double, long double, true, false, 0, 0, 1, false> sys_p_txt;
+    typedef system<long double, long double, long double, false, true, 0, 0, 1, false> sys_m_txt;
+    typedef system<long double, long double, long double, false, false, 3, 0, 1, false> sys_c_txt;
+    typedef system<long double, long double, long double, false, false, 7, 0, 1, false> sys_C_txt;
+    typedef system<long double, long double, long double, true, true, 0, 0, 1, false> sys_pm_txt;
+    typedef system<long double, long double, long double, true, false, 3, 0, 1, false> sys_pc_txt;
+    typedef system<long double, long double, long double, true, false, 7, 0, 1, false> sys_pC_txt;
+    typedef system<long double, long double, long double, false, true, 3, 0, 1, false> sys_mc_txt;
+    typedef system<long double, long double, long double, false, true, 7, 0, 1, false> sys_mC_txt;
+    typedef system<long double, long double, long double, true, true, 3, 0, 1, false> sys_pmc_txt;
+    typedef system<long double, long double, long double, true, true, 7, 0, 1, false> sys_pmC_txt;
     typedef system<long double, long double, long double, false, false, 0, 1, 0> sys_M;
     typedef system<long double, long double, long double, true, false, 0, 1, 0> sys_p_M;
     typedef system<long double, long double, long double, false, true, 0, 1, 0> sys_m_M;
@@ -1092,5 +1160,17 @@ namespace gtd {
     typedef system<long double, long double, long double, false, true, 7, 1, 1> sys_mC_MF;
     typedef system<long double, long double, long double, true, true, 3, 1, 1> sys_pmc_MF;
     typedef system<long double, long double, long double, true, true, 7, 1, 1> sys_pmC_MF;
+    typedef system<long double, long double, long double, false, false, 0, 1, 1, false> sys_MF_txt;
+    typedef system<long double, long double, long double, true, false, 0, 1, 1, false> sys_p_MF_txt;
+    typedef system<long double, long double, long double, false, true, 0, 1, 1, false> sys_m_MF_txt;
+    typedef system<long double, long double, long double, false, false, 3, 1, 1, false> sys_c_MF_txt;
+    typedef system<long double, long double, long double, false, false, 7, 1, 1, false> sys_C_MF_txt;
+    typedef system<long double, long double, long double, true, true, 0, 1, 1, false> sys_pm_MF_txt;
+    typedef system<long double, long double, long double, true, false, 3, 1, 1, false> sys_pc_MF_txt;
+    typedef system<long double, long double, long double, true, false, 7, 1, 1, false> sys_pC_MF_txt;
+    typedef system<long double, long double, long double, false, true, 3, 1, 1, false> sys_mc_MF_txt;
+    typedef system<long double, long double, long double, false, true, 7, 1, 1, false> sys_mC_MF_txt;
+    typedef system<long double, long double, long double, true, true, 3, 1, 1, false> sys_pmc_MF_txt;
+    typedef system<long double, long double, long double, true, true, 7, 1, 1, false> sys_pmC_MF_txt;
 }
 #endif

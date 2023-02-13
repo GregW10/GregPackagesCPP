@@ -68,8 +68,9 @@ concept isNumWrapper = requires (T val, T val2, size_t l, long double f, std::os
     {out << val}; // must have the insertion operator overloaded for outputting to a std::ostream object
 }; // see isIntegralNumWrapper concept in gregvec.h for modulo requirements
 template <typename T>
-concept isPrintable = requires (const T &a) {
-    {std::declval<std::ostream>() << a} -> std::same_as<std::ostream&>;
+concept isPrintable = requires (std::ostream &os, const T &a) {
+    {os << a} -> std::same_as<std::ostream&>;
+    {std::move(os) << a} -> std::same_as<std::ostream&&>;
 };
 template <typename F, typename T>
 concept binaryPredicate = requires (F f, T a, T b) {

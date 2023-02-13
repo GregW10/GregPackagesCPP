@@ -397,13 +397,11 @@ namespace gtd {
             }
         }
         void dealloc() {
-            if (data == nullptr) {
+            if (data == nullptr)
                 return;
-            }
             color **ptr = data;
-            for (unsigned int j = 0; j < height; ++j, ++ptr) {
+            for (unsigned int j = 0; j < height; ++j, ++ptr)
                 delete [] *ptr;
-            }
             delete [] data;
             data = nullptr;
         }
@@ -411,9 +409,8 @@ namespace gtd {
             dealloc();
             data = new color*[height];
             color **ptr = data;
-            for (unsigned int j = 0; j < height; ++j, ++ptr) {
+            for (unsigned int j = 0; j < height; ++j, ++ptr)
                 *ptr = new color[width];
-            }
         }
         unsigned char *get_hdr() const noexcept {
             unsigned int size = file_size();
@@ -431,9 +428,8 @@ namespace gtd {
             return info_hdr;
         }
         void read_bmp(const char *source) {
-            if (source == nullptr || *source == 0) {
+            if (source == nullptr || !*source)
                 throw std::invalid_argument("A nullptr or empty string cannot be passed as a source BMP path.\n");
-            }
             std::ifstream in(source, std::ios_base::binary | std::ios_base::in);
             if (!in.good()) {
                 String msg = "There was an error opening the file \"";
@@ -450,9 +446,8 @@ namespace gtd {
             in.read((char *) &height, 4);
             in.seekg(2, std::ios_base::cur);
             in.read((char *) &bpp, 2);
-            if (bpp != 24) {
+            if (bpp != 24)
                 throw invalid_bmp_format("The specified BMP must have a pixel depth of 24 bpp.\n");
-            }
             unsigned char pad = calc_pad(width);
             if (!in.good()) {
                 bad:
@@ -460,9 +455,8 @@ namespace gtd {
                 msg.append_back(source).append_back("\".\n");
                 throw std::invalid_argument(msg.c_str());
             }
-            if (offset != 54 || info_hdr_size != 40) {
+            if (offset != 54 || info_hdr_size != 40)
                 throw invalid_bmp_format();
-            }
             check_size();
             in.seekg(54, std::ios_base::beg);
             alloc();
@@ -477,14 +471,11 @@ namespace gtd {
             in.close();
         }
         void copy_pixels(const color *const *source) {
-            if (source == nullptr) {
+            if (source == nullptr)
                 return;
-            }
-            for (unsigned int j = 0; j < height; ++j) {
-                for (unsigned int i = 0; i < width; ++i) {
+            for (unsigned int j = 0; j < height; ++j)
+                for (unsigned int i = 0; i < width; ++i)
                     data[j][i] = source[j][i];
-                }
-            }
         }
     protected:
         explicit bmp(String &&str) : path{std::move(str)} {fill_background();}
@@ -553,9 +544,8 @@ namespace gtd {
             sc_clr.b = b;
         }
         bool set_pixel(unsigned int x, unsigned int y, const color &col) {
-            if (x >= width || y >= height) {
+            if (x >= width || y >= height)
                 return false;
-            }
             data[y][x] = col;
             return true;
         }
@@ -569,42 +559,35 @@ namespace gtd {
             return sc_clr;
         }
         color get_color(unsigned int x, unsigned int y) {
-            if (x >= width || y >= height) {
+            if (x >= width || y >= height)
                 throw std::out_of_range("The requested pixel is out of range.\n");
-            }
             return data[y][x];
         }
         bool fill_rect(unsigned int x, unsigned int y, unsigned int w, unsigned int h) {
-            if (x >= width || y >= height || w == 0 || h == 0) {
+            if (x >= width || y >= height || !w || !h)
                 return false;
-            }
-            if (x + w - 1 >= width) {
+            if (x + w - 1 >= width)
                 w = width - x;
-            }
-            if (y + h - 1 >= height) {
+            if (y + h - 1 >= height)
                 h = height - y;
-            }
             unsigned int x_end = x + w;
             unsigned int y_end = y + h;
-            for (unsigned int j = y; j < y_end; ++j) {
+            for (unsigned int j = y; j < y_end; ++j)
                 for (unsigned int i = x; i < x_end; ++i)
                     data[j][i] = sc_clr;
-            }
             return true;
         }
         void fill_bg() { // convenience method
             fill_rect(0, 0, width, height);
         }
         unsigned int get_rgb(unsigned int x, unsigned int y) {
-            if (x >= width || y >= height) {
+            if (x >= width || y >= height)
                 return -1;
-            }
             return (data[y][x].r << 16) + (data[y][x].g << 8) + data[y][x].b;
         }
         unsigned char *as_ycbcr(unsigned int x, unsigned int y) const noexcept {
-            if (x >= width || y >= height) {
+            if (x >= width || y >= height)
                 return nullptr;
-            }
             /* thanks to: https://web.archive.org/web/20180423091842/http://www.equasys.de/colorconversion.html for
              * the conversion equations */
             static unsigned char ret[3];
@@ -627,16 +610,14 @@ namespace gtd {
             pixel p;
             if (fill) {
                 long double top = c.pos.y + c.radius;
-                if (top > height - 1) {
+                if (top > height - 1)
                     top = height;
-                }
                 unsigned int left;
                 unsigned int right;
                 long double root;
                 long double y_btm = c.pos.y - c.radius;
-                if (y_btm < 0) {
+                if (y_btm < 0)
                     y_btm = 0;
-                }
                 long double y_counter = y_btm;
                 long double center_bound;
                 long double left_ld;
@@ -716,18 +697,16 @@ namespace gtd {
                         ++bg_count;
                     }
                 }
-                if (bg_count == 0) {
+                if (!bg_count)
                     background_color = sc_clr;
-                }
                 else {
                     background_color.r = (unsigned char) (tot_r/((long double) bg_count) + 0.5l);
                     background_color.g = (unsigned char) (tot_g/((long double) bg_count) + 0.5l);
                     background_color.b = (unsigned char) (tot_b/((long double) bg_count) + 0.5l);
                 }
                 p.calc_shade(c, background_color);
-                if (contains(p)) {
+                if (contains(p))
                     data[(unsigned int) roundl(p.pos.y - 0.5l)][(unsigned int) roundl(p.pos.x - 0.5l)] = p.get_color();
-                }
                 bye:
                 theta += d_theta; // f.p. rounding errors are not an issue here
                 prev = p;
