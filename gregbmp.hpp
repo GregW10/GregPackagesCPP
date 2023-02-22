@@ -5,14 +5,16 @@
 #ifndef GREGBMP_H
 #define GREGBMP_H
 
-// #include "gregbod.h"
+#ifndef __cplusplus
+#error "The gregbmp.hpp header file is a C++ header file only."
+#endif
 
 #include <iostream>
 #include <fstream>
 #include <cmath>
 
-#include "gregstring.h"
-#include "gregmat.h"
+#include "gregstr.hpp"
+#include "gregmat.hpp"
 
 namespace gtd {
 #pragma pack(push, 1)

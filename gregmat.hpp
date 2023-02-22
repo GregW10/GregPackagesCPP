@@ -1,8 +1,12 @@
 #ifndef GREGMAT_H
 #define GREGMAT_H
 
+#ifndef __cplusplus
+#error "The gregmat.hpp header file is a C++ header file only."
+#endif
+
 #include <sstream>
-#include "gregalg.h"
+#include "gregalg.hpp"
 
 namespace gtd {
     class empty_matrix_error : public std::invalid_argument {

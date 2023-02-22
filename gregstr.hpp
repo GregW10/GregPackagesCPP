@@ -5,6 +5,10 @@
 // Created by Gregor Hartl Watters on 04/04/2022.
 //
 
+#ifndef __cplusplus
+#error "The gregstr.hpp header file is a C++ header file only."
+#endif
+
 #include <cstdlib>
 #include <string>
 #include <iostream>
@@ -44,6 +48,27 @@
 #else
 #include <shlobj.h>
 #define FILE_SEP '\\'
+#define RESET_TXT_FLAGS ""
+#define BLACK_TXT_START ""
+#define RED_TXT_START ""
+#define GREEN_TXT_START ""
+#define YELLOW_TXT_START ""
+#define BLUE_TXT_START ""
+#define MAGENTA_TXT_START ""
+#define CYAN_TXT_START ""
+#define WHITE_TXT_START ""
+#define BOLD_TXT_START ""
+#define UNDERLINED_TXT_START ""
+#define BLACK_TXT(str) str
+#define RED_TXT(str) str
+#define GREEN_TXT(str) str
+#define YELLOW_TXT(str) str
+#define BLUE_TXT(str) str
+#define MAGENTA_TXT(str) str
+#define CYAN_TXT(str) str
+#define WHITE_TXT(str) str
+#define BOLD_TXT(str) str
+#define UNDERLINED_TXT(str) str
 #endif
 
 namespace gtd {

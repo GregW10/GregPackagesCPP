@@ -5,7 +5,11 @@
 #ifndef GREGBOD_H
 #define GREGBOD_H
 
-#include "gregvec.h"
+#ifndef __cplusplus
+#error "The gregbod.hpp header file is a C++ header file only."
+#endif
+
+#include "gregvec.hpp"
 #include <set>
 #include <fstream>
 #include <map>
@@ -263,7 +267,7 @@ namespace gtd {
         vector3D<T> curr_pos{}; // current position
     private:
         M mass_{1};
-        vector3D<T> curr_vel{}; // current velocity - have not included acc. as this should always be det. externally
+        vector3D<T> curr_vel{}; // current velocity
         vector3D<T> acc{}; // current acceleration of the body - only used within system class
         T pe{}; // current potential energy of the body - only used in system class since requires other bodies to calc.
         using K = decltype(0.5*mass_*curr_vel.magnitude()*curr_vel.magnitude());
@@ -343,19 +347,27 @@ namespace gtd {
             if constexpr (recFreq)
                 this->add_pos_vel_ke();
         }
-        template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t, ull_t rF>
-        body(const body<m, r, t, rF> &other) :
-        mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos}, curr_vel{other.curr_vel},
-        curr_ke{other.curr_ke}, acc{other.acc}, rest_c{other.rest_c}, pe{other.pe} {
+        template <ull_t rF>
+        body(const body<M, R, T, rF> &other) :
+                mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos},
+                curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc}, rest_c{other.rest_c}, pe{other.pe} {
             if constexpr (recFreq) {
                 this->add_pos_vel();
                 energies.push_back(this->curr_ke);
             }
         }
-        template <ull_t rF>
-        body(const body<M, R, T, rF> &other) :
-        mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos},
-        curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc}, rest_c{other.rest_c}, pe{other.pe} {
+        body(const body<M, R, T, recFreq> &other) :
+                mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos},
+                curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc}, rest_c{other.rest_c}, pe{other.pe} {
+            if constexpr (recFreq) {
+                this->add_pos_vel();
+                energies.push_back(this->curr_ke);
+            }
+        }
+        template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t, ull_t rF>
+        body(const body<m, r, t, rF> &other) :
+        mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos}, curr_vel{other.curr_vel},
+        curr_ke{other.curr_ke}, acc{other.acc}, rest_c{other.rest_c}, pe{other.pe} {
             if constexpr (recFreq) {
                 this->add_pos_vel();
                 energies.push_back(this->curr_ke);
@@ -769,7 +781,7 @@ namespace gtd {
         template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class ray;
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
-                  isNumWrapper, bool>
+                  isNumWrapper, bool, ull_t>
         friend class astro_scene;
         template <isNumWrapper, isNumWrapper, isNumWrapper, ull_t>
         friend class body;

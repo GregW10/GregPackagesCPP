@@ -3,6 +3,10 @@
 
 /* header file for important constants, concept definitions, algorithms (hence the name) and miscellaneous content */
 
+#ifndef __cplusplus
+#error "The gregalg.hpp header file is a C++ header file only."
+#endif
+
 #include <iostream>
 #include <vector>
 #include <cmath>
@@ -11,7 +15,9 @@
 #undef __PI__
 #endif
 
-#define __PI__ 3.14159265358979323846264338327950288419716939937510582097494459230
+#define __PI__ 3.14159265358979323846264338327950288419716939937510582097494459230l
+
+#define BILLION 1000000000.0l
 
 #define MEAN_AVG(a, b) (((a) + (b))/2)
 
@@ -70,7 +76,7 @@ concept isNumWrapper = requires (T val, T val2, size_t l, long double f, std::os
 template <typename T>
 concept isPrintable = requires (std::ostream &os, const T &a) {
     {os << a} -> std::same_as<std::ostream&>;
-    {std::move(os) << a} -> std::same_as<std::ostream&&>;
+    {std::move(os) << a} -> std::same_as<std::ostream&>;
 };
 template <typename F, typename T>
 concept binaryPredicate = requires (F f, T a, T b) {

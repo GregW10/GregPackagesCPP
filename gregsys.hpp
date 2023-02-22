@@ -1,7 +1,11 @@
 #ifndef GREGSYS_H
 #define GREGSYS_H
 
-#include "gregbod.h"
+#ifndef __cplusplus
+#error "The gregsys.hpp header file is a C++ header file only."
+#endif
+
+#include "gregbod.hpp"
 
 namespace gtd {
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
@@ -52,8 +56,10 @@ namespace gtd {
         ull_t iterations = 1000;
         long double prev_dt{}; // used in methods called after evolve(), since could be changed by setter
         ull_t prev_iterations{}; // same here
-        mom_t min_tot_com_mom{pow(10, 10)}; // minimum sum of magnitudes of COM momenta for two bodies to merge
+        mom_t min_tot_com_mom{BILLION*10}; // minimum sum of magnitudes of COM momenta for two bodies to merge
         // using P = decltype((G*std::declval<M>()*std::declval<M>())/std::declval<T>()); // will be long double
+        ull_t mCounter = 0;
+        ull_t fCounter = 0;
         std::map<ull_t, std::vector<T>> pe; // to store potential energies of bodies
         std::map<ull_t, std::vector<T>> energy; // total energy for each body at each iteration (KE + PE)
         //std::map<unsigned long long, std::vector<T>> del_ke; // map to store KE vectors of deleted bodies from mergers
@@ -107,7 +113,8 @@ namespace gtd {
         void clear_bodies() { // makes sure the trajectories of all bodies are deleted
             // for (bod_t &bod : bods)
             //     bod.clear();
-            std::for_each(bods.begin(), bods.end(), [this](bod_t &bod){bod.clear();});
+            if constexpr (memFreq)
+                std::for_each(bods.begin(), bods.end(), [this](bod_t &bod){bod.clear();});
         }
         void clear_bodies(vec_size_t &as_of) {
             // if (as_of >= bods.size())
@@ -115,7 +122,8 @@ namespace gtd {
             // vec_size_t size = bods.size();
             // while (as_of < size)
             //     bods[as_of++].clear();
-            std::for_each(bods.begin() + as_of, bods.end(), [this](bod_t &bod){bod.clear();});
+            if constexpr (memFreq)
+                std::for_each(bods.begin() + as_of, bods.end(), [this](bod_t &bod){bod.clear();});
         }
         void clear_bodies(vec_size_t &&as_of) {
             clear_bodies(as_of);
@@ -192,7 +200,7 @@ namespace gtd {
                 bod.add_pos_vel_ke();
             }
         }
-        void create_energy_vectors() {
+        void create_energy_vectors() requires (memFreq != 0) {
             unsigned long long iters_p1 = iterations + 1;
             // pe.resize(bods_size);
             // energy.resize(bods_size);
@@ -226,9 +234,8 @@ namespace gtd {
             num_bods = bods.size();
             for (outer = 0; outer < num_bods; ++outer) {
                 bod_t &ref = bods[outer];
-                for (inner = outer + 1; inner < num_bods; ++inner) {
+                for (inner = outer + 1; inner < num_bods; ++inner)
                     cumulative_acc_and_pe(ref, bods[inner]);
-                }
                 ref.pe /= T{2};
                 pe[ref.id].push_back(ref.pe);
                 energy[ref.id].push_back(ref.curr_ke + ref.pe);
@@ -254,9 +261,8 @@ namespace gtd {
             num_bods = bods.size();
             for (outer = 0; outer < num_bods; ++outer) {
                 bod_t &ref = bods[outer];
-                for (inner = outer + 1; inner < num_bods; ++inner) {
+                for (inner = outer + 1; inner < num_bods; ++inner)
                     cumulative_acc_and_pe(ref, bods[inner]);
-                }
                 ref.pe /= T{2};
                 /* KICK for half a step */
                 ref.curr_vel += half_dt*ref.acc;
@@ -285,9 +291,8 @@ namespace gtd {
             num_bods = bods.size();
             for (outer = 0; outer < num_bods; ++outer) {
                 bod_t &ref = bods[outer];
-                for (inner = outer + 1; inner < num_bods; ++inner) {
+                for (inner = outer + 1; inner < num_bods; ++inner)
                     cumulative_acc(ref, bods[inner]);
-                }
                 /* KICK for a full step */
                 ref.curr_vel += dt*ref.acc;
                 /* DRIFT for half a step */
@@ -301,9 +306,8 @@ namespace gtd {
             } /* a second loop is required to compute the potential energies based on the updated positions */
             for (outer = 0; outer < num_bods; ++outer) {
                 bod_t &ref = bods[outer];
-                for (inner = outer + 1; inner < num_bods; ++inner) {
+                for (inner = outer + 1; inner < num_bods; ++inner)
                     cumulative_pe(ref, bods[inner]);
-                }
                 ref.pe /= T{2};
                 pe[ref.id].push_back(ref.pe);
                 energy[ref.id].push_back(ref.curr_ke + ref.pe);
@@ -447,29 +451,32 @@ namespace gtd {
             printf("Iteration %llu/%llu\r", step, iterations);
 #endif
         }
-        static inline void print_conclusion(const char *method, const time_t &start_time) {
-            time_t total = time(nullptr) - start_time;
-#ifndef _WIN32
-            std::cout << RESET_TXT_FLAGS;
-            printf(BLACK_TXT("\n--------------------Done--------------------\n")
-                   UNDERLINED_TXT(GREEN_TXT("%s"))WHITE_TXT(" - time elapsed: ")
-                   BOLD_TXT(YELLOW_TXT("%zu"))WHITE_TXT(" second%c\n"), method, total, "s"[total == 1]);
-#else
-            printf("\n--------------------Done--------------------\n"
-                               "Midpoint method - time elapsed: %zu second%c\n", total, "s"[total == 1]);
-#endif
+        static inline void print_conclusion(const char *method,
+                                            const std::chrono::time_point<std::chrono::high_resolution_clock> &start) {
+            std::chrono::nanoseconds total = std::chrono::high_resolution_clock::now() - start;
+// #ifndef _WIN32
+            std::cout << RESET_TXT_FLAGS << BLACK_TXT("\n--------------------Done--------------------\n") <<
+            UNDERLINED_TXT_START GREEN_TXT_START << method <<
+            RESET_TXT_FLAGS WHITE_TXT(" - time elapsed: ") BOLD_TXT_START YELLOW_TXT_START << total.count()/BILLION <<
+            RESET_TXT_FLAGS WHITE_TXT_START " second" << "s"[total == std::chrono::seconds{1}] << std::endl;
+// #else
+            // printf("\n--------------------Done--------------------\n"
+            //                    "Midpoint method - time elapsed: %zu second%c\n", total, "s"[total == 1]);
+// #endif
         }
     public:
         constexpr system() : G{G_SI} {this->check_coll();}
         system(const std::initializer_list<bod_t> &list) : bods{list}, G{G_SI} {
             check_overlap();
             check_coll();
-            clear_bodies();
+            if constexpr (memFreq)
+                clear_bodies();
         }
         system(std::initializer_list<bod_t> &&list) : bods{std::move(list)}, G{G_SI} {
             check_overlap();
             check_coll();
-            clear_bodies();
+            if constexpr (memFreq)
+                clear_bodies();
         }
         explicit system(long double timestep, ull_t num_iterations, const char *units_format) :
                 dt{timestep}, iterations{num_iterations} {
@@ -487,7 +494,8 @@ namespace gtd {
             check_overlap();
             check_coll();
             parse_units_format(units_format);
-            clear_bodies();
+            if constexpr (memFreq && mF) // no need to clear bodies if the ones passed do not record history
+                clear_bodies();
         }
         system(std::vector<bod_t> &&bodies, long double timestep = 1,
                ull_t num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
@@ -495,7 +503,8 @@ namespace gtd {
             check_overlap();
             check_coll();
             parse_units_format(units_format);
-            clear_bodies();
+            if constexpr (memFreq)
+                clear_bodies();
         }
         template <ull_t mF>
         system(std::vector<body<M, R, T, mF>> &&bodies, long double timestep = 1,
@@ -506,7 +515,8 @@ namespace gtd {
             check_overlap();
             check_coll();
             parse_units_format(units_format);
-            clear_bodies();
+            if constexpr (memFreq && mF)
+                clear_bodies();
         }
         /* copy constructors are made to only copy the variables seen below: it does not make sense for a new system
          * object (even when copy-constructed) to be "evolved" if it has not gone through the evolution itself */
@@ -516,14 +526,16 @@ namespace gtd {
                bods{other.bods.begin(), other.bods.end()}, dt{other.dt}, iterations{other.iterations}, G{other.G} {
             check_overlap();
             check_coll();
-            clear_bodies();
+            if constexpr (memFreq && mF)
+                clear_bodies();
         }
         template <bool prg, bool mrg, int coll, ull_t fF, bool bF>
         system(system<M, R, T, prg, mrg, coll, memFreq, fF, bF> &&other) :
                bods{std::move(other.bods)}, dt{other.dt}, iterations{other.iterations}, G{other.G} {
             check_overlap();
             check_coll();
-            clear_bodies();
+            if constexpr (memFreq)
+                clear_bodies();
         }
         template <bool prg, bool mrg, int coll, ull_t mF, ull_t fF, bool bF>
         system(system<M, R, T, prg, mrg, coll, mF, fF, bF> &&other) :
@@ -532,7 +544,8 @@ namespace gtd {
                           [this](body<M, R, T, mF> &b){bods.emplace_back(std::move(b));});
             check_overlap();
             check_coll();
-            clear_bodies();
+            if constexpr (memFreq && mF)
+                clear_bodies();
         }
         vec_size_t num_bodies() {
             return bods.size();
@@ -557,14 +570,16 @@ namespace gtd {
             return set_timestep(delta_t);
         }
         sys_t &add_body(const bod_t &bod) {
-            bods.push_back(bod);
-            bods.back().clear(); // all bodies within a system object must start out without an evolution
+            bods.emplace_back(bod);
+            if constexpr (memFreq)
+                bods.back().clear(); // all bodies within a system object must start out without an evolution
             check_overlap();
             return *this;
         }
         sys_t &add_body(bod_t &&bod) {
-            bod.clear();
-            bods.push_back(std::move(bod));
+            if constexpr (memFreq)
+                bod.clear();
+            bods.emplace_back(std::move(bod));
             check_overlap();
             return *this;
         }
@@ -578,7 +593,8 @@ namespace gtd {
                 return *this;
             vec_size_t index = bods.size();
             bods.insert(bods.end(), bodies.begin(), bodies.end());
-            clear_bodies(index);
+            if constexpr (memFreq)
+                clear_bodies(index);
             check_overlap();
             return *this;
         }
@@ -586,14 +602,15 @@ namespace gtd {
             if (!bodies.size())
                 return *this;
             for (auto &b : bodies) {
-                b.clear();
+                if constexpr (memFreq)
+                    b.clear();
                 bods.emplace_back(std::move(b));
             }
             check_overlap();
             return *this;
         }
         const bod_t &get_body(unsigned long long id) {
-            for (const auto &b : *this)
+            for (const auto &b : *this) // this is where it would be nice to be using a set!!
                 if (b.id == id)
                     return b;
             throw std::invalid_argument("The id passed does not correspond to any body present in this system "
@@ -608,7 +625,7 @@ namespace gtd {
                 }
             return false;
         }
-        void reset() {
+        void reset() requires (memFreq != 0) {
             // for (bod_t &bod : bods)
             //     bod.reset(true);
             std::for_each(bods.begin(), bods.end(), [this](bod_t &bod){bod.reset(true);});
@@ -622,7 +639,7 @@ namespace gtd {
         /* reset() deletes the evolution of the bodies AND returns them to their original positions, velocities, and
          * kinetic energies, whilst clear_evolution() deletes the evolution BUT retains the current positions,
          * velocities and kinetic energies of the bodies. */
-        void clear_evolution() {
+        void clear_evolution() requires (memFreq != 0) {
             // for (bod_t &bod : bods)
             //     bod.clear();
             std::for_each(bods.begin(), bods.end(), [this](bod_t &bod){bod.clear();});
@@ -636,12 +653,15 @@ namespace gtd {
         bool evolve(int integration_method = leapfrog_kdk) {
             if (!bods.size() || !check_option(integration_method))
                 return false;
-            time_t start = time(nullptr);
+            // time_t start = time(nullptr);
+            std::chrono::time_point<std::chrono::high_resolution_clock> start=std::chrono::high_resolution_clock::now();
             unsigned long long steps = 0;
-            if (evolved)
-                this->clear_evolution();
+            if constexpr (memFreq) {
+                if (evolved)
+                    this->clear_evolution();
+                this->create_energy_vectors();
+            }
             vec_size_t num_bods = bods.size();
-            this->create_energy_vectors();
 #ifndef _WIN32
             if constexpr (prog)
                 std::cout << BOLD_TXT_START;
@@ -704,8 +724,10 @@ namespace gtd {
                         this->take_modified_euler_step(predicted);
                         for (std::tuple<vector3D<T>, vector3D<T>, vector3D<T>> &tup : predicted)
                             std::get<2>(tup).make_zero();
-                        if constexpr (collisions == overlap_coll_check)
+                        if constexpr (collisions == overlap_coll_check) {
                             this->s_coll();
+                            num_bods = bods.size();
+                        }
                         if constexpr (prog)
                             this->print_progress(steps);
                     }
@@ -742,8 +764,10 @@ namespace gtd {
                         this->take_midpoint_step(predicted);
                         for (std::tuple<vector3D<T>, vector3D<T>, vector3D<T>> &tup : predicted)
                             std::get<2>(tup).make_zero();
-                        if constexpr (collisions == overlap_coll_check)
+                        if constexpr (collisions == overlap_coll_check) {
                             this->s_coll();
+                            num_bods = bods.size();
+                        }
                         if constexpr (prog)
                             this->print_progress(steps);
                     }
@@ -821,7 +845,7 @@ namespace gtd {
             prev_iterations = iterations;
             return true;
         }
-        std::pair<T*, long double> *pe_extrema() const {
+        std::pair<T*, long double> *pe_extrema() const requires (memFreq != 0) {
             /* This method returns a pointer to a 2-element array of std::pairs. The first pair concerns the minima and
              * the second pair concerns the maxima. The first element of the pairs is a pointer to a 2-element array of
              * type T. The first element of the array is the actual extreme value, and the second is the difference
@@ -859,7 +883,7 @@ namespace gtd {
             (min_max + 1)->second = max_index*prev_dt;
             return min_max;
         }
-        std::pair<T*, long double> *ke_extrema() const {
+        std::pair<T*, long double> *ke_extrema() const requires (memFreq != 0) {
             /* Same as the above method, but for KE. */
             if (bods.empty())
                 throw empty_system_error("pe_diff() cannot be called on empty system objects (no bodies present).\n");
@@ -893,7 +917,7 @@ namespace gtd {
             (min_max + 1)->second = max_index*prev_dt;
             return min_max;
         }
-        std::pair<T*, long double> *tot_e_extrema() const {
+        std::pair<T*, long double> *tot_e_extrema() const requires (memFreq != 0) {
             /* Same as the above method, but for KE. */
             if (bods.empty())
                 throw empty_system_error("pe_diff() cannot be called on empty system objects (no bodies present).\n");
@@ -963,14 +987,14 @@ namespace gtd {
         auto crend() const {
             return bods.crend();
         }
-        bool write_trajectories(const String &path = def_path, bool binary = false) {
+        bool write_trajectories(const String &path = def_path, bool binary = false) requires (memFreq != 0) {
             /* This method can only be called if memFreq is non-zero, or else there would be no history to output. */
             /* Writes the trajectories (historically) of all the bodies to a file, including all the energy values. For
              * text files, units are not written as these will depend entirely on the units_format string passed to the
              * system<M, R, T> object in its constructor. */
             if (&path == &def_path)
                 def_path.append_back(get_date_and_time()).append_back(".csv");
-            if (!evolved || bods.size() == 0)
+            if (!evolved || !bods.size())
                 return false;
             if (binary) {} // needs work
             std::ofstream out(path.c_str(), std::ios_base::trunc);
@@ -1031,7 +1055,8 @@ namespace gtd {
             this->iterations = other.iterations;
             this->G = other.G;
             this->bods = other.bods;
-            this->clear_evolution();
+            if constexpr (memFreq)
+                this->clear_evolution();
             return *this;
         }
         sys_t &operator=(sys_t &&other) noexcept {
@@ -1041,7 +1066,8 @@ namespace gtd {
             this->iterations = std::move(other.iterations);
             this->G = std::move(other.G);
             this->bods = std::move(other.bods);
-            this->clear_evolution();
+            if constexpr (memFreq)
+                this->clear_evolution();
             return *this;
         }
         template <isNumWrapper m, isNumWrapper r, isNumWrapper t,
@@ -1055,7 +1081,7 @@ namespace gtd {
         template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool>
         friend class system;
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
-                isNumWrapper, bool>
+                isNumWrapper, bool, ull_t>
         friend class astro_scene;
     }; // all these template parameters are driving me coocoo
     template <isNumWrapper M, isNumWrapper R, isNumWrapper T, bool prg, bool mrg, int coll, ull_t mF, ull_t fF, bool bF>

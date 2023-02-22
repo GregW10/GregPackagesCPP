@@ -5,8 +5,12 @@
 #ifndef GREGVEC_H
 #define GREGVEC_H
 
-#include "gregstring.h"
-#include "gregmat.h"
+#ifndef __cplusplus
+#error "The gregvec.hpp header file is a C++ header file only."
+#endif
+
+#include "gregstr.hpp"
+#include "gregmat.hpp"
 
 #include <iostream>
 #include <type_traits>
