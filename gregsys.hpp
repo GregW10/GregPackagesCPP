@@ -7,6 +7,49 @@
 
 #include "gregbod.hpp"
 
+#define EMPTY
+
+#define FUNC_TEMPL_SELECT(func, cf, ...) \
+if constexpr (collisions == overlap_coll_check || !(memFreq && fileFreq)) { \
+    func<false, false>(__VA_ARGS__); \
+    cf \
+} \
+else { \
+    if constexpr (memFreq && fileFreq) { \
+        if (steps == memFreq && steps == fileFreq) { \
+            func<true, true>(__VA_ARGS__); \
+        } \
+        else if (steps == memFreq) { \
+            func<true, false>(__VA_ARGS__); \
+        } \
+        else if (steps == fileFreq) { \
+            func<false, true>(__VA_ARGS__); \
+            cf \
+        } \
+        else { \
+            func<false, false>(__VA_ARGS__); \
+            cf \
+        } \
+    } \
+    else if constexpr (memFreq) { \
+        if (steps == memFreq) { \
+            func<true, false>(__VA_ARGS__); \
+        } \
+        else { \
+            func<false, false>(__VA_ARGS__); \
+            cf \
+        } \
+    } \
+    else if constexpr (fileFreq) { \
+        if (steps == fileFreq) { \
+            func<false, true>(__VA_ARGS__); \
+            cf \
+        } \
+        func<false, false>(__VA_ARGS__); \
+        cf \
+    } \
+}
+
 namespace gtd {
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
               bool prog = false, bool mergeOverlappingBodies = false, int collisions = 0,
@@ -58,8 +101,7 @@ namespace gtd {
         ull_t prev_iterations{}; // same here
         mom_t min_tot_com_mom{BILLION*10}; // minimum sum of magnitudes of COM momenta for two bodies to merge
         // using P = decltype((G*std::declval<M>()*std::declval<M>())/std::declval<T>()); // will be long double
-        ull_t mCounter = 0;
-        ull_t fCounter = 0;
+        ull_t steps;
         std::map<ull_t, std::vector<T>> pe; // to store potential energies of bodies
         std::map<ull_t, std::vector<T>> energy; // total energy for each body at each iteration (KE + PE)
         //std::map<unsigned long long, std::vector<T>> del_ke; // map to store KE vectors of deleted bodies from mergers
@@ -110,22 +152,20 @@ namespace gtd {
             G /= m_denom*d_denom*d_denom*d_denom*t_denom*t_denom;
             G /= 1000000000000000; // correcting for the original G being 10^(15) times larger than it should be
         }
-        void clear_bodies() { // makes sure the trajectories of all bodies are deleted
+        void clear_bodies() requires (memFreq != 0) { // makes sure the trajectories of all bodies are deleted
             // for (bod_t &bod : bods)
             //     bod.clear();
-            if constexpr (memFreq)
-                std::for_each(bods.begin(), bods.end(), [this](bod_t &bod){bod.clear();});
+            std::for_each(bods.begin(), bods.end(), [this](bod_t &bod){bod.clear();});
         }
-        void clear_bodies(vec_size_t &as_of) {
+        void clear_bodies(vec_size_t &as_of) requires (memFreq != 0) {
             // if (as_of >= bods.size())
             //     return;
             // vec_size_t size = bods.size();
             // while (as_of < size)
             //     bods[as_of++].clear();
-            if constexpr (memFreq)
-                std::for_each(bods.begin() + as_of, bods.end(), [this](bod_t &bod){bod.clear();});
+            std::for_each(bods.begin() + as_of, bods.end(), [this](bod_t &bod){bod.clear();});
         }
-        void clear_bodies(vec_size_t &&as_of) {
+        void clear_bodies(vec_size_t &&as_of) requires (memFreq != 0) {
             clear_bodies(as_of);
         }
         void check_overlap() {
@@ -159,9 +199,12 @@ namespace gtd {
             long double &&r12_cubed_mag = (r12*r12*r12).magnitude();
             b1.acc += ((G*b2.mass_)/(r12_cubed_mag))*r12;
             b2.acc -= ((G*b1.mass_)/(r12_cubed_mag))*r12;
-            auto &&pot_energy = -(G*b1.mass_*b2.mass_)/r12.magnitude();
-            b1.pe += pot_energy;
-            b2.pe += pot_energy;
+            if constexpr (memFreq)
+                if (steps == memFreq) {
+                    auto &&pot_energy = -(G*b1.mass_*b2.mass_)/r12.magnitude();
+                    b1.pe += pot_energy;
+                    b2.pe += pot_energy;
+                }
         }
         void cumulative_acc(bod_t &b1, bod_t &b2) {
             vector3D<T> &&r12 = b2.curr_pos - b1.curr_pos;
@@ -169,35 +212,50 @@ namespace gtd {
             b1.acc += ((G*b2.mass_)/(r12_cubed_mag))*r12;
             b2.acc -= ((G*b1.mass_)/(r12_cubed_mag))*r12;
         }
-        void cumulative_pe(bod_t &b1, bod_t &b2) {
+        void cumulative_pe(bod_t &b1, bod_t &b2) requires (memFreq != 0) {
             vector3D<T> &&r12 = b2.curr_pos - b1.curr_pos;
             auto &&pot_energy = -(G*b1.mass_*b2.mass_)/r12.magnitude();
             b1.pe += pot_energy;
             b2.pe += pot_energy;
         }
+        template <bool mem, bool file>
         void take_euler_step() {
             for (bod_t &bod : bods) {
                 bod.curr_pos += bod.curr_vel*dt;
                 bod.curr_vel += bod.acc*dt;
-                bod.add_pos_vel_ke();
+                if constexpr (mem)
+                    bod.add_pos_vel_ke();
+                if constexpr (file) {
+                    // WRITE TO FILE
+                }
             }
         }
+        template <bool mem, bool file>
         void take_modified_euler_step(const std::vector<std::tuple<vector3D<T>, vector3D<T>, vector3D<T>>>
                                       &predicted_vals) {
             unsigned long long count = 0;
             for (bod_t &bod : bods) {
                 bod.curr_pos += half_dt*(bod.curr_vel + std::get<1>(predicted_vals[count]));
                 bod.curr_vel += half_dt*(bod.acc + std::get<2>(predicted_vals[count++]));
-                bod.add_pos_vel_ke();
+                if constexpr (mem)
+                    bod.add_pos_vel_ke();
+                if constexpr (file) {
+                    // WRITE TO FILE
+                }
             }
         }
+        template <bool mem, bool file>
         void take_midpoint_step(const std::vector<std::tuple<vector3D<T>, vector3D<T>, vector3D<T>>>
                                 &predicted_vals) {
             unsigned long long count = 0;
             for (bod_t &bod : bods) {
                 bod.curr_pos += dt*std::get<1>(predicted_vals[count]);
                 bod.curr_vel += dt*std::get<2>(predicted_vals[count++]);
-                bod.add_pos_vel_ke();
+                if constexpr (mem)
+                    bod.add_pos_vel_ke();
+                if constexpr (file) {
+                    // WRITE TO FILE
+                }
             }
         }
         void create_energy_vectors() requires (memFreq != 0) {
@@ -225,8 +283,8 @@ namespace gtd {
             static unsigned long long outer;
             static unsigned long long inner;
             static vec_size_t num_bods;
-            total_pe = T{0};
-            total_ke = T{0};
+            if constexpr (memFreq)
+                total_pe = total_ke = T{0};
             for (bod_t &bod : bods) {
                 bod.acc.make_zero();
                 bod.pe = T{0};
@@ -236,15 +294,19 @@ namespace gtd {
                 bod_t &ref = bods[outer];
                 for (inner = outer + 1; inner < num_bods; ++inner)
                     cumulative_acc_and_pe(ref, bods[inner]);
-                ref.pe /= T{2};
-                pe[ref.id].push_back(ref.pe);
-                energy[ref.id].push_back(ref.curr_ke + ref.pe);
-                total_pe += ref.pe;
-                total_ke += ref.curr_ke;
+                if constexpr (memFreq) {
+                    ref.pe /= T{2};
+                    pe[ref.id].push_back(ref.pe);
+                    energy[ref.id].push_back(ref.curr_ke + ref.pe);
+                    total_pe += ref.pe;
+                    total_ke += ref.curr_ke;
+                }
             }
-            tot_pe.push_back(total_pe);
-            tot_ke.push_back(total_ke);
-            tot_e.push_back(total_pe + total_ke);
+            if constexpr (memFreq) {
+                tot_pe.push_back(total_pe);
+                tot_ke.push_back(total_ke);
+                tot_e.push_back(total_pe + total_ke);
+            }
         }
         void leapfrog_kdk_acc_e_and_step() {
             static T total_pe;
@@ -252,29 +314,82 @@ namespace gtd {
             static unsigned long long inner;
             static unsigned long long outer;
             static vec_size_t num_bods;
-            total_pe = T{0};
-            total_ke = T{0};
-            for (bod_t &bod : bods) {
-                bod.acc.make_zero();
-                bod.pe = T{0};
+            if constexpr (memFreq || fileFreq) {
+                total_pe = total_ke = T{0};
+                if constexpr (memFreq && fileFreq) { // repeated comparison is fine as this is evaluated at compile-time
+                    if (steps == memFreq || steps == fileFreq)
+                        for (bod_t &bod : bods) {
+                            bod.acc.make_zero();
+                            bod.pe = T{0};
+                        }
+                    else
+                        for (bod_t &bod : bods)
+                            bod.acc.make_zero();
+                }
+                if constexpr (memFreq) {
+                    if (steps == memFreq)
+                        for (bod_t &bod : bods) {
+                            bod.acc.make_zero();
+                            bod.pe = T{0};
+                        }
+                    else
+                        for (bod_t &bod : bods)
+                            bod.acc.make_zero();
+                }
+                else {
+                    if (steps == fileFreq)
+                        for (bod_t &bod : bods) {
+                            bod.acc.make_zero();
+                            bod.pe = T{0};
+                        }
+                    else
+                        for (bod_t &bod : bods)
+                            bod.acc.make_zero();
+                }
             }
+            else
+                for (bod_t &bod : bods)
+                    bod.acc.make_zero();
             num_bods = bods.size();
-            for (outer = 0; outer < num_bods; ++outer) {
-                bod_t &ref = bods[outer];
-                for (inner = outer + 1; inner < num_bods; ++inner)
-                    cumulative_acc_and_pe(ref, bods[inner]);
-                ref.pe /= T{2};
-                /* KICK for half a step */
-                ref.curr_vel += half_dt*ref.acc;
-                ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
-                pe[ref.id].push_back(ref.pe);
-                energy[ref.id].push_back(ref.curr_ke + ref.pe);
-                total_pe += ref.pe;
-                total_ke += ref.curr_ke;
+            static auto loop = [this]<bool mem, bool file>{
+                for (outer = 0; outer < num_bods; ++outer) {
+                    bod_t &ref = bods[outer];
+                    for (inner = outer + 1; inner < num_bods; ++inner)
+                        cumulative_acc_and_pe(ref, bods[inner]);
+                    /* KICK for half a step */
+                    ref.curr_vel += half_dt*ref.acc;
+                    if constexpr (mem) {
+                        ref.pe /= T{2};
+                        ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
+                        pe[ref.id].push_back(ref.pe);
+                        energy[ref.id].push_back(ref.curr_ke + ref.pe);
+                        total_pe += ref.pe;
+                        total_ke += ref.curr_ke;
+                    }
+                    if constexpr (file) {
+                        // WRITE TO FILE
+                    }
+                }
+            };
+            FUNC_TEMPL_SELECT(loop.template operator(), return;)
+            // for (outer = 0; outer < num_bods; ++outer) {
+            //     bod_t &ref = bods[outer];
+            //     for (inner = outer + 1; inner < num_bods; ++inner)
+            //         cumulative_acc_and_pe(ref, bods[inner]);
+            //     ref.pe /= T{2};
+            //     /* KICK for half a step */
+            //     ref.curr_vel += half_dt*ref.acc;
+            //     ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
+            //     pe[ref.id].push_back(ref.pe);
+            //     energy[ref.id].push_back(ref.curr_ke + ref.pe);
+            //     total_pe += ref.pe;
+            //     total_ke += ref.curr_ke;
+            // }
+            if constexpr (memFreq) {
+                tot_pe.push_back(total_pe);
+                tot_ke.push_back(total_ke);
+                tot_e.push_back(total_pe + total_ke);
             }
-            tot_pe.push_back(total_pe);
-            tot_ke.push_back(total_ke);
-            tot_e.push_back(total_pe + total_ke);
         }
         void leapfrog_dkd_acc_e_and_step() {
             static T total_pe;
@@ -282,42 +397,55 @@ namespace gtd {
             static unsigned long long inner;
             static unsigned long long outer;
             static vec_size_t num_bods;
-            total_pe = T{0};
-            total_ke = T{0};
+            if constexpr (memFreq)
+                total_pe = total_ke =  T{0};
             for (bod_t &bod : bods) {
                 bod.acc.make_zero();
-                bod.pe = T{0};
+                if constexpr (memFreq)
+                    bod.pe = T{0};
             }
             num_bods = bods.size();
-            for (outer = 0; outer < num_bods; ++outer) {
-                bod_t &ref = bods[outer];
-                for (inner = outer + 1; inner < num_bods; ++inner)
-                    cumulative_acc(ref, bods[inner]);
-                /* KICK for a full step */
-                ref.curr_vel += dt*ref.acc;
-                /* DRIFT for half a step */
-                ref.curr_pos += half_dt*ref.curr_vel;
-                /* the reason it is possible to update the outer body's position within the outer loop (without
-                 * affecting the synchronisation of the particles) is because, by here, its effect (at its now-previous
-                 * position) on all the other particles in the system has been calculated (all subsequent updates of the
-                 * accelerations of the other particles no longer depend on the position of the outer body) */
-                ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
-                total_ke += ref.curr_ke;
-            } /* a second loop is required to compute the potential energies based on the updated positions */
-            for (outer = 0; outer < num_bods; ++outer) {
-                bod_t &ref = bods[outer];
-                for (inner = outer + 1; inner < num_bods; ++inner)
-                    cumulative_pe(ref, bods[inner]);
-                ref.pe /= T{2};
-                pe[ref.id].push_back(ref.pe);
-                energy[ref.id].push_back(ref.curr_ke + ref.pe);
-                total_pe += ref.pe;
+            static auto loop = [this]<bool mem, bool file>{
+                for (outer = 0; outer < num_bods; ++outer) {
+                    bod_t &ref = bods[outer];
+                    for (inner = outer + 1; inner < num_bods; ++inner)
+                        cumulative_acc(ref, bods[inner]);
+                    /* KICK for a full step */
+                    ref.curr_vel += dt*ref.acc;
+                    /* DRIFT for half a step */
+                    ref.curr_pos += half_dt*ref.curr_vel;
+                    /* the reason it is possible to update the outer body's position within the outer loop (without
+                     * affecting the synchronisation of the particles) is because, by here, its effect (at its
+                     * now-previous position) on all the other particles in the system has been calculated (all
+                     * subsequent updates of the accelerations of the other particles no longer depend on the position
+                     * of the outer body) */
+                    if (mem) {
+                        ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
+                        total_ke += ref.curr_ke;
+                    }
+                    if (file) {
+                        // WRITE TO FILE
+                    }
+                }
+            };
+            FUNC_TEMPL_SELECT(loop.template operator(), return;)
+            /* a second loop is required to compute the potential energies based on the updated positions */
+            if constexpr (memFreq) {
+                for (outer = 0; outer < num_bods; ++outer) {
+                    bod_t &ref = bods[outer];
+                    for (inner = outer + 1; inner < num_bods; ++inner)
+                        cumulative_pe(ref, bods[inner]);
+                    ref.pe /= T{2};
+                    pe[ref.id].push_back(ref.pe);
+                    energy[ref.id].push_back(ref.curr_ke + ref.pe);
+                    total_pe += ref.pe;
+                }
+                tot_pe.push_back(total_pe);
+                tot_ke.push_back(total_ke);
+                tot_e.push_back(total_pe + total_ke);
             }
-            tot_pe.push_back(total_pe);
-            tot_ke.push_back(total_ke);
-            tot_e.push_back(total_pe + total_ke);
         }
-        void calc_energy() {
+        void calc_energy() requires (memFreq != 0) {
             vec_size_t size = bods.size();
             for (bod_t &bod : bods)
                 bod.pe = T{0};
@@ -392,6 +520,8 @@ namespace gtd {
                      * addition, there would then be inconsistency between which bodies end up in the "deleted" bodies
                      * std::set (retaining all their history) and those that remain in the main std::vector. */
                     bod_t &&merged = bod_o + *merging_bod; // create body that is the result of the merger
+                    if constexpr (memFreq)
+                        merged.add_pos_vel_ke();
                     pe.emplace(merged.id, std::vector<T>{}); // add a std::vector to store its potential energies
                     energy.emplace(merged.id, std::vector<T>{}); // same for its total energy (as it stores its own KE)
                     del_bods.emplace(std::move(bod_o)); // move the merged bodies into the deleted bodies std::set
@@ -431,6 +561,8 @@ namespace gtd {
                         }
                     }
                 }
+                if constexpr (memFreq)
+                    bod_o.add_pos_vel_ke();
             }
         }
         static inline bool check_option(int option) noexcept {
@@ -655,7 +787,7 @@ namespace gtd {
                 return false;
             // time_t start = time(nullptr);
             std::chrono::time_point<std::chrono::high_resolution_clock> start=std::chrono::high_resolution_clock::now();
-            unsigned long long steps = 0;
+            steps = 0;
             if constexpr (memFreq) {
                 if (evolved)
                     this->clear_evolution();
@@ -681,7 +813,8 @@ namespace gtd {
 
                         }
                         this->calc_acc_and_e();
-                        this->take_euler_step();
+                        // this->take_euler_step();
+                        FUNC_TEMPL_SELECT(this->take_euler_step, EMPTY)
                         /* by having "prog" as a template parameter, it avoids having to re-evaluate whether it is true
                          * or not within the loop, since the "if constexpr ()" branches get rejected at compile-time */
                         if constexpr (collisions == overlap_coll_check)
@@ -721,7 +854,8 @@ namespace gtd {
                                 std::get<2>(predicted[inner]) -= ((G*ref.mass_)/(r12_cubed_mag))*r12;
                             }
                         }
-                        this->take_modified_euler_step(predicted);
+                        // this->take_modified_euler_step(predicted);
+                        FUNC_TEMPL_SELECT(this->take_modified_euler_step, EMPTY, predicted)
                         for (std::tuple<vector3D<T>, vector3D<T>, vector3D<T>> &tup : predicted)
                             std::get<2>(tup).make_zero();
                         if constexpr (collisions == overlap_coll_check) {
@@ -761,7 +895,8 @@ namespace gtd {
                                 std::get<2>(predicted[inner]) -= ((G*ref.mass_)/(r12_cubed_mag))*r12;
                             }
                         }
-                        this->take_midpoint_step(predicted);
+                        // this->take_midpoint_step(predicted);
+                        FUNC_TEMPL_SELECT(this->take_midpoint_step, EMPTY, predicted)
                         for (std::tuple<vector3D<T>, vector3D<T>, vector3D<T>> &tup : predicted)
                             std::get<2>(tup).make_zero();
                         if constexpr (collisions == overlap_coll_check) {
@@ -1199,4 +1334,6 @@ namespace gtd {
     typedef system<long double, long double, long double, true, true, 3, 1, 1, false> sys_pmc_MF_txt;
     typedef system<long double, long double, long double, true, true, 7, 1, 1, false> sys_pmC_MF_txt;
 }
+#undef FUNC_TEMPL_SELECT
+#undef EMPTY
 #endif
