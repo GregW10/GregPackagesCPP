@@ -76,7 +76,7 @@ concept isNumWrapper = requires (T val, T val2, size_t l, long double f, std::os
 template <typename T>
 concept isPrintable = requires (std::ostream &os, const T &a) {
     {os << a} -> std::same_as<std::ostream&>;
-    {std::move(os) << a} -> std::same_as<std::ostream&>;
+    // {std::move(os) << a} -> std::same_as<std::ostream&>;
 };
 template <typename F, typename T>
 concept binaryPredicate = requires (F f, T a, T b) {
@@ -265,12 +265,36 @@ namespace gtd {
         while (begin < end)
             swap(*begin++, *end--);
     }
-    template<class ForwardIterator, typename T>
-    void fill(ForwardIterator begin, ForwardIterator end, const T &value) {
+    template<forwardIterator fIT, typename T>
+    void fill(fIT begin, fIT end, const T &value) {
         if (begin == end || begin == end - 1)
             return;
         while (begin != end)
             *begin++ = value;
+    }
+    /* the below function, simple as it is, I find highly useful as it performs a byte-wise swap, and can, therefore,
+     * be used on objects without touching any of their copy constructors */
+    void swap(void *one, void *two, size_t size) {
+        if (!one || !two || !size)
+            return;
+        char temp;
+        char *first = (char *) one;
+        char *second = (char *) two;
+        while (size --> 0) {
+            temp = *first;
+            *first++ = *second;
+            *second++ = temp;
+        }
+    }
+    void move(void *dest, void *source, size_t size) {
+        if (!dest || !source || !size)
+            return;
+        char *dst = (char *) dest;
+        char *src = (char *) source;
+        while (size --> 0) {
+            *dst++ = *src;
+            *src++ = 0;
+        }
     }
 }
 template <isPrintable T> // must be defined in the global namespace due to argument-dependent-lookup

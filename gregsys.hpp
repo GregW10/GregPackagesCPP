@@ -19,10 +19,10 @@ else { \
         if (steps == memFreq && steps == fileFreq) { \
             func<true, true>(__VA_ARGS__); \
         } \
-        else if (steps == memFreq) { \
+        else if (!(steps % memFreq)) { \
             func<true, false>(__VA_ARGS__); \
         } \
-        else if (steps == fileFreq) { \
+        else if (!(steps % fileFreq)) { \
             func<false, true>(__VA_ARGS__); \
             cf \
         } \
@@ -32,23 +32,40 @@ else { \
         } \
     } \
     else if constexpr (memFreq) { \
-        if (steps == memFreq) { \
-            func<true, false>(__VA_ARGS__); \
-        } \
-        else { \
+        if (steps % memFreq) { \
             func<false, false>(__VA_ARGS__); \
             cf \
         } \
+        else { \
+            func<true, false>(__VA_ARGS__); \
+        } \
     } \
     else if constexpr (fileFreq) { \
-        if (steps == fileFreq) { \
-            func<false, true>(__VA_ARGS__); \
+        if (steps % fileFreq) { \
+            func<false, false>(__VA_ARGS__); \
             cf \
         } \
-        func<false, false>(__VA_ARGS__); \
+        func<false, true>(__VA_ARGS__); \
         cf \
     } \
 }
+
+#define MEM_LOOP \
+if constexpr (memFreq) { \
+    if (steps == memFreq) { \
+        total_pe = total_ke =  T{0}; \
+        for (bod_t &bod : bods) { \
+            bod.acc.make_zero(); \
+            bod.pe = T{0}; \
+        } \
+    } \
+    else \
+        for (bod_t &bod : bods) \
+            bod.acc.make_zero(); \
+    } \
+else \
+    for (bod_t &bod : bods) \
+        bod.acc.make_zero();
 
 namespace gtd {
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
@@ -98,6 +115,7 @@ namespace gtd {
         long double half_dt = dt/2; // I gave it its own variable, since it is a commonly used quantity
         ull_t iterations = 1000;
         long double prev_dt{}; // used in methods called after evolve(), since could be changed by setter
+        long double time_elapsed{};
         ull_t prev_iterations{}; // same here
         mom_t min_tot_com_mom{BILLION*10}; // minimum sum of magnitudes of COM momenta for two bodies to merge
         // using P = decltype((G*std::declval<M>()*std::declval<M>())/std::declval<T>()); // will be long double
@@ -194,17 +212,14 @@ namespace gtd {
                 }
             }
         }
-        void cumulative_acc_and_pe(bod_t &b1, bod_t &b2) {
+        void cumulative_acc_and_pe(bod_t &b1, bod_t &b2) requires (memFreq != 0) {
             vector3D<T> &&r12 = b2.curr_pos - b1.curr_pos;
             long double &&r12_cubed_mag = (r12*r12*r12).magnitude();
             b1.acc += ((G*b2.mass_)/(r12_cubed_mag))*r12;
             b2.acc -= ((G*b1.mass_)/(r12_cubed_mag))*r12;
-            if constexpr (memFreq)
-                if (steps == memFreq) {
-                    auto &&pot_energy = -(G*b1.mass_*b2.mass_)/r12.magnitude();
-                    b1.pe += pot_energy;
-                    b2.pe += pot_energy;
-                }
+            auto &&pot_energy = -(G*b1.mass_*b2.mass_)/r12.magnitude();
+            b1.pe += pot_energy;
+            b2.pe += pot_energy;
         }
         void cumulative_acc(bod_t &b1, bod_t &b2) {
             vector3D<T> &&r12 = b2.curr_pos - b1.curr_pos;
@@ -259,7 +274,7 @@ namespace gtd {
             }
         }
         void create_energy_vectors() requires (memFreq != 0) {
-            unsigned long long iters_p1 = iterations + 1;
+            unsigned long long iters_p1 = (iterations + 1)/memFreq;
             // pe.resize(bods_size);
             // energy.resize(bods_size);
             pe.clear();
@@ -283,23 +298,35 @@ namespace gtd {
             static unsigned long long outer;
             static unsigned long long inner;
             static vec_size_t num_bods;
-            if constexpr (memFreq)
-                total_pe = total_ke = T{0};
-            for (bod_t &bod : bods) {
-                bod.acc.make_zero();
-                bod.pe = T{0};
-            }
+            MEM_LOOP // zeros out total_pe, total_ke and pe of each body if memFreq, and always zeros all accelerations
             num_bods = bods.size();
-            for (outer = 0; outer < num_bods; ++outer) {
-                bod_t &ref = bods[outer];
-                for (inner = outer + 1; inner < num_bods; ++inner)
-                    cumulative_acc_and_pe(ref, bods[inner]);
-                if constexpr (memFreq) {
-                    ref.pe /= T{2};
-                    pe[ref.id].push_back(ref.pe);
-                    energy[ref.id].push_back(ref.curr_ke + ref.pe);
-                    total_pe += ref.pe;
-                    total_ke += ref.curr_ke;
+            if constexpr (!memFreq) {
+                for (outer = 0; outer < num_bods; ++outer) {
+                    bod_t &ref = bods[outer];
+                    for (inner = outer + 1; inner < num_bods; ++inner)
+                        this->cumulative_acc(ref, bods[inner]);
+                }
+            }
+            else {
+                if (steps % memFreq) {
+                    for (outer = 0; outer < num_bods; ++outer) {
+                        bod_t &ref = bods[outer];
+                        for (inner = outer + 1; inner < num_bods; ++inner)
+                            this->cumulative_acc(ref, bods[inner]);
+                    }
+                    return;
+                }
+                else {
+                    for (outer = 0; outer < num_bods; ++outer) {
+                        bod_t &ref = bods[outer];
+                        for (inner = outer + 1; inner < num_bods; ++inner)
+                            this->cumulative_acc_and_pe(ref, bods[inner]);
+                        ref.pe /= T{2};
+                        pe[ref.id].push_back(ref.pe);
+                        energy[ref.id].push_back(ref.curr_ke + ref.pe);
+                        total_pe += ref.pe;
+                        total_ke += ref.curr_ke;
+                    }
                 }
             }
             if constexpr (memFreq) {
@@ -314,48 +341,17 @@ namespace gtd {
             static unsigned long long inner;
             static unsigned long long outer;
             static vec_size_t num_bods;
-            if constexpr (memFreq || fileFreq) {
-                total_pe = total_ke = T{0};
-                if constexpr (memFreq && fileFreq) { // repeated comparison is fine as this is evaluated at compile-time
-                    if (steps == memFreq || steps == fileFreq)
-                        for (bod_t &bod : bods) {
-                            bod.acc.make_zero();
-                            bod.pe = T{0};
-                        }
-                    else
-                        for (bod_t &bod : bods)
-                            bod.acc.make_zero();
-                }
-                if constexpr (memFreq) {
-                    if (steps == memFreq)
-                        for (bod_t &bod : bods) {
-                            bod.acc.make_zero();
-                            bod.pe = T{0};
-                        }
-                    else
-                        for (bod_t &bod : bods)
-                            bod.acc.make_zero();
-                }
-                else {
-                    if (steps == fileFreq)
-                        for (bod_t &bod : bods) {
-                            bod.acc.make_zero();
-                            bod.pe = T{0};
-                        }
-                    else
-                        for (bod_t &bod : bods)
-                            bod.acc.make_zero();
-                }
-            }
-            else
-                for (bod_t &bod : bods)
-                    bod.acc.make_zero();
+            MEM_LOOP
             num_bods = bods.size();
             static auto loop = [this]<bool mem, bool file>{
                 for (outer = 0; outer < num_bods; ++outer) {
                     bod_t &ref = bods[outer];
-                    for (inner = outer + 1; inner < num_bods; ++inner)
-                        cumulative_acc_and_pe(ref, bods[inner]);
+                    for (inner = outer + 1; inner < num_bods; ++inner) {
+                        if constexpr (mem)
+                            this->cumulative_acc_and_pe(ref, bods[inner]);
+                        else
+                            this->cumulative_acc(ref, bods[inner]);
+                    }
                     /* KICK for half a step */
                     ref.curr_vel += half_dt*ref.acc;
                     if constexpr (mem) {
@@ -385,7 +381,7 @@ namespace gtd {
             //     total_pe += ref.pe;
             //     total_ke += ref.curr_ke;
             // }
-            if constexpr (memFreq) {
+            if constexpr (memFreq) { // in the FUNC_TEMPL_SELECT macro it is checked whether not steps % memFreq
                 tot_pe.push_back(total_pe);
                 tot_ke.push_back(total_ke);
                 tot_e.push_back(total_pe + total_ke);
@@ -397,13 +393,7 @@ namespace gtd {
             static unsigned long long inner;
             static unsigned long long outer;
             static vec_size_t num_bods;
-            if constexpr (memFreq)
-                total_pe = total_ke =  T{0};
-            for (bod_t &bod : bods) {
-                bod.acc.make_zero();
-                if constexpr (memFreq)
-                    bod.pe = T{0};
-            }
+            MEM_LOOP
             num_bods = bods.size();
             static auto loop = [this]<bool mem, bool file>{
                 for (outer = 0; outer < num_bods; ++outer) {
@@ -430,7 +420,7 @@ namespace gtd {
             };
             FUNC_TEMPL_SELECT(loop.template operator(), return;)
             /* a second loop is required to compute the potential energies based on the updated positions */
-            if constexpr (memFreq) {
+            if constexpr (memFreq) { // again, only reached if not steps % memFreq (checked within FUNC_TEMPL_SELECT)
                 for (outer = 0; outer < num_bods; ++outer) {
                     bod_t &ref = bods[outer];
                     for (inner = outer + 1; inner < num_bods; ++inner)
@@ -470,6 +460,7 @@ namespace gtd {
             tot_ke.push_back(total_ke);
             tot_e.push_back(total_pe + total_ke);
         }
+        template <bool mem, bool file>
         void s_coll() { // "simple" (ahem, ahem) collision detection and evolution
             static unsigned long long inner;
             static unsigned long long outer;
@@ -520,10 +511,16 @@ namespace gtd {
                      * addition, there would then be inconsistency between which bodies end up in the "deleted" bodies
                      * std::set (retaining all their history) and those that remain in the main std::vector. */
                     bod_t &&merged = bod_o + *merging_bod; // create body that is the result of the merger
-                    if constexpr (memFreq)
+                    if constexpr (mem) {
                         merged.add_pos_vel_ke();
-                    pe.emplace(merged.id, std::vector<T>{}); // add a std::vector to store its potential energies
-                    energy.emplace(merged.id, std::vector<T>{}); // same for its total energy (as it stores its own KE)
+                    }
+                    if constexpr (file) {
+                        // WRITE TO FILE
+                    }
+                    if constexpr (memFreq) {
+                        pe.emplace(merged.id, std::vector<T>{}); // add a std::vector to store its potential energies
+                        energy.emplace(merged.id, std::vector<T>{}); // same for its total energy (it stores its own KE)
+                    }
                     del_bods.emplace(std::move(bod_o)); // move the merged bodies into the deleted bodies std::set
                     del_bods.emplace(std::move(*bod_i));
                     bods.erase(bods.begin() + outer--); // erase the merged bodies from the std::vector
@@ -561,8 +558,12 @@ namespace gtd {
                         }
                     }
                 }
-                if constexpr (memFreq)
+                if constexpr (mem) {
                     bod_o.add_pos_vel_ke();
+                }
+                if constexpr (file) {
+                    // WRITE TO FILE
+                }
             }
         }
         static inline bool check_option(int option) noexcept {
@@ -575,10 +576,10 @@ namespace gtd {
             static_assert(collisions <= pred_coll_check && !(collisions & (collisions + 1)),
                           "Invalid collision-checking option.");
         }
-        void print_progress(const unsigned long long &step) const noexcept {
+        void print_progress() const noexcept {
 #ifndef _WIN32
             printf(CYAN_TXT_START "Iteration " BLUE_TXT_START "%llu" RED_TXT_START "/" MAGENTA_TXT_START
-                   "%llu\r", step, iterations);
+                   "%llu\r", this->steps, this->iterations);
 #else
             printf("Iteration %llu/%llu\r", step, iterations);
 #endif
@@ -820,7 +821,7 @@ namespace gtd {
                         if constexpr (collisions == overlap_coll_check)
                             this->s_coll();
                         if constexpr (prog)
-                            this->print_progress(steps);
+                            this->print_progress();
                     }
                     if constexpr (prog)
                         this->print_conclusion("Euler", start);
@@ -863,7 +864,7 @@ namespace gtd {
                             num_bods = bods.size();
                         }
                         if constexpr (prog)
-                            this->print_progress(steps);
+                            this->print_progress();
                     }
                     if constexpr (prog)
                         this->print_conclusion("Modified Euler", start);
@@ -904,7 +905,7 @@ namespace gtd {
                             num_bods = bods.size();
                         }
                         if constexpr (prog)
-                            this->print_progress(steps);
+                            this->print_progress();
                     }
                     if constexpr (prog)
                         this->print_conclusion("Midpoint method", start);
@@ -928,7 +929,7 @@ namespace gtd {
                         if constexpr (collisions == overlap_coll_check)
                             this->s_coll();
                         if constexpr (prog)
-                            this->print_progress(steps);
+                            this->print_progress();
                     }
                     if constexpr (prog)
                         this->print_conclusion("Leapfrog KDK", start);
@@ -940,7 +941,8 @@ namespace gtd {
                     // lots of stuff here
                 }
                 else {
-                    this->calc_energy();
+                    if constexpr (memFreq)
+                        this->calc_energy();
                     while (steps++ < iterations) {
                         for (bod_t &bod : bods)
                             /* DRIFT for half a step */
@@ -950,7 +952,7 @@ namespace gtd {
                         if constexpr (collisions == overlap_coll_check)
                             this->s_coll();
                         if constexpr (prog)
-                            this->print_progress(steps);
+                            this->print_progress();
                     }
                     if constexpr (prog)
                         this->print_conclusion("Leapfrog DKD", start);
@@ -973,11 +975,16 @@ namespace gtd {
 
                 }
             }
-            this->calc_energy();
+            if constexpr (memFreq) {
+                if (!(steps % memFreq)) {
+                    this->calc_energy();
+                }
+            }
             bye:
             evolved = true;
             prev_dt = dt;
             prev_iterations = iterations;
+            time_elapsed = iterations*dt;
             return true;
         }
         std::pair<T*, long double> *pe_extrema() const requires (memFreq != 0) {
@@ -1014,8 +1021,8 @@ namespace gtd {
             *maxima = max;
             *(minima + 1) = first_element - min; // assign differences from initial PE
             *(maxima + 1) = max - first_element;
-            min_max->second = min_index*prev_dt; // assign times at which extrema occurred
-            (min_max + 1)->second = max_index*prev_dt;
+            min_max->second = min_index*prev_dt*memFreq; // assign times at which extrema occurred
+            (min_max + 1)->second = max_index*prev_dt*memFreq;
             return min_max;
         }
         std::pair<T*, long double> *ke_extrema() const requires (memFreq != 0) {
@@ -1048,8 +1055,8 @@ namespace gtd {
             *maxima = max;
             *(minima + 1) = first_element - min;
             *(maxima + 1) = max - first_element;
-            min_max->second = min_index*prev_dt;
-            (min_max + 1)->second = max_index*prev_dt;
+            min_max->second = min_index*prev_dt*memFreq;
+            (min_max + 1)->second = max_index*prev_dt*memFreq;
             return min_max;
         }
         std::pair<T*, long double> *tot_e_extrema() const requires (memFreq != 0) {
@@ -1082,8 +1089,8 @@ namespace gtd {
             *maxima = max;
             *(minima + 1) = first_element - min;
             *(maxima + 1) = max - first_element;
-            min_max->second = min_index*prev_dt;
-            (min_max + 1)->second = max_index*prev_dt;
+            min_max->second = min_index*prev_dt*memFreq;
+            (min_max + 1)->second = max_index*prev_dt*memFreq;
             return min_max;
         }
         auto begin() {
@@ -1127,31 +1134,33 @@ namespace gtd {
             /* Writes the trajectories (historically) of all the bodies to a file, including all the energy values. For
              * text files, units are not written as these will depend entirely on the units_format string passed to the
              * system<M, R, T> object in its constructor. */
-            if (&path == &def_path)
-                def_path.append_back(get_date_and_time()).append_back(".csv");
             if (!evolved || !bods.size())
                 return false;
-            if (binary) {} // needs work
+            if (&path == &def_path)
+                def_path.append_back(get_date_and_time()).append_back(".csv");
+            if (binary) {} // needs work - does NOT output energies
             std::ofstream out(path.c_str(), std::ios_base::trunc);
             if (!out.good())
                 return false;
-            unsigned long long count = 0;
+            // unsigned long long count = 0;
             unsigned long long i;
+            ull_t num_els = (prev_iterations + 1)/memFreq; // CHECK THIS IS CORRECT
+            // DO THE SAME FOR DELETED BODIES
             for (const bod_t &bod : bods) {
                 out << "body_id,mass,radius\r\n" << bod.id << ',' << bod.mass_ << ',' << bod.radius << "\r\n"
                     << "time_elapsed,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,kinetic_energy,"
                        "potential_energy,total_energy\r\n";
-                for (i = 0; i <= prev_iterations; ++i)
-                    out << i*prev_dt << ',' << bod.positions[i].x << ',' << bod.positions[i].y << ','
+                for (i = 0; i <= num_els; ++i)
+                    out << i*prev_dt*memFreq << ',' << bod.positions[i].x << ',' << bod.positions[i].y << ','
                         << bod.positions[i].z << ',' << bod.velocities[i].x << ',' << bod.velocities[i].y << ','
                         << bod.velocities[i].z << ',' << bod.energies[i] << ',' << pe[bod.id][i] << ','
                         << energy[bod.id][i] << "\r\n";
                 out << ",,,,,,,,,\r\n";
-                ++count;
+                // ++count;
             }
             out << "time_elapsed,system_PE,system_KE,system_E\r\n";
-            for (i = 0; i <= prev_iterations; ++i)
-                out << i*prev_dt << ',' << tot_pe[i] << ',' << tot_ke[i] << ',' << tot_e[i] << "\r\n";
+            for (i = 0; i <= num_els; ++i)
+                out << i*prev_dt*memFreq << ',' << tot_pe[i] << ',' << tot_ke[i] << ',' << tot_e[i] << "\r\n";
             out << ",,,,,,,,,\r\n";
             out << "energy_type,min,max,min_abs_diff_from_start_val,"
                    "max_abs_diff_from_start_val,time_of_min,time_of_max\r\n";
@@ -1176,7 +1185,7 @@ namespace gtd {
             // std::cout << "Total energy size: " << tot_e.size() << std::endl;
             return true;
         }
-        const bod_t &operator[](vec_size_t index) {
+        const bod_t &operator[](vec_size_t index) const {
             if (index >= bods.size())
                 throw std::out_of_range("The requested body does not exist (index out of range).\n");
             return bods[index];
@@ -1334,6 +1343,7 @@ namespace gtd {
     typedef system<long double, long double, long double, true, true, 3, 1, 1, false> sys_pmc_MF_txt;
     typedef system<long double, long double, long double, true, true, 7, 1, 1, false> sys_pmC_MF_txt;
 }
+#undef MEM_LOOP
 #undef FUNC_TEMPL_SELECT
 #undef EMPTY
 #endif
