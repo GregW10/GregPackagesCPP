@@ -296,6 +296,13 @@ namespace gtd {
             *src++ = 0;
         }
     }
+    void copy(void *dest, void *source, size_t size) {
+        if (!dest || !source || !size)
+            return;
+        char *dst = (char *) dest;
+        char *src = (char *) source;
+        while (size --> 0) *dst++ = *src++;
+    }
 }
 template <isPrintable T> // must be defined in the global namespace due to argument-dependent-lookup
 std::ostream &operator<<(std::ostream &os, const std::vector<T> &vec) {

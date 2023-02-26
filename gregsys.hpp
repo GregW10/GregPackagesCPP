@@ -11,12 +11,47 @@
 
 #define FUNC_TEMPL_SELECT(func, cf, ...) \
 if constexpr (collisions == overlap_coll_check || !(memFreq && fileFreq)) { \
-    func<false, false>(__VA_ARGS__); \
+    func<false, false>(__VA_ARGS__);            \
+    if constexpr (collisions == overlap_coll_check) {                       \
+        if constexpr (memFreq && fileFreq) {                           \
+            if (!(steps % memFreq) && !(steps % fileFreq)) { \
+                this->s_coll<true, true>(); \
+            } \
+            else if (!(steps % memFreq)) { \
+                this->s_coll<true, false>(); \
+            } \
+            else if (!(steps % fileFreq)) { \
+                this->s_coll<false, true>(); \
+                cf \
+            } \
+            else { \
+                this->s_coll<false, false>(); \
+                cf \
+            } \
+        }                                \
+        else if constexpr (memFreq) { \
+            if (steps % memFreq) { \
+                this->s_coll<false, false>(); \
+                cf \
+            } \
+            else { \
+                this->s_coll<true, false>(); \
+            } \
+        } \
+        else if constexpr (fileFreq) { \
+            if (steps % fileFreq) { \
+                this->s_coll<false, false>(); \
+                cf \
+            } \
+            this->s_coll<false, true>(); \
+            cf \
+        } \
+    }\
     cf \
 } \
 else { \
     if constexpr (memFreq && fileFreq) { \
-        if (steps == memFreq && steps == fileFreq) { \
+        if (!(steps % memFreq) && !(steps % fileFreq)) { \
             func<true, true>(__VA_ARGS__); \
         } \
         else if (!(steps % memFreq)) { \
@@ -347,7 +382,7 @@ namespace gtd {
                 for (outer = 0; outer < num_bods; ++outer) {
                     bod_t &ref = bods[outer];
                     for (inner = outer + 1; inner < num_bods; ++inner) {
-                        if constexpr (mem)
+                        if constexpr (mem && collisions != overlap_coll_check)
                             this->cumulative_acc_and_pe(ref, bods[inner]);
                         else
                             this->cumulative_acc(ref, bods[inner]);
@@ -438,9 +473,9 @@ namespace gtd {
         void calc_energy() requires (memFreq != 0) {
             vec_size_t size = bods.size();
             for (bod_t &bod : bods)
-                bod.pe = T{0};
-            T total_pe{0}; // no static variables as this func. is never called inside a loop
-            T total_ke{0};
+                bod.pe = T{};
+            T total_pe{}, total_ke{}; // no static variables as this func. is never called inside a loop
+            // T total_ke{0};
             unsigned long long inner;
             for (unsigned long long outer = 0; outer < size; ++outer) {
                 bod_t &ref = bods[outer];
