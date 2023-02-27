@@ -91,7 +91,7 @@ concept forwardIterator = requires (IT it, IT other) {
     {it != other} -> std::same_as<bool>;
 };
 namespace gtd {
-    constexpr long double PI = 3.14159265358979323846264338327950288419716939937510582097494459230;
+    constexpr long double PI = 3.14159265358979323846264338327950288419716939937510582097494459230l;
     template<typename T>
     inline void swap(T &A, T &B) {
         T C{A};

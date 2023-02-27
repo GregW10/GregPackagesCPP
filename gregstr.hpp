@@ -110,7 +110,7 @@ namespace gtd {
     };
     class EmptyStringError : public std::exception {
     private:
-        static constexpr char default_msg[] = "This operation cannot be performed on en emtpy string.";
+        static constexpr const char *default_msg = "This operation cannot be performed on en emtpy string.";
         char *msg = nullptr;
     public:
         EmptyStringError() = default;
@@ -124,9 +124,8 @@ namespace gtd {
             setchr_c(msg, 0, length);
         }
         [[nodiscard]] const char *what() const noexcept override {
-            if (msg == nullptr) {
+            if (msg == nullptr)
                 return default_msg;
-            }
             return msg;
         }
         ~EmptyStringError() override {
@@ -134,7 +133,13 @@ namespace gtd {
         }
     };
     template <typename T>
-    concept charIt = requires (T val) {{*val} -> std::convertible_to<char>;};
+    concept charIt = requires (T it) {
+        {*it} -> std::convertible_to<char>;
+        {++it} -> std::same_as<T&>;
+        {it++} -> std::same_as<T>;
+        {--it} -> std::same_as<T&>;
+        {it--} -> std::same_as<T>;
+    };
     class String {
     private:
         char *data = nullptr;
@@ -217,10 +222,8 @@ namespace gtd {
             memset_c(data, '\0', size);
             string = data + get_first_pos();
             char *ptr = string;
-            for (; beg != ending; ++beg) {
-                *ptr = *beg;
-                ++ptr;
-            }
+            while (beg != ending)
+                *ptr++ = *beg++;
             setchr_c(string, '\0', length_w_null - 1);
             space_front = get_first_pos();
             space_back = start_left ? size - length_w_null : (is_even(length_w_null) ? space_front : space_front + 1);
@@ -351,7 +354,7 @@ namespace gtd {
         class ConstRevIterator : public RevIterator, public ConstIterator {
         public:
             ConstRevIterator() = default;
-            ConstRevIterator(char *pointer) : Iterator(pointer), ConstIterator(pointer), RevIterator(pointer) {}
+            ConstRevIterator(char *pointer) : Iterator(pointer), RevIterator(pointer), ConstIterator(pointer) {}
             const char *operator->() override {
                 return ConstIterator::operator->();
             }
@@ -491,7 +494,6 @@ namespace gtd {
     public:
         template <typename T> requires (std::is_fundamental<T>::value)
         String &append_back(T value, size_t num_dec_places = 15) {
-            const char *ptr;
             if constexpr (std::is_integral<T>::value) {
                 process_integral_num(value);
                 return *this;
@@ -502,9 +504,8 @@ namespace gtd {
                 this->push_back('0');
                 if (num_dec_places > 0) {
                     this->push_back('.');
-                    while (num_dec_places --> 0) {
+                    while (num_dec_places --> 0)
                         this->push_back('0');
-                    }
                 }
             }
             bool negative = false;
@@ -523,29 +524,24 @@ namespace gtd {
                 this->push_back('1');
                 if (num_dec_places > 0) {
                     this->push_back('.');
-                    while (num_dec_places --> 0) {
+                    while (num_dec_places --> 0)
                         this->push_back('0');
-                    }
                 }
                 return *this;
             }
             if (num_dec_places == 0) {
                 floatPart = value - ((size_t) value);
                 if (value > 1) {
-                    if (floatPart > 0.5) {
+                    if (floatPart > 0.5)
                         process_integral_num(((size_t) value) + 1);
-                    }
-                    else {
+                    else
                         process_integral_num((size_t) value);
-                    }
                     return *this;
                 }
-                if (floatPart > 0.5) {
+                if (floatPart > 0.5)
                     this->push_back('1');
-                }
-                else {
+                else
                     this->push_back('0');
-                }
                 return *this;
             }
             if (value > 1) {
@@ -572,9 +568,8 @@ namespace gtd {
             n = 1;
             size_t max_n = 1000000000000000000;
             max_n *= 10; // to avoid compiler warnings on too-long-to-be-signed integer literals
-            while (num_dec_places --> 0 && n < (size_t) max_n) {
+            while (num_dec_places --> 0 && n < (size_t) max_n)
                 n *= 10;
-            }
             floatPart *= n;
             size_t intFloatPart = (size_t) floatPart;
             unsigned char remainder = ((size_t) (floatPart*10)) % 10;
@@ -589,16 +584,14 @@ namespace gtd {
             if ((intFloatPart + 1) / (n*10) == 1) {
                 if (reduced && org_org_partial_val > 0.1) {
                     this->pop_back();
-                    while (num --> 0) {
+                    while (num --> 0)
                         this->pop_back();
-                    }
                     if (negative)
                         this->push_back('-');
                     process_integral_num(org_org_int_val + 1);
                     this->push_back('.');
-                    while (org_dec_p --> 0) {
+                    while (org_dec_p --> 0)
                         this->push_back('0');
-                    }
                     return *this;
                 }
                 if (*(string + length_w_null - 2) != '.')
@@ -803,20 +796,20 @@ namespace gtd {
                     return {string};
                 return {};
             }
-            char *start_m = string;
-            char *start;
-            char *final_m = string + len;
+            const char *start_m = string;
+            const char *start;
+            const char *final_m = string + len;
             const char *final_fixed = string + length_w_null - 1;
-            int count = 0;
+            size_t count;
+            const char *ptr;
             while (final_fixed >= final_m) {
-                for (start = start_m; start != final_m; ++start) {
-                    if (*start != *(str + count))
+                ptr = str;
+                count = 0;
+                for (start = start_m; start != final_m; ++count)
+                    if (*start++ != *ptr++)
                         break;
-                    ++count;
-                }
                 if (count == len)
                     return {start_m};
-                count = 0;
                 ++start_m;
                 ++final_m;
             }
@@ -924,11 +917,20 @@ namespace gtd {
         bool isnumeric() const noexcept {
             if (is_empty)
                 return false;
-            char *start = string;
-            const char *final = start + length_w_null - 1;
-            while (start != final)
-                if (!isdigit_c(*start++))
+            const char *ptr = string;
+            const char *final = ptr + length_w_null - 1;
+            bool has_dot = false;
+            while (ptr != final) {
+                if (*ptr == '.') {
+                    if (has_dot)
+                        return false;
+                    has_dot = true;
+                    ++ptr;
+                    continue;
+                }
+                if (!isdigit_c(*ptr++))
                     return false;
+            }
             return true;
         }
         bool contains(char ch) const noexcept {
@@ -967,22 +969,20 @@ namespace gtd {
         size_t strip(char ch = ' ') noexcept { // returns the number of characters removed
             if (is_empty || !contains(ch) || !ch)
                 return 0;
-            char *start = string;
-            size_t temp_len = length_w_null - 1;
+            char *ptr = string;
+            const char *from;
             size_t count = 0;
-            while (*start) {
-                if (*start == ch) {
-                    for (int i = 0; i < temp_len; ++i)
-                        *(start + i) = *(start + i + 1);
+            while (*ptr) {
+                if (*ptr == ch) {
+                    for (from = ptr; *ptr;)
+                        *ptr++ = *++from;
                     --length_w_null;
                     --space_back;
-                    start = string;
-                    temp_len = length_w_null - 1;
+                    ptr = string;
                     ++count;
                     continue;
                 }
-                ++start;
-                --temp_len;
+                ++ptr;
             }
             if (length_w_null < 2)
                 this->clear();
@@ -1514,12 +1514,12 @@ namespace gtd {
             return size;
         }
         size_t get_length() const noexcept {
-            return length_w_null == 0 ? 0 : length_w_null - 1;
+            return !length_w_null ? 0 : length_w_null - 1;
         }
         bool empty() const noexcept {
             return is_empty;
         }
-        const char *const c_str() const noexcept {
+        const char *c_str() const noexcept {
             if (is_empty)
                 return nullptr; // perhaps change this
             return string;
@@ -1848,15 +1848,21 @@ namespace gtd {
         return ret_string;
     }
     std::string to_upper(const std::string &str) {
-        size_t length = str.length();
         std::string ret_string;
         for (const char &ch: str)
             ret_string.push_back((char) to_upper(ch));
         return ret_string;
     }
+    void char_upper(char &c) {
+        if (c >= 97 && c <= 122)
+            c -= 32;
+    }
+    void char_lower(char &c) {
+        if (c >= 65 && c <= 90)
+            c += 32;
+    }
     void string_upper(std::string &str) {
-        for (char &ch: str)
-            ch = (char) to_upper(ch);
+        std::for_each(str.begin(), str.end(), char_upper);
     }
     void string_upper(char *str) {
         if (str == nullptr)
@@ -1867,8 +1873,7 @@ namespace gtd {
         }
     }
     void string_lower(std::string &str) {
-        for (char &ch: str)
-            ch = (char) to_lower(ch);
+        std::for_each(str.begin(), str.end(), char_lower);
     }
     void string_lower(char *str) {
         if (str == nullptr)

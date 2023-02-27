@@ -126,12 +126,12 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
     class vector {
     public:
         constexpr vector() noexcept = default;
-        constexpr vector(const vector<T> &other) noexcept {}
-        constexpr vector(const vector<T> &&other) noexcept {}
-        template <typename U> requires isNumWrapper<U>
-        constexpr vector(const vector<U> &other) noexcept {}
-        template <typename U> requires isNumWrapper<U>
-        constexpr vector(const vector<U> &&other) noexcept {}
+        constexpr vector(const vector<T> &other) = default;
+        constexpr vector(vector<T> &&other) noexcept = default;
+        // template <isNumWrapper U> requires isConvertible<U, T>
+        // constexpr vector(const vector<U> &other) noexcept {}
+        // template <isNumWrapper U> requires isConvertible<U, T>
+        // constexpr vector(const vector<U> &&other) noexcept {}
         virtual String str(unsigned char f_p_dec_places = 5) const = 0;
         virtual long double magnitude() const noexcept = 0;
         virtual T &operator[](unsigned char index) = 0;
@@ -139,7 +139,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         virtual vector<T> &operator++() noexcept = 0; //can only declare reference-returning func. for an abstract class
         virtual vector<T> &operator--() noexcept = 0;
         virtual vector<T> &operator=(const vector<T> &other) noexcept = 0; // copies other
-        virtual vector<T> &operator=(const vector<T> &&other) noexcept = 0; // copies other
+        virtual vector<T> &operator=(vector<T> &&other) noexcept = 0; // copies other
+        virtual ~vector<T>() = default;
         template <isNumWrapper U>
         friend class vector;
     };
@@ -506,13 +507,12 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             --this->y;
             return *this;
         }
-        vector2D<T> operator~() requires requires (T val) {~val;}{
+        vector2D<T> operator~() requires requires (T val) {~val;} {
             return vector2D<T>(~this->x, ~this->y);
         }
-        virtual vector2D<T> &operator=(const vector<T> &other) noexcept override {
-            if (&other == this) {
+        vector2D<T> &operator=(const vector<T> &other) noexcept override {
+            if (&other == this)
                 return *this;
-            }
             try {
                 const vector2D<T> &oth = dynamic_cast<const vector2D<T>&>(other);
                 this->x = oth.x;
@@ -531,8 +531,15 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->y = other.y;
             return *this;
         }
-        vector2D<T> &operator=(const vector<T> &&other) noexcept override {
-            return *this = other;
+        vector2D<T> &operator=(vector<T> &&other) noexcept override {
+            if (&other == this)
+                return *this;
+            try {
+                const vector2D<T> &oth = dynamic_cast<const vector2D<T>&>(other);
+                this->x = std::move(oth.x);
+                this->y = std::move(oth.y);
+            } catch (const std::bad_cast &bc) {} // no action taken in case of std::bad_cast - vector obj. is unchanged
+            return *this;
         }
         vector2D<T> &operator=(vector2D<T> &&other) noexcept {
             this->x = std::move(other.x); // in case T is an object and not a primitive type
@@ -2542,9 +2549,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return *this;
         }
         virtual vector3D<T> &operator=(const vector3D<T> &other) noexcept {
-            if (&other == this) {
+            if (&other == this)
                 return *this;
-            }
             this->x = other.x;
             this->y = other.y;
             this->z = other.z;
@@ -2561,8 +2567,22 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         vector3D<T> &operator=(const vector3D<U> &&other) noexcept {
             return *this = other;
         }
-        vector3D<T> &operator=(const vector<T> &&other) noexcept override {
-            return *this = other;
+        vector3D<T> &operator=(vector<T> &&other) noexcept override {
+            if (&other == this)
+                return *this;
+            try {
+                const vector3D<T> &oth = dynamic_cast<const vector3D<T>&>(other);
+                this->x = std::move(oth.x);
+                this->y = std::move(oth.y);
+                this->z = std::move(oth.z);
+            } catch (const std::bad_cast &bc) {
+                try {
+                    const vector2D<T> &oth_v2 = dynamic_cast<const vector2D<T>&>(other);
+                    this->x = std::move(oth_v2.x);
+                    this->y = std::move(oth_v2.y);
+                } catch (std::bad_cast &bc2) {}
+            }
+            return *this;
         }
         virtual vector3D<T> &operator=(vector3D<T> &&other) noexcept {
             this->x = std::move(other.x);

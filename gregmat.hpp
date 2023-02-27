@@ -486,7 +486,7 @@ namespace gtd {
             }
             return {out.str().c_str()};
         }
-        static inline matrix<long double> get_2D_rotation_matrix(const long double &&angle_rad = __PI__) {
+        static inline matrix<long double> get_2D_rotation_matrix(const long double &angle_rad = PI) {
             if (angle_rad == PI/2) { // returns an exact matrix for the following 4 cases (no f.p. rounding errors)
                 return matrix<long double>(2, 2) << 0 << -1 << 1 << 0;
             }
@@ -502,7 +502,7 @@ namespace gtd {
             return matrix<long double>(2, 2) << cosl(angle_rad) << -sinl(angle_rad)
                                              << sinl(angle_rad) <<  cosl(angle_rad);
         }
-        static inline matrix<long double> get_2D_rotation_matrix(const long double &angle_rad = PI) {
+        static inline matrix<long double> get_2D_rotation_matrix(const long double &&angle_rad = __PI__) {
             return get_2D_rotation_matrix(angle_rad);
         }
         static inline matrix<long double> get_2D_scale_matrix(const long double &&scale) {

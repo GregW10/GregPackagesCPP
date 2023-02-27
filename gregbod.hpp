@@ -138,10 +138,10 @@ namespace gtd {
         ull_t get_id() const noexcept {
             return id;
         }
-        static ull_t get_tot_bc() noexcept {
+        static ull_t body_count() noexcept {
             return count;
         }
-        static std::vector<ull_t> get_all_ids() {
+        static std::vector<ull_t> all_ids() {
             return {ids.begin(), ids.end()};
         }
         static void print_all_ids() {
@@ -419,6 +419,12 @@ namespace gtd {
         }
         long double restitution() const noexcept {
             return rest_c;
+        }
+        auto volume() const {
+            return (4/3.0l)*__PI__*this->radius*this->radius*this->radius;
+        }
+        auto density() const {
+            return this->mass_/this->volume();
         }
         const vector3D<T> &prev_pos_at(vec_s_t index) const requires (recFreq != 0) {
             // static_assert(recFreq, "prev_pos_at cannot be called on body objects with recFreq == 0 (no history)\n");
@@ -759,6 +765,9 @@ namespace gtd {
                   isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
         friend inline auto vel_com(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&);
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
+                isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
+        friend inline auto vel_com(const body<m1, r1, t1, rF1>*, const body<m2, r2, t2, rF2>*);
+        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
                   isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
         friend inline auto acc_com(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&);
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
@@ -804,6 +813,11 @@ namespace gtd {
     inline auto vel_com(const body<m1, r1, t1, rF1> &b1, const body<m2, r2, t2, rF2> &b2) {
         /* centre-of-mass velocity, taking conservation of momentum into account */
         return (b1.momentum() + b2.momentum())/(b1.mass_ + b2.mass_);
+    }
+    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
+            isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
+    inline auto vel_com(const body<m1, r1, t1, rF1> *b1, const body<m2, r2, t2, rF2> *b2) {
+        return (b1->momentum() + b2->momentum())/(b1->mass_ + b2->mass_);
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
               isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>

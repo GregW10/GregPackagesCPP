@@ -46,8 +46,10 @@ if constexpr (collisions == overlap_coll_check || !(memFreq && fileFreq)) { \
             this->s_coll<false, true>(); \
             cf \
         } \
+    }                                    \
+    else { \
+        cf                               \
     }\
-    cf \
 } \
 else { \
     if constexpr (memFreq && fileFreq) { \
@@ -87,17 +89,17 @@ else { \
 
 #define MEM_LOOP \
 if constexpr (memFreq) { \
-    if (steps == memFreq) { \
+    if (steps % memFreq) \
+        for (bod_t &bod : bods) \
+            bod.acc.make_zero(); \
+    else {       \
         total_pe = total_ke =  T{0}; \
         for (bod_t &bod : bods) { \
             bod.acc.make_zero(); \
             bod.pe = T{0}; \
         } \
-    } \
-    else \
-        for (bod_t &bod : bods) \
-            bod.acc.make_zero(); \
-    } \
+    }\
+} \
 else \
     for (bod_t &bod : bods) \
         bod.acc.make_zero();
@@ -154,7 +156,12 @@ namespace gtd {
         ull_t prev_iterations{}; // same here
         mom_t min_tot_com_mom{BILLION*10}; // minimum sum of magnitudes of COM momenta for two bodies to merge
         // using P = decltype((G*std::declval<M>()*std::declval<M>())/std::declval<T>()); // will be long double
-        ull_t steps;
+        ull_t steps{}; // defined as an instance variable since it's required in numerous functions
+        T total_pe{}; // these 5 variables are defined as instance variables to avoid their redefinition in many funcs
+        T total_ke{};
+        ull_t inner{};
+        ull_t outer{};
+        vec_size_t num_bods{};
         std::map<ull_t, std::vector<T>> pe; // to store potential energies of bodies
         std::map<ull_t, std::vector<T>> energy; // total energy for each body at each iteration (KE + PE)
         //std::map<unsigned long long, std::vector<T>> del_ke; // map to store KE vectors of deleted bodies from mergers
@@ -222,26 +229,26 @@ namespace gtd {
             clear_bodies(as_of);
         }
         void check_overlap() {
-            vec_size_t size;
-            bod_t *outer;
-            bod_t *inner;
+            bod_t *outer_b;
+            bod_t *inner_b;
             vec_size_t i = 0;
             vec_size_t j;
             start:
-            size = bods.size();
-            for (; i < size; ++i) {
-                outer = bods.data() + i;
-                for (j = i + 1; j < size; ++j) {
-                    inner = bods.data() + j;
-                    if ((outer->curr_pos - inner->curr_pos).magnitude() < outer->radius + inner->radius) {
+            num_bods = bods.size();
+            for (; i < num_bods; ++i) {
+                outer_b = bods.data() + i;
+                for (j = i + 1; j < num_bods; ++j) {
+                    inner_b = bods.data() + j;
+                    if ((outer_b->curr_pos - inner_b->curr_pos).magnitude() < outer_b->radius + inner_b->radius) {
                         if constexpr (!mergeOverlappingBodies) {
                             String str = "The bodies with id=";
-                            str.append_back(outer->id).append_back(" and id=").append_back(inner->id);
+                            str.append_back(outer_b->id).append_back(" and id=").append_back(inner_b->id);
                             str.append_back(" that were added to this system object overlap.\n");
                             throw overlapping_bodies_error(str.c_str());
                         }
-                        *outer += *inner; // merges the two overlapping bodies
+                        *outer_b += *inner_b; // merges the two overlapping bodies
                         bods.erase(bods.begin() + j); // thus the number of total bodies is reduced by 1
+                        --i; // have to recalculate possible mergers for newly created body
                         goto start;
                     }
                 }
@@ -328,11 +335,6 @@ namespace gtd {
             tot_e.reserve(iters_p1);
         }
         void calc_acc_and_e() {
-            static T total_pe;
-            static T total_ke;
-            static unsigned long long outer;
-            static unsigned long long inner;
-            static vec_size_t num_bods;
             MEM_LOOP // zeros out total_pe, total_ke and pe of each body if memFreq, and always zeros all accelerations
             num_bods = bods.size();
             if constexpr (!memFreq) {
@@ -371,38 +373,50 @@ namespace gtd {
             }
         }
         void leapfrog_kdk_acc_e_and_step() {
-            static T total_pe;
-            static T total_ke;
-            static unsigned long long inner;
-            static unsigned long long outer;
-            static vec_size_t num_bods;
             MEM_LOOP
-            num_bods = bods.size();
-            static auto loop = [this]<bool mem, bool file>{
+            static auto loop = [this]<bool mem, bool file, bool only_e = false>{
+                num_bods = bods.size();
                 for (outer = 0; outer < num_bods; ++outer) {
                     bod_t &ref = bods[outer];
                     for (inner = outer + 1; inner < num_bods; ++inner) {
-                        if constexpr (mem && collisions != overlap_coll_check)
+                        if constexpr (mem)
                             this->cumulative_acc_and_pe(ref, bods[inner]);
+                        else if constexpr (only_e)
+                            this->cumulative_pe(ref, bods[inner]);
                         else
                             this->cumulative_acc(ref, bods[inner]);
                     }
-                    /* KICK for half a step */
-                    ref.curr_vel += half_dt*ref.acc;
-                    if constexpr (mem) {
+                    if constexpr (only_e) {
                         ref.pe /= T{2};
-                        ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
                         pe[ref.id].push_back(ref.pe);
                         energy[ref.id].push_back(ref.curr_ke + ref.pe);
                         total_pe += ref.pe;
                         total_ke += ref.curr_ke;
                     }
-                    if constexpr (file) {
-                        // WRITE TO FILE
+                    else {
+                        /* KICK for half a step */
+                        ref.curr_vel += half_dt*ref.acc;
+                        if constexpr (mem) {
+                            ref.pe /= T{2};
+                            ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
+                            pe[ref.id].push_back(ref.pe);
+                            energy[ref.id].push_back(ref.curr_ke + ref.pe);
+                            total_pe += ref.pe;
+                            total_ke += ref.curr_ke;
+                        }
+                        if constexpr (file) {
+                            // WRITE TO FILE
+                        }
                     }
                 }
             };
             FUNC_TEMPL_SELECT(loop.template operator(), return;)
+            /* repeatedly evaluating the same if constexpr conditions DOES NOT MATTER (apart from slightly increasing
+             * compilation time) given that they are evaluated at compile time, so there is never any runtime overhead*/
+            if constexpr (collisions == overlap_coll_check) {
+                // std::cout << "never get here!" << std::endl;
+                loop.template operator()<false, false, true>();
+            }
             // for (outer = 0; outer < num_bods; ++outer) {
             //     bod_t &ref = bods[outer];
             //     for (inner = outer + 1; inner < num_bods; ++inner)
@@ -423,11 +437,6 @@ namespace gtd {
             }
         }
         void leapfrog_dkd_acc_e_and_step() {
-            static T total_pe;
-            static T total_ke;
-            static unsigned long long inner;
-            static unsigned long long outer;
-            static vec_size_t num_bods;
             MEM_LOOP
             num_bods = bods.size();
             static auto loop = [this]<bool mem, bool file>{
@@ -464,6 +473,8 @@ namespace gtd {
                     pe[ref.id].push_back(ref.pe);
                     energy[ref.id].push_back(ref.curr_ke + ref.pe);
                     total_pe += ref.pe;
+                    if constexpr (collisions == overlap_coll_check)
+                        total_ke += ref.curr_ke;
                 }
                 tot_pe.push_back(total_pe);
                 tot_ke.push_back(total_ke);
@@ -471,15 +482,13 @@ namespace gtd {
             }
         }
         void calc_energy() requires (memFreq != 0) {
-            vec_size_t size = bods.size();
+            num_bods = bods.size();
             for (bod_t &bod : bods)
                 bod.pe = T{};
-            T total_pe{}, total_ke{}; // no static variables as this func. is never called inside a loop
-            // T total_ke{0};
-            unsigned long long inner;
-            for (unsigned long long outer = 0; outer < size; ++outer) {
+            total_pe = total_ke = T{};
+            for (outer = 0; outer < num_bods; ++outer) {
                 bod_t &ref = bods[outer];
-                for (inner = outer + 1; inner < size; ++inner) {
+                for (inner = outer + 1; inner < num_bods; ++inner) {
                     // auto &&pot_energy = (G*ref.mass_*bods[inner].mass_)/(ref.curr_pos-bods[inner].curr_pos).magnitude();
                     // ref.pe -= pot_energy;
                     // bods[inner].pe -= pot_energy;
@@ -497,37 +506,35 @@ namespace gtd {
         }
         template <bool mem, bool file>
         void s_coll() { // "simple" (ahem, ahem) collision detection and evolution
-            static unsigned long long inner;
-            static unsigned long long outer;
-            static vec_size_t num_bods;
             static std::map<long double, std::tuple<bod_t*, decltype(M{}*T{}), decltype(M{}*T{}), vector3D<T>>>
                     overlapping;
             outer = 0;
             num_bods = bods.size();
+            bod_t *bod_o;
             bod_t *bod_i;
             bod_t *merging_bod;
             R rad_dist{};
             mom_t max_mom{min_tot_com_mom};
             mom_t curr_mom{};
-            long double min_dist = HUGE_VALL; // usually expands to infinity
+            // long double min_dist = HUGE_VALL; // usually expands to infinity
             mom_t axis_mom_o;
             mom_t axis_mom_i;
             vec_size_t merging_index;
             for (; outer < num_bods; ++outer) {
                 merging_bod = nullptr;
                 overlapping.clear();
-                bod_t &bod_o = bods[outer];
+                bod_o = bods.data() + outer;
                 for (inner = outer + 1; inner < num_bods; ++inner) {
                     bod_i = bods.data() + inner;
-                    rad_dist = bod_o.radius + bod_i->radius;
-                    vector3D<T> &&r12 = bod_i->curr_pos - bod_o.curr_pos;
+                    rad_dist = bod_o->radius + bod_i->radius;
+                    vector3D<T> &&r12 = bod_i->curr_pos - bod_o->curr_pos;
                     long double &&dist = r12.magnitude(); // DEAL WITH ZERO DISTANCE CASE
                     r12.x /= dist; r12.y /= dist; r12.z /= dist; // more efficient than calling normalise()
                     if (rad_dist > dist) {
-                        vector3D<T> &&com_vel = vel_com(bod_o, *bod_i);
-                        axis_mom_o = bod_o.momentum()*r12;
+                        vector3D<T> &&com_vel = vel_com(bod_o, bod_i);
+                        axis_mom_o = bod_o->momentum()*r12;
                         axis_mom_i = bod_i->momentum()*r12;
-                        if ((curr_mom = axis_mom_o - axis_mom_i - (bod_o.mass_ - bod_i->mass_)*(com_vel*r12))>=max_mom){
+                        if((curr_mom = axis_mom_o - axis_mom_i - (bod_o->mass_ - bod_i->mass_)*(com_vel*r12))>=max_mom){
                             max_mom = curr_mom;
                             merging_bod = bod_i;
                             merging_index = inner;
@@ -545,7 +552,7 @@ namespace gtd {
                      * data for the body before the merger would be mixed with its new "self" after the merger. In
                      * addition, there would then be inconsistency between which bodies end up in the "deleted" bodies
                      * std::set (retaining all their history) and those that remain in the main std::vector. */
-                    bod_t &&merged = bod_o + *merging_bod; // create body that is the result of the merger
+                    bod_t &&merged = *bod_o + *merging_bod; // create body that is the result of the merger
                     if constexpr (mem) {
                         merged.add_pos_vel_ke();
                     }
@@ -556,7 +563,7 @@ namespace gtd {
                         pe.emplace(merged.id, std::vector<T>{}); // add a std::vector to store its potential energies
                         energy.emplace(merged.id, std::vector<T>{}); // same for its total energy (it stores its own KE)
                     }
-                    del_bods.emplace(std::move(bod_o)); // move the merged bodies into the deleted bodies std::set
+                    del_bods.emplace(std::move(*bod_o)); // move the merged bodies into the deleted bodies std::set
                     del_bods.emplace(std::move(*bod_i));
                     bods.erase(bods.begin() + outer--); // erase the merged bodies from the std::vector
                     bods.erase(bods.begin() + merging_index - 1); // -1 because outer body was just deleted
@@ -572,10 +579,10 @@ namespace gtd {
                     T new_i_vel;
                     long double avg_rest;
                     for (const auto &[_, tup] : overlapping) {
-                        o_vel = std::get<1>(tup)/bod_o.mass_; // recalculating is cheaper than adding them to the tuple
+                        o_vel = std::get<1>(tup)/bod_o->mass_; // recalculating is cheaper than adding them to the tuple
                         i_vel = std::get<2>(tup)/bod_i->mass_; // up above
                         o_minus_i = o_vel - i_vel; // v1 - v2
-                        avg_rest = (bod_o.rest_c + std::get<0>(tup)->rest_c)/2;
+                        avg_rest = (bod_o->rest_c + std::get<0>(tup)->rest_c)/2;
                         if (o_vel > 0 || i_vel < 0) {
                             if (o_vel <= 0 && i_vel < 0)
                                 if (o_vel < i_vel) // bodies are already separating
@@ -584,17 +591,17 @@ namespace gtd {
                                 if (o_vel < i_vel)
                                     continue; // case for bodies having passed through each other
                             new_o_vel = (std::get<1>(tup) + std::get<2>(tup) -
-                                         std::get<0>(tup)->mass_*avg_rest*o_minus_i)/(bod_o.mass_ +
+                                         std::get<0>(tup)->mass_*avg_rest*o_minus_i)/(bod_o->mass_ +
                                                                                       std::get<0>(tup)->mass_);
                             new_i_vel = (std::get<1>(tup) + std::get<2>(tup) +
-                                         bod_o.mass_*avg_rest*o_minus_i)/(bod_o.mass_ + std::get<0>(tup)->mass_);
-                            bod_o.curr_vel += (new_o_vel - o_vel)*std::get<3>(tup);
+                                         bod_o->mass_*avg_rest*o_minus_i)/(bod_o->mass_ + std::get<0>(tup)->mass_);
+                            bod_o->curr_vel += (new_o_vel - o_vel)*std::get<3>(tup);
                             std::get<0>(tup)->curr_vel += (new_i_vel - i_vel)*std::get<3>(tup);
                         }
                     }
                 }
                 if constexpr (mem) {
-                    bod_o.add_pos_vel_ke();
+                    bod_o->add_pos_vel_ke();
                 }
                 if constexpr (file) {
                     // WRITE TO FILE
@@ -611,7 +618,7 @@ namespace gtd {
             static_assert(collisions <= pred_coll_check && !(collisions & (collisions + 1)),
                           "Invalid collision-checking option.");
         }
-        void print_progress() const noexcept {
+        void print_progress() const noexcept requires (prog) {
 #ifndef _WIN32
             printf(CYAN_TXT_START "Iteration " BLUE_TXT_START "%llu" RED_TXT_START "/" MAGENTA_TXT_START
                    "%llu\r", this->steps, this->iterations);
@@ -619,18 +626,14 @@ namespace gtd {
             printf("Iteration %llu/%llu\r", step, iterations);
 #endif
         }
-        static inline void print_conclusion(const char *method,
-                                            const std::chrono::time_point<std::chrono::high_resolution_clock> &start) {
-            std::chrono::nanoseconds total = std::chrono::high_resolution_clock::now() - start;
-// #ifndef _WIN32
+        void print_conclusion(const std::chrono::time_point<std::chrono::high_resolution_clock> &start,
+                              std::chrono::nanoseconds &total) requires (prog) {
+            total = std::chrono::high_resolution_clock::now() - start;
             std::cout << RESET_TXT_FLAGS << BLACK_TXT("\n--------------------Done--------------------\n") <<
-            UNDERLINED_TXT_START GREEN_TXT_START << method <<
+            UNDERLINED_TXT_START GREEN_TXT_START << this->method_str() <<
             RESET_TXT_FLAGS WHITE_TXT(" - time elapsed: ") BOLD_TXT_START YELLOW_TXT_START << total.count()/BILLION <<
-            RESET_TXT_FLAGS WHITE_TXT_START " second" << "s"[total == std::chrono::seconds{1}] << std::endl;
-// #else
-            // printf("\n--------------------Done--------------------\n"
-            //                    "Midpoint method - time elapsed: %zu second%c\n", total, "s"[total == 1]);
-// #endif
+            RESET_TXT_FLAGS WHITE_TXT_START " second" << "s"[total == std::chrono::seconds{1}] <<
+            RESET_TXT_FLAGS << std::endl;
         }
     public:
         constexpr system() : G{G_SI} {this->check_coll();}
@@ -754,15 +757,16 @@ namespace gtd {
         template <typename ...Args>
         sys_t &emplace_body(Args&& ...args) { // to allow a body to be constructed in-place, within the system object
             bods.emplace_back(std::forward<Args>(args)...);
+            this->check_overlap();
             return *this;
         }
         sys_t &add_bodies(const std::vector<bod_t> &bodies) {
             if (!bodies.size())
                 return *this;
-            vec_size_t index = bods.size();
+            num_bods = bods.size();
             bods.insert(bods.end(), bodies.begin(), bodies.end());
             if constexpr (memFreq)
-                clear_bodies(index);
+                clear_bodies(num_bods);
             check_overlap();
             return *this;
         }
@@ -777,7 +781,17 @@ namespace gtd {
             check_overlap();
             return *this;
         }
-        const bod_t &get_body(unsigned long long id) {
+        const bod_t &back() const {
+            if (this->bods.size())
+                return this->bods.back();
+            throw std::logic_error{"gtd::system<>::back cannot be called on an empty gtd::system object.\n"};
+        }
+        const bod_t &front() const {
+            if (this->bods.size())
+                return this->bods.front();
+            throw std::logic_error{"gtd::system<>::front cannot be called on an empty gtd::system object.\n"};
+        }
+        const bod_t &get_body(unsigned long long id) const {
             for (const auto &b : *this) // this is where it would be nice to be using a set!!
                 if (b.id == id)
                     return b;
@@ -810,7 +824,7 @@ namespace gtd {
         void clear_evolution() requires (memFreq != 0) {
             // for (bod_t &bod : bods)
             //     bod.clear();
-            std::for_each(bods.begin(), bods.end(), [this](bod_t &bod){bod.clear();});
+            std::for_each(bods.begin(), bods.end(), [](bod_t &bod){bod.clear();});
             pe.clear();
             energy.clear();
             tot_pe.clear();
@@ -818,24 +832,32 @@ namespace gtd {
             tot_e.clear();
             evolved = false;
         }
-        bool evolve(int integration_method = leapfrog_kdk) {
-            if (!bods.size() || !check_option(integration_method))
-                return false;
+    private:
+        const char *&method_str() {
+            static const char *ptr{};
+            return ptr;
+        }
+    public:
+        std::chrono::nanoseconds evolve(int integration_method = leapfrog_kdk) {
+            static std::chrono::time_point<std::chrono::high_resolution_clock> start;
+            static std::chrono::nanoseconds total;
+            num_bods = bods.size();
+            if (!num_bods || !check_option(integration_method))
+                return {};
             // time_t start = time(nullptr);
-            std::chrono::time_point<std::chrono::high_resolution_clock> start=std::chrono::high_resolution_clock::now();
             steps = 0;
             if constexpr (memFreq) {
                 if (evolved)
                     this->clear_evolution();
                 this->create_energy_vectors();
             }
-            vec_size_t num_bods = bods.size();
 #ifndef _WIN32
             if constexpr (prog)
                 std::cout << BOLD_TXT_START;
 #endif
+            start = std::chrono::high_resolution_clock::now();
             if ((integration_method & two_body) == two_body) {
-                if (bods.size() != 2)
+                if (num_bods != 2)
                     throw two_body_error();
                 /* no force approximation techniques performed here, as the integration is just for two bodies */
             }
@@ -844,22 +866,23 @@ namespace gtd {
                     // lots of stuff here
                 }
                 else {
-                    while (steps++ < iterations) {
+                    while (steps < iterations) {
                         if constexpr (collisions == pred_coll_check) {
 
                         }
                         this->calc_acc_and_e();
+                        ++steps;
                         // this->take_euler_step();
                         FUNC_TEMPL_SELECT(this->take_euler_step, EMPTY)
                         /* by having "prog" as a template parameter, it avoids having to re-evaluate whether it is true
                          * or not within the loop, since the "if constexpr ()" branches get rejected at compile-time */
-                        if constexpr (collisions == overlap_coll_check)
-                            this->s_coll();
+                        // if constexpr (collisions == overlap_coll_check)
+                        //     this->s_coll();
                         if constexpr (prog)
                             this->print_progress();
                     }
                     if constexpr (prog)
-                        this->print_conclusion("Euler", start);
+                        this->method_str() = "Euler";
                 }
             }
             else if ((integration_method & modified_euler) == modified_euler) {
@@ -870,9 +893,7 @@ namespace gtd {
                     // lots of stuff here
                 }
                 else {
-                    unsigned long long outer;
-                    unsigned long long inner;
-                    while (steps++ < iterations) {
+                    while (steps < iterations) {
                         this->calc_acc_and_e();
                         for (outer = 0; outer < num_bods; ++outer) {
                             bod_t &ref = bods[outer];
@@ -891,18 +912,19 @@ namespace gtd {
                             }
                         }
                         // this->take_modified_euler_step(predicted);
+                        ++steps;
                         FUNC_TEMPL_SELECT(this->take_modified_euler_step, EMPTY, predicted)
                         for (std::tuple<vector3D<T>, vector3D<T>, vector3D<T>> &tup : predicted)
                             std::get<2>(tup).make_zero();
                         if constexpr (collisions == overlap_coll_check) {
-                            this->s_coll();
-                            num_bods = bods.size();
+                            // this->s_coll();
+                            num_bods = bods.size(); // number of bodies can change through mergers
                         }
                         if constexpr (prog)
                             this->print_progress();
                     }
                     if constexpr (prog)
-                        this->print_conclusion("Modified Euler", start);
+                        this->method_str() = "Modified Euler";
                 }
             }
             else if ((integration_method & midpoint) == midpoint) {
@@ -911,9 +933,7 @@ namespace gtd {
                     // lots of stuff here
                 }
                 else {
-                    unsigned long long outer;
-                    unsigned long long inner;
-                    while (steps++ < iterations) {
+                    while (steps < iterations) {
                         this->calc_acc_and_e();
                         for (outer = 0; outer < num_bods; ++outer) {
                             bod_t &ref = bods[outer];
@@ -932,18 +952,19 @@ namespace gtd {
                             }
                         }
                         // this->take_midpoint_step(predicted);
+                        ++steps;
                         FUNC_TEMPL_SELECT(this->take_midpoint_step, EMPTY, predicted)
                         for (std::tuple<vector3D<T>, vector3D<T>, vector3D<T>> &tup : predicted)
                             std::get<2>(tup).make_zero();
                         if constexpr (collisions == overlap_coll_check) {
-                            this->s_coll();
+                            // this->s_coll();
                             num_bods = bods.size();
                         }
                         if constexpr (prog)
                             this->print_progress();
                     }
                     if constexpr (prog)
-                        this->print_conclusion("Midpoint method", start);
+                        this->method_str() = "Midpoint method.";
                 }
             }
             else if ((integration_method & leapfrog_kdk) == leapfrog_kdk) {
@@ -961,13 +982,13 @@ namespace gtd {
                         }
                         /* update accelerations and energies based on new positions and KICK for half a step */
                         this->leapfrog_kdk_acc_e_and_step();
-                        if constexpr (collisions == overlap_coll_check)
-                            this->s_coll();
+                        // if constexpr (collisions == overlap_coll_check)
+                        //     this->s_coll();
                         if constexpr (prog)
                             this->print_progress();
                     }
                     if constexpr (prog)
-                        this->print_conclusion("Leapfrog KDK", start);
+                        this->method_str() = "Leapfrog KDK";
                 }
                 goto bye;
             }
@@ -984,13 +1005,13 @@ namespace gtd {
                             bod.curr_pos += half_dt*bod.curr_vel;
                         /* update accelerations, then KICK for a full step and DRIFT for half a step, then update E */
                         this->leapfrog_dkd_acc_e_and_step();
-                        if constexpr (collisions == overlap_coll_check)
-                            this->s_coll();
+                        // if constexpr (collisions == overlap_coll_check)
+                        //     this->s_coll();
                         if constexpr (prog)
                             this->print_progress();
                     }
                     if constexpr (prog)
-                        this->print_conclusion("Leapfrog DKD", start);
+                        this->method_str() = "Leapfrog DKD";
                 }
                 goto bye;
             }
@@ -1016,11 +1037,15 @@ namespace gtd {
                 }
             }
             bye:
+            if constexpr (prog)
+                print_conclusion(start, total);
+            else
+                total = std::chrono::high_resolution_clock::now() - start;
             evolved = true;
             prev_dt = dt;
             prev_iterations = iterations;
             time_elapsed = iterations*dt;
-            return true;
+            return total;
         }
         std::pair<T*, long double> *pe_extrema() const requires (memFreq != 0) {
             /* This method returns a pointer to a 2-element array of std::pairs. The first pair concerns the minima and
@@ -1171,21 +1196,39 @@ namespace gtd {
              * system<M, R, T> object in its constructor. */
             if (!evolved || !bods.size())
                 return false;
+            if (binary) {
+                if (&path == &def_path)
+                    def_path.append_back(get_date_and_time()).append_back(".nbod");
+                return true;
+            } // needs work - does NOT output energies
             if (&path == &def_path)
                 def_path.append_back(get_date_and_time()).append_back(".csv");
-            if (binary) {} // needs work - does NOT output energies
             std::ofstream out(path.c_str(), std::ios_base::trunc);
             if (!out.good())
                 return false;
             // unsigned long long count = 0;
             unsigned long long i;
-            ull_t num_els = (prev_iterations + 1)/memFreq; // CHECK THIS IS CORRECT
-            // DO THE SAME FOR DELETED BODIES
+            const ull_t num_max_els = (prev_iterations + 1)/memFreq; // CHECK THIS IS CORRECT
+            if constexpr (collisions) {
+
+            }
+            for (const bod_t &bod : del_bods) {
+                out << "body_id,mass,radius\r\n" << bod.id << ',' << bod.mass_ << ',' << bod.radius << "\r\n"
+                    << "time_elapsed,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,kinetic_energy,"
+                       "potential_energy,total_energy\r\n";
+                for (i = 0; i <= num_max_els; ++i)
+                    out << i*prev_dt*memFreq << ',' << bod.positions[i].x << ',' << bod.positions[i].y << ','
+                        << bod.positions[i].z << ',' << bod.velocities[i].x << ',' << bod.velocities[i].y << ','
+                        << bod.velocities[i].z << ',' << bod.energies[i] << ',' << pe[bod.id][i] << ','
+                        << energy[bod.id][i] << "\r\n";
+                out << ",,,,,,,,,\r\n";
+                // ++count;
+            }
             for (const bod_t &bod : bods) {
                 out << "body_id,mass,radius\r\n" << bod.id << ',' << bod.mass_ << ',' << bod.radius << "\r\n"
                     << "time_elapsed,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,kinetic_energy,"
                        "potential_energy,total_energy\r\n";
-                for (i = 0; i <= num_els; ++i)
+                for (i = 0; i <= num_max_els; ++i)
                     out << i*prev_dt*memFreq << ',' << bod.positions[i].x << ',' << bod.positions[i].y << ','
                         << bod.positions[i].z << ',' << bod.velocities[i].x << ',' << bod.velocities[i].y << ','
                         << bod.velocities[i].z << ',' << bod.energies[i] << ',' << pe[bod.id][i] << ','
@@ -1194,7 +1237,7 @@ namespace gtd {
                 // ++count;
             }
             out << "time_elapsed,system_PE,system_KE,system_E\r\n";
-            for (i = 0; i <= num_els; ++i)
+            for (i = 0; i <= num_max_els; ++i)
                 out << i*prev_dt*memFreq << ',' << tot_pe[i] << ',' << tot_ke[i] << ',' << tot_e[i] << "\r\n";
             out << ",,,,,,,,,\r\n";
             out << "energy_type,min,max,min_abs_diff_from_start_val,"
