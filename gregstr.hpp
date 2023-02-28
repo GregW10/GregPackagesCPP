@@ -93,12 +93,11 @@ namespace gtd {
             strcpy_c(message, def_msg);
         }
         explicit NullPointerError(const char *msg) {
-            if (msg == nullptr) {
+            if (msg == nullptr)
                 throw std::invalid_argument("nullptr passed as message.");
-            }
-            size_t length = strlen_c(msg);
-            message = new char[length + 1];
-            memset_c(message, '\0', length + 1);
+            size_t len_p1 = strlen_c(msg) + 1;
+            message = new char[len_p1];
+            memset_c(message, '\0', len_p1);
             strcpy_c(message, msg);
         }
         [[nodiscard]] const char *what() const noexcept override {
@@ -110,14 +109,13 @@ namespace gtd {
     };
     class EmptyStringError : public std::exception {
     private:
-        static constexpr const char *default_msg = "This operation cannot be performed on en emtpy string.";
+        static constexpr const char *default_msg = "This operation cannot be performed on an emtpy string.";
         char *msg = nullptr;
     public:
         EmptyStringError() = default;
         explicit EmptyStringError(const char *message) {
-            if (message == nullptr) {
+            if (message == nullptr)
                 throw NullPointerError();
-            }
             size_t length = strlen_c(message);
             msg = new char[length + 1];
             strcpy_c(msg, message);

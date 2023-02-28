@@ -231,14 +231,14 @@ namespace gtd {
         void check_overlap() {
             bod_t *outer_b;
             bod_t *inner_b;
-            vec_size_t i = 0;
-            vec_size_t j;
-            start:
             num_bods = bods.size();
-            for (; i < num_bods; ++i) {
-                outer_b = bods.data() + i;
-                for (j = i + 1; j < num_bods; ++j) {
-                    inner_b = bods.data() + j;
+            for (outer = 0; outer < num_bods; ++outer) {
+                outer_b = bods.data() + outer;
+                for (inner = outer + 1; inner < num_bods; ++inner) {
+                    if constexpr (mergeOverlappingBodies)
+                        if (inner == outer) // will be true at some point if there has been a merger
+                            continue;
+                    inner_b = bods.data() + inner;
                     if ((outer_b->curr_pos - inner_b->curr_pos).magnitude() < outer_b->radius + inner_b->radius) {
                         if constexpr (!mergeOverlappingBodies) {
                             String str = "The bodies with id=";
@@ -247,9 +247,9 @@ namespace gtd {
                             throw overlapping_bodies_error(str.c_str());
                         }
                         *outer_b += *inner_b; // merges the two overlapping bodies
-                        bods.erase(bods.begin() + j); // thus the number of total bodies is reduced by 1
-                        --i; // have to recalculate possible mergers for newly created body
-                        goto start;
+                        bods.erase(bods.begin() + inner); // thus the number of total bodies is reduced by 1
+                        inner = 0; // have to recalculate possible mergers for newly created body
+                        --num_bods;
                     }
                 }
             }
@@ -833,17 +833,17 @@ namespace gtd {
             evolved = false;
         }
     private:
-        const char *&method_str() {
+        const char *&method_str() requires (prog) {
             static const char *ptr{};
             return ptr;
         }
     public:
-        std::chrono::nanoseconds evolve(int integration_method = leapfrog_kdk) {
+        const std::chrono::nanoseconds &evolve(int integration_method = leapfrog_kdk) {
             static std::chrono::time_point<std::chrono::high_resolution_clock> start;
             static std::chrono::nanoseconds total;
             num_bods = bods.size();
             if (!num_bods || !check_option(integration_method))
-                return {};
+                return total = std::chrono::nanoseconds::zero();
             // time_t start = time(nullptr);
             steps = 0;
             if constexpr (memFreq) {
@@ -964,7 +964,7 @@ namespace gtd {
                             this->print_progress();
                     }
                     if constexpr (prog)
-                        this->method_str() = "Midpoint method.";
+                        this->method_str() = "Midpoint method";
                 }
             }
             else if ((integration_method & leapfrog_kdk) == leapfrog_kdk) {
@@ -1199,15 +1199,17 @@ namespace gtd {
             if (binary) {
                 if (&path == &def_path)
                     def_path.append_back(get_date_and_time()).append_back(".nbod");
+                if (&path == &def_path)
+                    def_path.erase_chars(def_path.get_length() - 30);
                 return true;
             } // needs work - does NOT output energies
             if (&path == &def_path)
                 def_path.append_back(get_date_and_time()).append_back(".csv");
             std::ofstream out(path.c_str(), std::ios_base::trunc);
-            if (!out.good())
+            if (!out)
                 return false;
             // unsigned long long count = 0;
-            unsigned long long i;
+            ull_t i;
             const ull_t num_max_els = (prev_iterations + 1)/memFreq; // CHECK THIS IS CORRECT
             if constexpr (collisions) {
 
