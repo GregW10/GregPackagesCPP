@@ -147,7 +147,15 @@ namespace gtd {
         using sys_t = system<M, R, T, prog, mergeOverlappingBodies, collisions, memFreq, fileFreq, binaryFile>;
         using mom_t = decltype(M{}*T{});
         std::vector<bod_t> bods; // not using set or map as need fast random access to bodies
-        std::set<bod_t, std::less<>> del_bods; // set to store bodies removed from system after collision mergers
+        // std::set<bod_t, std::less<>> del_bods; // set to store bodies removed from system after collision mergers
+        /* Here I declare a std::set to store bodies that are removed from the evolution in the case of a merger. I have
+         * declared the type of the comparator used by the std::set object to be that of an anonymous lambda type, which
+         * will cause the std::pair objects to be sorted first by the iteration at which they were "destroyed", and then
+         * by their IDs (for when times of destruction are equal). */
+        std::set<std::pair<ull_t, bod_t>,
+                decltype([](const std::pair<ull_t, bod_t> &p1, const std::pair<ull_t, bod_t> &p2){
+                    return p1.first == p2.first ? p1.second < p2.second : p1.first < p2.first;
+                })> del_bods;
         long double dt = 1;
         long double half_dt = dt/2; // I gave it its own variable, since it is a commonly used quantity
         ull_t iterations = 1000;
@@ -520,12 +528,13 @@ namespace gtd {
             mom_t axis_mom_o;
             mom_t axis_mom_i;
             vec_size_t merging_index;
-            for (; outer < num_bods; ++outer) {
+            while (outer < num_bods) {
                 merging_bod = nullptr;
                 overlapping.clear();
                 bod_o = bods.data() + outer;
-                for (inner = outer + 1; inner < num_bods; ++inner) {
-                    bod_i = bods.data() + inner;
+                bod_i = bod_o + 1; // to point to body just after bod_o
+                for (inner = outer + 1; inner < num_bods; ++inner, ++bod_i) {
+                    // bod_i = bods.data() + inner;
                     rad_dist = bod_o->radius + bod_i->radius;
                     vector3D<T> &&r12 = bod_i->curr_pos - bod_o->curr_pos;
                     long double &&dist = r12.magnitude(); // DEAL WITH ZERO DISTANCE CASE
@@ -563,9 +572,9 @@ namespace gtd {
                         pe.emplace(merged.id, std::vector<T>{}); // add a std::vector to store its potential energies
                         energy.emplace(merged.id, std::vector<T>{}); // same for its total energy (it stores its own KE)
                     }
-                    del_bods.emplace(std::move(*bod_o)); // move the merged bodies into the deleted bodies std::set
-                    del_bods.emplace(std::move(*bod_i));
-                    bods.erase(bods.begin() + outer--); // erase the merged bodies from the std::vector
+                    del_bods.emplace(steps, std::move(*bod_o)); // move the merged bodies into the deleted bodies set
+                    del_bods.emplace(steps, std::move(*bod_i));
+                    bods.erase(bods.begin() + outer); // erase the merged bodies from the std::vector
                     bods.erase(bods.begin() + merging_index - 1); // -1 because outer body was just deleted
                     bods.emplace_back(std::move(merged)); // move the new body into the std::vector storing all bodies
                     --num_bods; // there is a net loss of 1 body
@@ -606,6 +615,7 @@ namespace gtd {
                 if constexpr (file) {
                     // WRITE TO FILE
                 }
+                ++outer;
             }
         }
         static inline bool check_option(int option) noexcept {
@@ -816,6 +826,7 @@ namespace gtd {
             tot_pe.clear();
             tot_ke.clear();
             tot_e.clear();
+            del_bods.clear();
             evolved = false;
         }
         /* reset() deletes the evolution of the bodies AND returns them to their original positions, velocities, and
@@ -830,6 +841,7 @@ namespace gtd {
             tot_pe.clear();
             tot_ke.clear();
             tot_e.clear();
+            del_bods.clear();
             evolved = false;
         }
     private:
@@ -1209,34 +1221,52 @@ namespace gtd {
             if (!out)
                 return false;
             // unsigned long long count = 0;
-            ull_t i;
+            vec_size_t i;
             const ull_t num_max_els = (prev_iterations + 1)/memFreq; // CHECK THIS IS CORRECT
+            std::cout << "size of bods: " << bods.size() << ", size of del_bods: " << del_bods.size() << std::endl;
             if constexpr (collisions) {
-
+                ull_t d_i;
+                vec_size_t max_index;
+                for (const auto &[destruction_it, bod] : del_bods) {
+                    max_index = bod.positions.size();
+                    d_i = (destruction_it + memFreq)/memFreq - max_index;
+                    out << "body_id,mass,radius\r\n" << bod.id << ',' << bod.mass_ << ',' << bod.radius << "\r\n"
+                           "time_elapsed,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,"
+                           "kinetic_energy,potential_energy,total_energy\r\n";
+                    for (i = 0; i < max_index; ++i)
+                        out << d_i++*prev_dt*memFreq << ',' << bod.positions[i].x << ',' << bod.positions[i].y << ','
+                            << bod.positions[i].z << ',' << bod.velocities[i].x << ',' << bod.velocities[i].y << ','
+                            << bod.velocities[i].z << ',' << bod.energies[i] << ',' << pe[bod.id][i] << ','
+                            << energy[bod.id][i] << "\r\n";
+                    out << ",,,,,,,,,\r\n";
+                }
+                for (const bod_t &bod : bods) {
+                    max_index = bod.positions.size();
+                    d_i = prev_iterations/memFreq - max_index + 1;
+                    std::cout << "max_index: " << max_index << ", d_i: " << d_i << std::endl;
+                    out << "body_id,mass,radius\r\n" << bod.id << ',' << bod.mass_ << ',' << bod.radius << "\r\n"
+                           "time_elapsed,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,"
+                           "kinetic_energy,potential_energy,total_energy\r\n";
+                    for (i = 0; i < max_index; ++i)
+                        out << d_i*prev_dt*memFreq << ',' << bod.positions[i].x << ',' << bod.positions[i].y << ','
+                            << bod.positions[i].z << ',' << bod.velocities[i].x << ',' << bod.velocities[i].y << ','
+                            << bod.velocities[i].z << ',' << bod.energies[i] << ',' << pe[bod.id][i] << ','
+                            << energy[bod.id][i] << "\r\n";
+                    out << ",,,,,,,,,\r\n";
+                }
             }
-            for (const bod_t &bod : del_bods) {
-                out << "body_id,mass,radius\r\n" << bod.id << ',' << bod.mass_ << ',' << bod.radius << "\r\n"
-                    << "time_elapsed,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,kinetic_energy,"
-                       "potential_energy,total_energy\r\n";
-                for (i = 0; i <= num_max_els; ++i)
-                    out << i*prev_dt*memFreq << ',' << bod.positions[i].x << ',' << bod.positions[i].y << ','
-                        << bod.positions[i].z << ',' << bod.velocities[i].x << ',' << bod.velocities[i].y << ','
-                        << bod.velocities[i].z << ',' << bod.energies[i] << ',' << pe[bod.id][i] << ','
-                        << energy[bod.id][i] << "\r\n";
-                out << ",,,,,,,,,\r\n";
-                // ++count;
-            }
-            for (const bod_t &bod : bods) {
-                out << "body_id,mass,radius\r\n" << bod.id << ',' << bod.mass_ << ',' << bod.radius << "\r\n"
-                    << "time_elapsed,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,kinetic_energy,"
-                       "potential_energy,total_energy\r\n";
-                for (i = 0; i <= num_max_els; ++i)
-                    out << i*prev_dt*memFreq << ',' << bod.positions[i].x << ',' << bod.positions[i].y << ','
-                        << bod.positions[i].z << ',' << bod.velocities[i].x << ',' << bod.velocities[i].y << ','
-                        << bod.velocities[i].z << ',' << bod.energies[i] << ',' << pe[bod.id][i] << ','
-                        << energy[bod.id][i] << "\r\n";
-                out << ",,,,,,,,,\r\n";
-                // ++count;
+            else {
+                for (const bod_t &bod : bods) { // simple case of all bodies lasting from beginning to end
+                    out << "body_id,mass,radius\r\n" << bod.id << ',' << bod.mass_ << ',' << bod.radius << "\r\n"
+                           "time_elapsed,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,"
+                           "kinetic_energy,potential_energy,total_energy\r\n";
+                    for (i = 0; i <= num_max_els; ++i)
+                        out << i*prev_dt*memFreq << ',' << bod.positions[i].x << ',' << bod.positions[i].y << ','
+                            << bod.positions[i].z << ',' << bod.velocities[i].x << ',' << bod.velocities[i].y << ','
+                            << bod.velocities[i].z << ',' << bod.energies[i] << ',' << pe[bod.id][i] << ','
+                            << energy[bod.id][i] << "\r\n";
+                    out << ",,,,,,,,,\r\n";
+                }
             }
             out << "time_elapsed,system_PE,system_KE,system_E\r\n";
             for (i = 0; i <= num_max_els; ++i)

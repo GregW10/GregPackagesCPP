@@ -256,8 +256,8 @@ namespace gtd {
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
               unsigned long long recFreq = 1>
     class body : public body_counter {
-        /* A body object is one which represents a real, spherical object in 3D space. It has a given mass & radius, &
-         * position & velocity at any given time. It is able to record its entire history of where it has been. */
+        /* A body object is one which represents a real, spherical object in 3D space. It has a mass & radius, as well
+         * as a position & velocity at any given time. It is able to record its entire history of where it has been. */
         /* The template parameters M, R & T are the data types that are used to represent the body's mass, radius &
          * position & velocity, respectively. */
         /* The non-type template parameter recFreq represents the frequency with which a body should record its
@@ -322,244 +322,231 @@ namespace gtd {
         /* unfortunately, the constructors cannot be marked constexpr, because it is impossible for any body_counter
          * constructor to be constexpr (since ID must be dynamically determined) */
         body() {
-            if constexpr (recFreq)
-                this->emplace_zeros();
+            this->emplace_zeros();
         }
         body(M &&body_mass, R &&body_radius) : mass_{std::move(body_mass)}, radius{std::move(body_radius)} {
             check_mass();
             check_radius();
-            if constexpr (recFreq)
-                this->emplace_zeros();
+            this->emplace_zeros();
         }
         body(const M &body_mass, const R &body_radius) : mass_{body_mass}, radius{body_radius} {
             check_mass();
             check_radius();
-            if constexpr (recFreq)
-                this->emplace_zeros();
+            this->emplace_zeros();
         }
         body(M &&body_mass, R &&body_radius, vector3D<T> &&pos, vector3D<T> &&vel) :
         mass_{std::move(body_mass)}, radius{std::move(body_radius)}, curr_pos{std::move(pos)}, curr_vel{std::move(vel)}{
             check_mass();
             check_radius();
-            if constexpr (recFreq)
-                this->add_pos_vel_ke();
+            this->add_pos_vel_ke();
         }
         body(const M &body_mass, const R &body_radius, const vector3D<T> &pos, const vector3D<T> &vel) :
         mass_{body_mass}, radius{body_radius}, curr_pos{pos}, curr_vel{vel} {
             check_mass();
             check_radius();
-            if constexpr (recFreq)
-                this->add_pos_vel_ke();
+            this->add_pos_vel_ke();
         }
         template <ull_t rF>
         body(const body<M, R, T, rF> &other) :
                 mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos},
                 curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc}, rest_c{other.rest_c}, pe{other.pe} {
-            if constexpr (recFreq) {
-                this->add_pos_vel();
-                energies.push_back(this->curr_ke);
-            }
+            this->add_pos_vel();
+            energies.push_back(this->curr_ke);
         }
         body(const body<M, R, T, recFreq> &other) :
                 mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos},
                 curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc}, rest_c{other.rest_c}, pe{other.pe} {
-            if constexpr (recFreq) {
-                this->add_pos_vel();
-                energies.push_back(this->curr_ke);
-            }
+            this->add_pos_vel();
+            energies.push_back(this->curr_ke);
         }
         template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t, ull_t rF>
         body(const body<m, r, t, rF> &other) :
         mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos}, curr_vel{other.curr_vel},
         curr_ke{other.curr_ke}, acc{other.acc}, rest_c{other.rest_c}, pe{other.pe} {
-            if constexpr (recFreq) {
-                this->add_pos_vel();
-                energies.push_back(this->curr_ke);
-            }
+            this->add_pos_vel();
+            energies.push_back(this->curr_ke);
         }
         body(body<M, R, T, recFreq> &&other) noexcept :
              body_counter{std::move(other)}, mass_{std::move(other.mass_)},
              radius{std::move(other.radius)}, curr_pos{std::move(other.curr_pos)}, curr_vel{std::move(other.curr_vel)},
              curr_ke{std::move(other.curr_ke)}, acc{std::move(other.acc)}, positions{std::move(other.positions)},
              velocities{std::move(other.velocities)}, energies{std::move(other.energies)}, cref{std::move(other.cref)},
-        rest_c{other.rest_c}, pe{other.pe}, rec_counter{other.rec_counter} {
-            if constexpr (recFreq)
-                if (rec_counter == recFreq) {
-                    this->add_pos_vel_ke();
-                    rec_counter = 0;
-                }
+             rest_c{other.rest_c}, pe{other.pe}, rec_counter{other.rec_counter} {
+            if (rec_counter == recFreq) {
+                this->add_pos_vel_ke();
+                rec_counter = 0;
+            }
         }
         template <ull_t rF>
         body(body<M, R, T, rF> &&other) noexcept :
              body_counter{std::move(other)}, mass_{std::move(other.mass_)},
              radius{std::move(other.radius)}, curr_pos{std::move(other.curr_pos)}, curr_vel{std::move(other.curr_vel)},
              curr_ke{std::move(other.curr_ke)}, acc{std::move(other.acc)}, rest_c{other.rest_c}, pe{other.pe} {
-            if constexpr (recFreq)
-                this->add_pos_vel_ke();
+            this->add_pos_vel_ke();
         }
-        const M &mass() const noexcept {
-            return mass_;
+#define BODY_COMMON_GROUND_1 \
+        const M &mass() const noexcept { \
+            return mass_; \
+        } \
+        const R &rad() const noexcept { \
+            return radius; \
+        } \
+        const vector3D<T> &pos() const noexcept { \
+            return curr_pos; \
+        } \
+        const vector3D<T> &vel() const noexcept { \
+            return curr_vel; \
+        } \
+        vector3D<T> &acceleration() noexcept { \
+            return acc; \
+        } \
+        const vector3D<T> &acceleration() const noexcept { \
+            return acc; \
+        } \
+        const K &ke() const noexcept { \
+            return curr_ke; \
+        } \
+        const T &potential_energy() const noexcept { \
+            return pe; \
+        } \
+        long double restitution() const noexcept { \
+            return rest_c; \
+        } \
+        auto volume() const { \
+            return (4/3.0l)*__PI__*this->radius*this->radius*this->radius; \
+        } \
+        auto density() const { \
+            return this->mass_/this->volume(); \
         }
-        const R &rad() const noexcept {
-            return radius;
-        }
-        const vector3D<T> &pos() const noexcept {
-            return curr_pos;
-        }
-        const vector3D<T> &vel() const noexcept {
-            return curr_vel;
-        }
-        vector3D<T> &acceleration() noexcept {
-            return acc;
-        }
-        const vector3D<T> &acceleration() const noexcept {
-            return acc;
-        }
-        const K &ke() const noexcept {
-            return curr_ke;
-        }
-        const T &potential_energy() const noexcept {
-            return pe;
-        }
-        long double restitution() const noexcept {
-            return rest_c;
-        }
-        auto volume() const {
-            return (4/3.0l)*__PI__*this->radius*this->radius*this->radius;
-        }
-        auto density() const {
-            return this->mass_/this->volume();
-        }
-        const vector3D<T> &prev_pos_at(vec_s_t index) const requires (recFreq != 0) {
-            // static_assert(recFreq, "prev_pos_at cannot be called on body objects with recFreq == 0 (no history)\n");
+        BODY_COMMON_GROUND_1
+        const vector3D<T> &prev_pos_at(vec_s_t index) const {
             if (index >= positions.size())
                 throw std::out_of_range("Requested position does not exist (index out of range).\n");
             return positions[index];
         }
-        const vector3D<T> &prev_vel_at(vec_s_t index) const requires (recFreq != 0) {
-            // static_assert(recFreq, "prev_vel_at cannot be called on body objects with recFreq == 0 (no history)\n");
+        const vector3D<T> &prev_vel_at(vec_s_t index) const {
             if (index >= velocities.size())
                 throw std::out_of_range("Requested velocity does not exist (index out of range).\n");
             return velocities[index];
         }
-        const K &prev_ke_at(typename std::vector<K>::size_type index) const requires (recFreq != 0) {
-            // static_assert(recFreq, "prev_ke_at cannot be called on body objects with recFreq == 0 (no history)\n");
+        const K &prev_ke_at(typename std::vector<K>::size_type index) const {
             if (index >= energies.size())
                 throw std::out_of_range("Requested kinetic energy does not exist (index out of range).\n");
             return energies[index];
         }
-        bool set_mass(const M &new_mass) {
-            if (new_mass < 0)
-                return false;
-            mass_ = new_mass;
-            return true;
+#define ADD_POS_VEL_KE \
+            if (++rec_counter != recFreq) \
+                return; \
+            rec_counter = 0; \
+            this->add_pos_vel_ke();
+#define BODY_COMMON_GROUND_2 \
+        bool set_mass(const M &new_mass) { \
+            if (new_mass < 0) \
+                return false; \
+            mass_ = new_mass; \
+            return true; \
+        } \
+        bool set_mass(M &&new_mass) noexcept { \
+            if (new_mass < 0) \
+                return false; \
+            mass_ = std::move(new_mass); \
+            return true; \
+        } \
+        bool set_radius(const R &new_radius) { \
+            if (new_radius < 0) \
+                return false; \
+            radius = new_radius; \
+            return true; \
+        } \
+        bool set_radius(R &&new_radius) noexcept { \
+            if (new_radius < 0) \
+                return false; \
+            radius = std::move(new_radius); \
+            return true; \
+        } \
+        void set_acc(const vector3D<T> &new_acc) { \
+            acc = new_acc; \
+        } \
+        void set_acc(vector3D<T> &&new_acc) noexcept { \
+            acc = std::move(new_acc); \
+        } \
+        bool set_pe(const T &new_pe) { \
+            if (new_pe > 0) /* gravitational PE can only be zero (at infinity) or negative */ \
+                return false; \
+            pe = new_pe; \
+            return true; \
+        } \
+        bool set_pe(T &&new_pe) noexcept { \
+            if (new_pe > 0) \
+                return false; \
+            pe = std::move(new_pe); \
+            return true; \
+        } \
+        bool set_restitution(const long double &new_restitution_coefficient) noexcept { \
+            if (new_restitution_coefficient < 0 || new_restitution_coefficient > 1) \
+                return false; \
+            rest_c = new_restitution_coefficient; \
+            return true; \
+        } \
+        bool set_restitution(const long double &&new_restitution_coefficient) noexcept { \
+            if (new_restitution_coefficient < 0 || new_restitution_coefficient > 1) \
+                return false; \
+            rest_c = new_restitution_coefficient; \
+            return true; \
+        } \
+        void update(const vector3D<T> &new_position, const vector3D<T> &new_velocity) noexcept { \
+            curr_pos = new_position; /* no checks to be performed, these new vecs can be anything */ \
+            curr_vel = new_velocity; \
+            ADD_POS_VEL_KE \
+        } \
+        void shift(const vector3D<T> &position_shift, const vector3D<T> &velocity_shift) noexcept { \
+            curr_pos += position_shift; \
+            curr_vel += velocity_shift; \
+            ADD_POS_VEL_KE \
+        } \
+        void update(vector3D<T> &&new_position, vector3D<T> &&new_velocity) noexcept { \
+            curr_pos = std::move(new_position); \
+            curr_vel = std::move(new_velocity); \
+            ADD_POS_VEL_KE \
+        } \
+        void shift(const vector3D<T> &&position_shift, const vector3D<T> &&velocity_shift) noexcept { \
+            shift(position_shift, velocity_shift); \
+        } \
+        void apply_pos_transform(const matrix<T> &transform) { /* will throw if not 3x3 matrix */ \
+            curr_pos.apply(transform); \
+            ADD_POS_VEL_KE \
+        } \
+        void apply_pos_transform(const matrix<T> &&transform) { \
+            curr_pos.apply(transform); \
+            ADD_POS_VEL_KE \
+        } \
+        void apply_vel_transform(const matrix<T> &transform) { \
+            curr_vel.apply(transform); \
+            ADD_POS_VEL_KE \
+        } \
+        void apply_vel_transform(const matrix<T> &&transform) { \
+            curr_vel.apply(transform); \
+            ADD_POS_VEL_KE \
+        } \
+        void apply_acc_transform(const matrix<T> &transform) { \
+            acc.apply(transform); \
+            ADD_POS_VEL_KE \
+        } \
+        void apply_acc_transform(const matrix<T> &&transform) { \
+            acc.apply(transform); \
+            ADD_POS_VEL_KE \
+        } \
+        auto momentum() const { \
+            return mass_*curr_vel; \
+        } \
+        void reset_acc() { \
+            acc = T{0}; \
         }
-        bool set_mass(M &&new_mass) noexcept {
-            if (new_mass < 0)
-                return false;
-            mass_ = std::move(new_mass);
-            return true;
-        }
-        bool set_radius(const R &new_radius) {
-            if (new_radius < 0)
-                return false;
-            radius = new_radius;
-            return true;
-        }
-        bool set_radius(R &&new_radius) noexcept {
-            if (new_radius < 0)
-                return false;
-            radius = std::move(new_radius);
-            return true;
-        }
-        void set_acc(const vector3D<T> &new_acc) {
-            acc = new_acc;
-        }
-        void set_acc(vector3D<T> &&new_acc) noexcept {
-            acc = std::move(new_acc);
-        }
-        bool set_pe(const T &new_pe) {
-            if (new_pe > 0) // gravitational PE can only be zero (at infinity) or negative
-                return false;
-            pe = new_pe;
-            return true;
-        }
-        bool set_pe(T &&new_pe) noexcept {
-            if (new_pe > 0)
-                return false;
-            pe = std::move(new_pe);
-            return true;
-        }
-        bool set_restitution(const long double &new_restitution_coefficient) noexcept {
-            if (new_restitution_coefficient < 0 || new_restitution_coefficient > 1)
-                return false;
-            rest_c = new_restitution_coefficient;
-            return true;
-        }
-        bool set_restitution(const long double &&new_restitution_coefficient) noexcept {
-            if (new_restitution_coefficient < 0 || new_restitution_coefficient > 1)
-                return false;
-            rest_c = new_restitution_coefficient;
-            return true;
-        }
-        void update(const vector3D<T> &new_position, const vector3D<T> &new_velocity) noexcept {
-            curr_pos = new_position; // no checks to be performed, these new vecs can be anything
-            curr_vel = new_velocity;
-            if constexpr (recFreq) {
-                if (++rec_counter != recFreq)
-                    return;
-                rec_counter = 0;
-                this->add_pos_vel_ke();
-            }
-        }
-        void shift(const vector3D<T> &position_shift, const vector3D<T> &velocity_shift) noexcept {
-            curr_pos += position_shift;
-            curr_vel += velocity_shift;
-            if constexpr (recFreq) {
-                if (++rec_counter != recFreq)
-                    return;
-                rec_counter = 0;
-                this->add_pos_vel_ke();
-            }
-        }
-        void update(vector3D<T> &&new_position, vector3D<T> &&new_velocity) noexcept {
-            curr_pos = std::move(new_position);
-            curr_vel = std::move(new_velocity);
-            if constexpr (recFreq) {
-                if (++rec_counter != recFreq)
-                    return;
-                rec_counter = 0;
-                this->add_pos_vel_ke();
-            }
-        }
-        void shift(const vector3D<T> &&position_shift, const vector3D<T> &&velocity_shift) noexcept {
-            shift(position_shift, velocity_shift);
-        }
-        void apply_pos_transform(const matrix<T> &transform) { // will throw if not 3x3 matrix
-            curr_pos.apply(transform);
-        }
-        void apply_pos_transform(const matrix<T> &&transform) {
-            curr_pos.apply(transform);
-        }
-        void apply_vel_transform(const matrix<T> &transform) {
-            curr_vel.apply(transform);
-        }
-        void apply_vel_transform(const matrix<T> &&transform) {
-            curr_vel.apply(transform);
-        }
-        void apply_acc_transform(const matrix<T> &transform) {
-            acc.apply(transform);
-        }
-        void apply_acc_transform(const matrix<T> &&transform) {
-            acc.apply(transform);
-        }
-        auto momentum() const {
-            return mass_*curr_vel;
-        }
-        void reset_acc() {
-            acc = T{0};
-        } // resets the body to initial setup and clears trajectory if specified:
-        void reset(bool clear_trajectory = true) requires (recFreq != 0) {
+        BODY_COMMON_GROUND_2
+#undef ADD_POS_VEL_KE
+#define ADD_POS_VEL_KE // re-define as empty macro so empty replacement occurs in partial template specialization below
+        // resets the body to initial setup and clears trajectory if specified:
+        void reset(bool clear_trajectory = true) {
             // static_assert(recFreq, "reset cannot be called on body objects with recFrec == 0 (no history)\n");
             curr_pos = positions.front(); // if recFreq is not zero, there is guaranteed to be at least 1 element
             curr_vel = velocities.front();
@@ -574,8 +561,7 @@ namespace gtd {
             this->add_pos_vel();
             energies.push_back(curr_ke);
         }
-        void clear() requires (recFreq != 0) {
-            // static_assert(recFreq, "clear cannot be called on body objects with recFrec == 0 (no history)\n");
+        void clear() {
             positions.clear();
             velocities.clear();
             energies.clear();
@@ -584,59 +570,59 @@ namespace gtd {
             energies.push_back(curr_ke); // no need to calculate ke again
             rec_counter = 0;
         }
-        std::vector<vector3D<T>> get_positions_cpy() const requires (recFreq != 0) {
+        std::vector<vector3D<T>> get_positions_cpy() const {
             return {positions};
         }
-        std::vector<vector3D<T>> get_velocities_cpy() const requires (recFreq != 0) {
+        std::vector<vector3D<T>> get_velocities_cpy() const {
             return {velocities};
         }
-        std::vector<K> get_kinetic_energies_cpy() const requires (recFreq != 0) {
+        std::vector<K> get_kinetic_energies_cpy() const {
             return {energies};
         }
-        const std::vector<vector3D<T>> &get_positions() const requires (recFreq != 0) {
+        const std::vector<vector3D<T>> &get_positions() const {
             return positions;
         }
-        const std::vector<vector3D<T>> &get_velocities() const requires (recFreq != 0) {
+        const std::vector<vector3D<T>> &get_velocities() const {
             return velocities;
         }
-        const std::vector<K> &get_kinetic_energies() const requires (recFreq != 0) {
+        const std::vector<K> &get_kinetic_energies() const {
             return energies;
         }
         /* since one should not modify any past pos, vel or ke at all, and no current pos, vel or ke other than
          * through the update() or shift() methods, all the iteration methods below return const iterators */
-        auto begin() const requires (recFreq != 0) {
+        auto begin() const {
             if (cref.size() != positions.size())
                 return (cref = zip_cref(positions, velocities, energies)).cbegin();
             return cref.cbegin();
         }
-        auto end() const requires (recFreq != 0) {
+        auto end() const {
             if (cref.size() != positions.size())
                 return (cref = zip_cref(positions, velocities, energies)).cend();
             return cref.cend();
         }
-        auto cbegin() const requires (recFreq != 0) {
+        auto cbegin() const {
             return begin();
         }
-        auto cend() const requires (recFreq != 0) {
+        auto cend() const {
             return end();
         }
-        auto rbegin() const requires (recFreq != 0) {
+        auto rbegin() const {
             if (cref.size() != positions.size())
                 return (cref = zip_cref(positions, velocities, energies)).crbegin();
             return cref.crbegin();
         }
-        auto rend() const requires (recFreq != 0) {
+        auto rend() const {
             if (cref.size() != positions.size())
                 return (cref = zip_cref(positions, velocities, energies)).crend();
             return cref.crend();
         }
-        auto crbegin() const requires (recFreq != 0) {
+        auto crbegin() const {
             return rbegin();
         }
-        auto crend() const requires (recFreq != 0) {
+        auto crend() const {
             return rend();
         }
-        bool trajectory_to_txt(std::ofstream &out, bool full_csv_style = true) const requires (recFreq != 0) {
+        bool trajectory_to_txt(std::ofstream &out, bool full_csv_style = true) const {
             if (!out.good())
                 return false;
             ull_t count = 0;
@@ -667,8 +653,7 @@ namespace gtd {
             out << '\n';
             return true;
         }
-        bool trajectory_to_txt(const String &path = def_path, bool truncate = false, bool full_csv_style = false)
-        const requires (recFreq != 0) {
+        bool trajectory_to_txt(const String &path = def_path, bool truncate = false, bool full_csv_style = false) const{
             if (&path == &def_path)
                 def_path.append_back(get_date_and_time()).append_back(".csv");
             std::ofstream out(path.c_str(), truncate ? std::ios_base::trunc : std::ios_base::app);
@@ -759,7 +744,12 @@ namespace gtd {
             }
             return *this;
         }
-        vector3D<T> operator[](vec_s_t index) const requires (recFreq != 0) { // returns a copy
+        vector3D<T> operator[](vec_s_t index) { // returns a copy
+            if (index >= positions.size())
+                throw std::out_of_range("The specified position index is out of range.\n");
+            return positions[index];
+        }
+        const vector3D<T> &operator[](vec_s_t index) const {
             if (index >= positions.size())
                 throw std::out_of_range("The specified position index is out of range.\n");
             return positions[index];
@@ -780,55 +770,54 @@ namespace gtd {
             this->rest_c = MEAN_AVG(this->rest_c, other.rest_c); // average coefficient of restitution
             this->mass_ += other.mass_;
             this->radius = cbrtl(this->radius*this->radius*this->radius + other.radius*other.radius*other.radius);
-            if constexpr (recFreq) {
-                if (++rec_counter == recFreq) {
-                    this->add_pos_vel_ke();
-                    rec_counter = 0;
-                }
+            if (++rec_counter == recFreq) {
+                this->add_pos_vel_ke();
+                rec_counter = 0;
             }
             return *this;
         }
-        // virtual ~body() = default;
-        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, ull_t rF>
-        friend std::ostream &operator<<(std::ostream&, const body<m, r, t, rF>&);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                  isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto com(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                  isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto vel_com(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto vel_com(const body<m1, r1, t1, rF1>*, const body<m2, r2, t2, rF2>*);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                  isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto acc_com(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                  isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto operator+(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                  isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto operator+(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&&);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                  isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto operator+(const body<m1, r1, t1, rF1>&&, const body<m2, r2, t2, rF2>&);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                  isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto operator+(const body<m1, r1, t1, rF1>&&, const body<m2, r2, t2, rF2>&&);
-        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg1, bool prg2, bool mrg1, bool mrg2,
-                  int c1, int c2, ull_t mF1, ull_t mF2, ull_t fF1, ull_t fF2, bool bF1, bool bF2>
-        friend system<m, r, t, prg1 & prg2, mrg1 & mrg2, c1 & c2, MEAN_AVG(mF1, mF2), MEAN_AVG(fF1, fF2), bF1 & bF2>
-        operator+(const system<m, r, t, prg1, mrg1, c1, mF1, fF1, bF1> &sys1,
-                  const system<m, r, t, prg2, mrg2, c2, mF2, fF2, bF2> &sys2);
-        template <isNumWrapper, isNumWrapper, isNumWrapper>
-        friend class ray;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
-                  isNumWrapper, bool, ull_t>
-        friend class astro_scene;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, ull_t>
-        friend class body;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool>
+#define BODY_FRIEND_DECLARATIONS \
+        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, ull_t rF> \
+        friend std::ostream &operator<<(std::ostream&, const body<m, r, t, rF>&); \
+        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1, \
+                  isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2> \
+        friend inline auto com(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&); \
+        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1, \
+                  isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2> \
+        friend inline auto vel_com(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&); \
+        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1, \
+                isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2> \
+        friend inline auto vel_com(const body<m1, r1, t1, rF1>*, const body<m2, r2, t2, rF2>*); \
+        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1, \
+                  isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2> \
+        friend inline auto acc_com(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&); \
+        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1, \
+                  isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2> \
+        friend inline auto operator+(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&); \
+        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1, \
+                  isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2> \
+        friend inline auto operator+(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&&); \
+        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1, \
+                  isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2> \
+        friend inline auto operator+(const body<m1, r1, t1, rF1>&&, const body<m2, r2, t2, rF2>&); \
+        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1, \
+                  isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2> \
+        friend inline auto operator+(const body<m1, r1, t1, rF1>&&, const body<m2, r2, t2, rF2>&&); \
+        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg1, bool prg2, bool mrg1, bool mrg2, \
+                  int c1, int c2, ull_t mF1, ull_t mF2, ull_t fF1, ull_t fF2, bool bF1, bool bF2> \
+        friend system<m, r, t, prg1 & prg2, mrg1 & mrg2, c1 & c2, MEAN_AVG(mF1, mF2), MEAN_AVG(fF1, fF2), bF1 & bF2> \
+        operator+(const system<m, r, t, prg1, mrg1, c1, mF1, fF1, bF1> &sys1, \
+                  const system<m, r, t, prg2, mrg2, c2, mF2, fF2, bF2> &sys2); \
+        template <isNumWrapper, isNumWrapper, isNumWrapper> \
+        friend class ray; \
+        template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, \
+                  isNumWrapper, bool, ull_t> \
+        friend class astro_scene; \
+        template <isNumWrapper, isNumWrapper, isNumWrapper, ull_t> \
+        friend class body; \
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool> \
         friend class system;
+        BODY_FRIEND_DECLARATIONS // pre-processed code will not look pretty...
     };
     template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
     class body<M, R, T, 0> : public body_counter {
@@ -896,7 +885,9 @@ namespace gtd {
         constexpr body(const body<M, R, T, rF> &other) :
                 mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos},
                 curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc}, rest_c{other.rest_c}, pe{other.pe} {}
-        body(const body<M, R, T, 0> &other) = default; // will cause a compilation error, as base copy ctor is deleted
+        body(const body<M, R, T, 0> &other) : // cannot be defaulted as would be implicitly deleted
+                mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos},
+                curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc}, rest_c{other.rest_c}, pe{other.pe} {}
         template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t, ull_t rF>
         constexpr body(const body<m, r, t, rF> &other) :
                 mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos}, curr_vel{other.curr_vel},
@@ -904,135 +895,14 @@ namespace gtd {
         body(body<M, R, T, 0> &&other) noexcept = default;
         template <ull_t rF>
         constexpr body(body<M, R, T, rF> &&other) noexcept :
-                body_counter{std::move(other)}, mass_{std::move(other.mass_)},
-                radius{std::move(other.radius)}, curr_pos{std::move(other.curr_pos)}, curr_vel{std::move(other.curr_vel)},
-                curr_ke{std::move(other.curr_ke)}, acc{std::move(other.acc)}, rest_c{other.rest_c}, pe{other.pe} {}
-        const M &mass() const noexcept {
-            return mass_;
-        }
-        const R &rad() const noexcept {
-            return radius;
-        }
-        const vector3D<T> &pos() const noexcept {
-            return curr_pos;
-        }
-        const vector3D<T> &vel() const noexcept {
-            return curr_vel;
-        }
-        vector3D<T> &acceleration() noexcept {
-            return acc;
-        }
-        const vector3D<T> &acceleration() const noexcept {
-            return acc;
-        }
-        const K &ke() const noexcept {
-            return curr_ke;
-        }
-        const T &potential_energy() const noexcept {
-            return pe;
-        }
-        long double restitution() const noexcept {
-            return rest_c;
-        }
-        auto volume() const {
-            return (4/3.0l)*__PI__*this->radius*this->radius*this->radius;
-        }
-        auto density() const {
-            return this->mass_/this->volume();
-        }
-        bool set_mass(const M &new_mass) {
-            if (new_mass < 0)
-                return false;
-            mass_ = new_mass;
-            return true;
-        }
-        bool set_mass(M &&new_mass) noexcept {
-            if (new_mass < 0)
-                return false;
-            mass_ = std::move(new_mass);
-            return true;
-        }
-        bool set_radius(const R &new_radius) {
-            if (new_radius < 0)
-                return false;
-            radius = new_radius;
-            return true;
-        }
-        bool set_radius(R &&new_radius) noexcept {
-            if (new_radius < 0)
-                return false;
-            radius = std::move(new_radius);
-            return true;
-        }
-        void set_acc(const vector3D<T> &new_acc) {
-            acc = new_acc;
-        }
-        void set_acc(vector3D<T> &&new_acc) noexcept {
-            acc = std::move(new_acc);
-        }
-        bool set_pe(const T &new_pe) {
-            if (new_pe > 0) // gravitational PE can only be zero (at infinity) or negative
-                return false;
-            pe = new_pe;
-            return true;
-        }
-        bool set_pe(T &&new_pe) noexcept {
-            if (new_pe > 0)
-                return false;
-            pe = std::move(new_pe);
-            return true;
-        }
-        bool set_restitution(const long double &new_restitution_coefficient) noexcept {
-            if (new_restitution_coefficient < 0 || new_restitution_coefficient > 1)
-                return false;
-            rest_c = new_restitution_coefficient;
-            return true;
-        }
-        bool set_restitution(const long double &&new_restitution_coefficient) noexcept {
-            if (new_restitution_coefficient < 0 || new_restitution_coefficient > 1)
-                return false;
-            rest_c = new_restitution_coefficient;
-            return true;
-        }
-        void update(const vector3D<T> &new_position, const vector3D<T> &new_velocity) noexcept {
-            curr_pos = new_position; // no checks to be performed, these new vecs can be anything
-            curr_vel = new_velocity;
-        }
-        void shift(const vector3D<T> &position_shift, const vector3D<T> &velocity_shift) noexcept {
-            curr_pos += position_shift;
-            curr_vel += velocity_shift;
-        }
-        void update(vector3D<T> &&new_position, vector3D<T> &&new_velocity) noexcept {
-            curr_pos = std::move(new_position);
-            curr_vel = std::move(new_velocity);
-        }
-        void shift(const vector3D<T> &&position_shift, const vector3D<T> &&velocity_shift) noexcept {
-            shift(position_shift, velocity_shift);
-        }
-        void apply_pos_transform(const matrix<T> &transform) { // will throw if not 3x3 matrix
-            curr_pos.apply(transform);
-        }
-        void apply_pos_transform(const matrix<T> &&transform) {
-            curr_pos.apply(transform);
-        }
-        void apply_vel_transform(const matrix<T> &transform) {
-            curr_vel.apply(transform);
-        }
-        void apply_vel_transform(const matrix<T> &&transform) {
-            curr_vel.apply(transform);
-        }
-        void apply_acc_transform(const matrix<T> &transform) {
-            acc.apply(transform);
-        }
-        void apply_acc_transform(const matrix<T> &&transform) {
-            acc.apply(transform);
-        }
-        auto momentum() const {
-            return mass_*curr_vel;
-        }
-        void reset_acc() {
-            acc = T{0};
-        }
+        body_counter{std::move(other)}, mass_{std::move(other.mass_)},
+        radius{std::move(other.radius)}, curr_pos{std::move(other.curr_pos)}, curr_vel{std::move(other.curr_vel)},
+        curr_ke{std::move(other.curr_ke)}, acc{std::move(other.acc)}, rest_c{other.rest_c}, pe{other.pe} {}
+        BODY_COMMON_GROUND_1
+        BODY_COMMON_GROUND_2
+#undef ADD_POS_VEL_KE
+#undef BODY_COMMON_GROUND_1
+#undef BODY_COMMON_GROUND_2
         // template <ull_t rF>
         // body<M, R, T, 0> &operator=(const body<M, R, T, rF> &other) {
         //     if (&other == this)
@@ -1095,49 +965,9 @@ namespace gtd {
             this->radius = cbrtl(this->radius*this->radius*this->radius + other.radius*other.radius*other.radius);
             return *this;
         }
-        // virtual ~body() = default; // body_counter has been made abstract, so no need to specify virtual dtor again
-        /*
-        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, ull_t rF>
-        friend std::ostream &operator<<(std::ostream&, const body<m, r, t, rF>&);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto com(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto vel_com(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto vel_com(const body<m1, r1, t1, rF1>*, const body<m2, r2, t2, rF2>*);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto acc_com(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto operator+(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto operator+(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&&);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto operator+(const body<m1, r1, t1, rF1>&&, const body<m2, r2, t2, rF2>&);
-        template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-                isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
-        friend inline auto operator+(const body<m1, r1, t1, rF1>&&, const body<m2, r2, t2, rF2>&&);
-        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg1, bool prg2, bool mrg1, bool mrg2,
-                int c1, int c2, ull_t mF1, ull_t mF2, ull_t fF1, ull_t fF2, bool bF1, bool bF2>
-        friend system<m, r, t, prg1 & prg2, mrg1 & mrg2, c1 & c2, MEAN_AVG(mF1, mF2), MEAN_AVG(fF1, fF2), bF1 & bF2>
-        operator+(const system<m, r, t, prg1, mrg1, c1, mF1, fF1, bF1> &sys1,
-                  const system<m, r, t, prg2, mrg2, c2, mF2, fF2, bF2> &sys2);
-        template <isNumWrapper, isNumWrapper, isNumWrapper>
-        friend class ray;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
-                isNumWrapper, bool, ull_t>
-        friend class astro_scene;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, ull_t>
-        friend class body;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool>
-        friend class system;
-        */
+        // all friend declarations have to re-declared for the partial template specialisation:
+        BODY_FRIEND_DECLARATIONS
+#undef BODY_FRIEND_DECLARATIONS
     };
     template <isNumWrapper m, isNumWrapper r, isNumWrapper t, ull_t rF>
     std::ostream &operator<<(std::ostream &os, const body<m, r, t, rF> &bod) {
