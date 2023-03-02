@@ -318,6 +318,14 @@ namespace gtd {
         mass_{std::move(body_mass)}, radius{std::move(body_radius)}, curr_pos{std::move(pos)}, curr_vel{std::move(vel)},
         acc{acceleration}, rest_c{restitution}
         {add_pos_vel_ke(); check_mass(); check_radius();} // private ctor as only needed for 1 func.
+        body(const body<M, R, T, recFreq> *one, const body<M, R, T, recFreq> *two) {
+            this->mass_ = one->mass_ + two->mass_;
+            this->radius = std::cbrtl(one->radius*one->radius*one->radius + two->radius*two->radius*two->radius);
+            this->curr_pos = com(*one, *two);
+            this->curr_vel = vel_com(*one, *two);
+            this->acc = acc_com(*one, *two);
+            this->rest_c = MEAN_AVG(one->rest_c, two->rest_c);
+        }
     public:
         /* unfortunately, the constructors cannot be marked constexpr, because it is impossible for any body_counter
          * constructor to be constexpr (since ID must be dynamically determined) */
@@ -1023,10 +1031,12 @@ namespace gtd {
     inline auto operator+(const body<m1, r1, t1, rF1> &&b1, const body<m2, r2, t2, rF2> &&b2) {
         return b1 + b2;
     }
-    typedef body<long double, long double, long double> bod;
+    typedef body<long double, long double, long double> bod; // recFreq == 1
     typedef body<long double, long double, long double, 0> bod_0f;
     typedef body<long double, long double, long double, 10> bod_10f;
     typedef body<long double, long double, long double, 100> bod_100f;
     typedef body<long double, long double, long double, 1000> bod_1000f;
+    template <ull_t rF>
+    using bod_ld = body<long double, long double, long double, rF>;
 }
 #endif

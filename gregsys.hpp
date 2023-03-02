@@ -152,13 +152,20 @@ namespace gtd {
          * declared the type of the comparator used by the std::set object to be that of an anonymous lambda type, which
          * will cause the std::pair objects to be sorted first by the iteration at which they were "destroyed", and then
          * by their IDs (for when times of destruction are equal). */
-        std::set<std::pair<ull_t, bod_t>,
-                decltype([](const std::pair<ull_t, bod_t> &p1, const std::pair<ull_t, bod_t> &p2){
-                    return p1.first == p2.first ? p1.second < p2.second : p1.first < p2.first;
-                })> del_bods;
+        // std::set<std::pair<ull_t, bod_t>,
+        //         decltype([](const std::pair<ull_t, bod_t> &p1, const std::pair<ull_t, bod_t> &p2){
+        //             return p1.first == p2.first ? p1.second < p2.second : p1.first < p2.first;
+        //         })> del_bods;
+        static inline auto pair_bods_func = [](const std::pair<ull_t, bod_t> &p1, const std::pair<ull_t, bod_t> &p2) {
+            return p1.first == p2.first ? p1.second < p2.second : p1.first < p2.first;
+        };
+        union {
+            std::set<bod_t, std::less<>> *del_bods_n;
+            std::set<std::pair<ull_t, bod_t>, decltype(pair_bods_func)> *del_bods_m;
+        };
         long double dt = 1;
         long double half_dt = dt/2; // I gave it its own variable, since it is a commonly used quantity
-        ull_t iterations = 1000;
+        ull_t iterations = 1'000;
         long double prev_dt{}; // used in methods called after evolve(), since could be changed by setter
         long double time_elapsed{};
         ull_t prev_iterations{}; // same here
@@ -219,6 +226,12 @@ namespace gtd {
             G *= m_num*d_num*d_num*d_num*t_num*t_num;
             G /= m_denom*d_denom*d_denom*d_denom*t_denom*t_denom;
             G /= 1000000000000000; // correcting for the original G being 10^(15) times larger than it should be
+        }
+        void set_set() requires (collisions != 0) {
+            if constexpr (memFreq)
+                del_bods_m = new std::set<std::pair<ull_t, bod_t>, decltype(pair_bods_func)>{pair_bods_func};
+            else
+                del_bods_n = new std::set<bod_t, std::less<>>;
         }
         void clear_bodies() requires (memFreq != 0) { // makes sure the trajectories of all bodies are deleted
             // for (bod_t &bod : bods)
@@ -561,7 +574,9 @@ namespace gtd {
                      * data for the body before the merger would be mixed with its new "self" after the merger. In
                      * addition, there would then be inconsistency between which bodies end up in the "deleted" bodies
                      * std::set (retaining all their history) and those that remain in the main std::vector. */
-                    bod_t &&merged = *bod_o + *merging_bod; // create body that is the result of the merger
+                    // bod_t &&merged = *bod_o + *merging_bod; // create body that is the result of the merger
+                    bod_t &&merged = bod_t{bod_o, merging_bod}; // create body that is the result of the merger
+                    merged.rec_counter = steps;
                     if constexpr (mem) {
                         merged.add_pos_vel_ke();
                     }
@@ -572,8 +587,15 @@ namespace gtd {
                         pe.emplace(merged.id, std::vector<T>{}); // add a std::vector to store its potential energies
                         energy.emplace(merged.id, std::vector<T>{}); // same for its total energy (it stores its own KE)
                     }
-                    del_bods.emplace(steps, std::move(*bod_o)); // move the merged bodies into the deleted bodies set
-                    del_bods.emplace(steps, std::move(*bod_i));
+                    // move the merged bodies into the deleted bodies set:
+                    if constexpr (memFreq) {
+                        del_bods_m->emplace(steps, std::move(*bod_o));
+                        del_bods_m->emplace(steps, std::move(*merging_bod));
+                    }
+                    else {
+                        del_bods_n->emplace(std::move(*bod_o));
+                        del_bods_n->emplace(std::move(*merging_bod));
+                    }
                     bods.erase(bods.begin() + outer); // erase the merged bodies from the std::vector
                     bods.erase(bods.begin() + merging_index - 1); // -1 because outer body was just deleted
                     bods.emplace_back(std::move(merged)); // move the new body into the std::vector storing all bodies
@@ -646,18 +668,22 @@ namespace gtd {
             RESET_TXT_FLAGS << std::endl;
         }
     public:
-        constexpr system() : G{G_SI} {this->check_coll();}
+        system() : G{G_SI} {this->check_coll(); if constexpr (collisions) this->set_set();}
         system(const std::initializer_list<bod_t> &list) : bods{list}, G{G_SI} {
             check_overlap();
             check_coll();
             if constexpr (memFreq)
                 clear_bodies();
+            if constexpr (collisions)
+                this->set_set();
         }
         system(std::initializer_list<bod_t> &&list) : bods{std::move(list)}, G{G_SI} {
             check_overlap();
             check_coll();
             if constexpr (memFreq)
                 clear_bodies();
+            if constexpr (collisions)
+                this->set_set();
         }
         explicit system(long double timestep, ull_t num_iterations, const char *units_format) :
                 dt{timestep}, iterations{num_iterations} {
@@ -665,6 +691,8 @@ namespace gtd {
              * time to kg, metres and seconds (SI units), respectively. This means any units can be used. */
             check_coll();
             parse_units_format(units_format);
+            if constexpr (collisions)
+                this->set_set();
         }
         template <ull_t mF>
         system(const std::vector<body<M, R, T, mF>> &bodies, long double timestep = 1,
@@ -677,6 +705,8 @@ namespace gtd {
             parse_units_format(units_format);
             if constexpr (memFreq && mF) // no need to clear bodies if the ones passed do not record history
                 clear_bodies();
+            if constexpr (collisions)
+                this->set_set();
         }
         system(std::vector<bod_t> &&bodies, long double timestep = 1,
                ull_t num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
@@ -686,6 +716,8 @@ namespace gtd {
             parse_units_format(units_format);
             if constexpr (memFreq)
                 clear_bodies();
+            if constexpr (collisions)
+                this->set_set();
         }
         template <ull_t mF>
         system(std::vector<body<M, R, T, mF>> &&bodies, long double timestep = 1,
@@ -698,6 +730,8 @@ namespace gtd {
             parse_units_format(units_format);
             if constexpr (memFreq && mF)
                 clear_bodies();
+            if constexpr (collisions)
+                this->set_set();
         }
         /* copy constructors are made to only copy the variables seen below: it does not make sense for a new system
          * object (even when copy-constructed) to be "evolved" if it has not gone through the evolution itself */
@@ -709,6 +743,8 @@ namespace gtd {
             check_coll();
             if constexpr (memFreq && mF)
                 clear_bodies();
+            if constexpr (collisions)
+                this->set_set();
         }
         template <bool prg, bool mrg, int coll, ull_t fF, bool bF>
         system(system<M, R, T, prg, mrg, coll, memFreq, fF, bF> &&other) :
@@ -717,6 +753,8 @@ namespace gtd {
             check_coll();
             if constexpr (memFreq)
                 clear_bodies();
+            if constexpr (collisions)
+                this->set_set();
         }
         template <bool prg, bool mrg, int coll, ull_t mF, ull_t fF, bool bF>
         system(system<M, R, T, prg, mrg, coll, mF, fF, bF> &&other) :
@@ -727,6 +765,8 @@ namespace gtd {
             check_coll();
             if constexpr (memFreq && mF)
                 clear_bodies();
+            if constexpr (collisions)
+                this->set_set();
         }
         vec_size_t num_bodies() {
             return bods.size();
@@ -820,13 +860,17 @@ namespace gtd {
         void reset() requires (memFreq != 0) {
             // for (bod_t &bod : bods)
             //     bod.reset(true);
+            if constexpr (collisions) {
+                bods.insert(bods.end(), std::make_move_iterator(del_bods_m->begin()),
+                            std::make_move_iterator(del_bods_m->end()));
+                del_bods_m->clear();
+            }
             std::for_each(bods.begin(), bods.end(), [this](bod_t &bod){bod.reset(true);});
             pe.clear();
             energy.clear();
             tot_pe.clear();
             tot_ke.clear();
             tot_e.clear();
-            del_bods.clear();
             evolved = false;
         }
         /* reset() deletes the evolution of the bodies AND returns them to their original positions, velocities, and
@@ -835,13 +879,16 @@ namespace gtd {
         void clear_evolution() requires (memFreq != 0) {
             // for (bod_t &bod : bods)
             //     bod.clear();
+            // bods.insert(bods.end(), std::make_move_iterator(del_bods_m->begin()),
+            //             std::make_move_iterator(del_bods_m->end()));
+            if constexpr (collisions)
+                del_bods_m->clear();
             std::for_each(bods.begin(), bods.end(), [](bod_t &bod){bod.clear();});
             pe.clear();
             energy.clear();
             tot_pe.clear();
             tot_ke.clear();
             tot_e.clear();
-            del_bods.clear();
             evolved = false;
         }
     private:
@@ -1223,13 +1270,16 @@ namespace gtd {
             // unsigned long long count = 0;
             vec_size_t i;
             const ull_t num_max_els = (prev_iterations + 1)/memFreq; // CHECK THIS IS CORRECT
-            std::cout << "size of bods: " << bods.size() << ", size of del_bods: " << del_bods.size() << std::endl;
+            std::cout << "size of bods: " << bods.size() << ", size of del_bods: " << del_bods_m->size() << std::endl;
             if constexpr (collisions) {
                 ull_t d_i;
                 vec_size_t max_index;
-                for (const auto &[destruction_it, bod] : del_bods) {
+                for (const auto &[destruction_it, bod] : *del_bods_m) {
                     max_index = bod.positions.size();
                     d_i = (destruction_it + memFreq)/memFreq - max_index;
+                    std::cout << "Positions size: " << bod.positions.size() << ", pe size: " << pe[bod.id].size()
+                    << std::endl;
+                    std::cout << "body id: " << bod.id << std::endl << std::endl;
                     out << "body_id,mass,radius\r\n" << bod.id << ',' << bod.mass_ << ',' << bod.radius << "\r\n"
                            "time_elapsed,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,"
                            "kinetic_energy,potential_energy,total_energy\r\n";
@@ -1244,11 +1294,12 @@ namespace gtd {
                     max_index = bod.positions.size();
                     d_i = prev_iterations/memFreq - max_index + 1;
                     std::cout << "max_index: " << max_index << ", d_i: " << d_i << std::endl;
+                    std::cout << "body id: " << bod.id << std::endl;
                     out << "body_id,mass,radius\r\n" << bod.id << ',' << bod.mass_ << ',' << bod.radius << "\r\n"
                            "time_elapsed,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,"
                            "kinetic_energy,potential_energy,total_energy\r\n";
                     for (i = 0; i < max_index; ++i)
-                        out << d_i*prev_dt*memFreq << ',' << bod.positions[i].x << ',' << bod.positions[i].y << ','
+                        out << d_i++*prev_dt*memFreq << ',' << bod.positions[i].x << ',' << bod.positions[i].y << ','
                             << bod.positions[i].z << ',' << bod.velocities[i].x << ',' << bod.velocities[i].y << ','
                             << bod.velocities[i].z << ',' << bod.energies[i] << ',' << pe[bod.id][i] << ','
                             << energy[bod.id][i] << "\r\n";
@@ -1294,6 +1345,14 @@ namespace gtd {
             // std::cout << "Total kinetic energy size: " << tot_ke.size() << std::endl;
             // std::cout << "Total energy size: " << tot_e.size() << std::endl;
             return true;
+        }
+        ~system() {
+            if constexpr (collisions) {
+                if constexpr (memFreq)
+                    delete del_bods_m;
+                else
+                    delete del_bods_n;
+            }
         }
         const bod_t &operator[](vec_size_t index) const {
             if (index >= bods.size())
