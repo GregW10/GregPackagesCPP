@@ -541,13 +541,22 @@ namespace gtd {
             mom_t axis_mom_o;
             mom_t axis_mom_i;
             vec_size_t merging_index;
+            bool first_merged;
+            bod_t *merged;
+            alignas(bod_t) char fake_body[sizeof(bod_t)];
+            static std::set<ull_t> merged_ids;
+            merged_ids.clear();
             while (outer < num_bods) {
+                first_merged = false;
                 merging_bod = nullptr;
                 overlapping.clear();
                 bod_o = bods.data() + outer;
                 bod_i = bod_o + 1; // to point to body just after bod_o
                 for (inner = outer + 1; inner < num_bods; ++inner, ++bod_i) {
                     // bod_i = bods.data() + inner;
+                    inner_loop:
+                    if (inner == outer)
+                        continue;
                     rad_dist = bod_o->radius + bod_i->radius;
                     vector3D<T> &&r12 = bod_i->curr_pos - bod_o->curr_pos;
                     long double &&dist = r12.magnitude(); // DEAL WITH ZERO DISTANCE CASE
@@ -575,32 +584,41 @@ namespace gtd {
                      * addition, there would then be inconsistency between which bodies end up in the "deleted" bodies
                      * std::set (retaining all their history) and those that remain in the main std::vector. */
                     // bod_t &&merged = *bod_o + *merging_bod; // create body that is the result of the merger
-                    bod_t &&merged = bod_t{bod_o, merging_bod}; // create body that is the result of the merger
-                    merged.rec_counter = steps;
-                    if constexpr (mem) {
-                        merged.add_pos_vel_ke();
+                    if (!first_merged) {
+                        merged = new(fake_body) bod_t{bod_o, merging_bod};//create body that is the result of the merger
+                        if constexpr (memFreq) {
+                            del_bods_m->emplace(steps, std::move(*bod_o));
+                        }
+                        else {
+                            del_bods_n->emplace(std::move(*bod_o));
+                        }
+                        // bods.erase(bods.begin() + outer); // erase the merged bodies from the std::vector
+                        // bod_o->~body();
+                        bod_o = merged;
+                        first_merged = true;
+                    } else {
+                        *bod_o += *merging_bod;
                     }
-                    if constexpr (file) {
-                        // WRITE TO FILE
+                    // must check that the merging body is not one from a previous merger at this time-step:
+                    if (!merged_ids.contains(merging_bod->id)) {
+                        if constexpr (memFreq) {
+                            del_bods_m->emplace(steps, std::move(*merging_bod));
+                        }
+                        else {
+                            del_bods_n->emplace(std::move(*merging_bod));
+                        }
                     }
-                    if constexpr (memFreq) {
-                        pe.emplace(merged.id, std::vector<T>{}); // add a std::vector to store its potential energies
-                        energy.emplace(merged.id, std::vector<T>{}); // same for its total energy (it stores its own KE)
+                    bods.erase(bods.begin() + merging_index);// - 1); // -1 because outer body was just deleted
+                    // new position of primary merged body will be one less if merging body comes before
+                    if (merging_index < outer) {
+                        --outer;
                     }
-                    // move the merged bodies into the deleted bodies set:
-                    if constexpr (memFreq) {
-                        del_bods_m->emplace(steps, std::move(*bod_o));
-                        del_bods_m->emplace(steps, std::move(*merging_bod));
-                    }
-                    else {
-                        del_bods_n->emplace(std::move(*bod_o));
-                        del_bods_n->emplace(std::move(*merging_bod));
-                    }
-                    bods.erase(bods.begin() + outer); // erase the merged bodies from the std::vector
-                    bods.erase(bods.begin() + merging_index - 1); // -1 because outer body was just deleted
-                    bods.emplace_back(std::move(merged)); // move the new body into the std::vector storing all bodies
                     --num_bods; // there is a net loss of 1 body
-                    continue;
+                    inner = 0;
+                    bod_i = bods.data();
+                    overlapping.clear();
+                    merging_bod = nullptr;
+                    goto inner_loop;
                 }
                 if (overlapping.size()) {
                     T o_vel;
@@ -631,15 +649,97 @@ namespace gtd {
                         }
                     }
                 }
-                if constexpr (mem) {
-                    bod_o->add_pos_vel_ke();
+                if (first_merged) {
+                    // bod_o->rec_counter = steps;
+                    // move the merged bodies into the deleted bodies set:
+                    // bods.emplace_back(std::move(merged)); // move the new body into the std::vector storing all bodies
+                    merged_ids.insert(bod_o->id);
+                    bods[outer].~body(); // have to manually call dtor of body being moved into
+                    copy(bods.data() + outer, fake_body, sizeof(bod_t)); // bypass constructors
+                    // bod_o->~body_counter();
+                    // if constexpr (file)
+                    //     bod_o = bods.data() + outer;
                 }
-                if constexpr (file) {
-                    // WRITE TO FILE
-                }
+                // if constexpr (file) {
+                //     // WRITE TO FILE
+                // }
                 ++outer;
             }
+            if constexpr (memFreq || file) { // repeated constexpr conditionals don't make it to runtime!!
+                // the repeated loop below is to avoid re-checking the conditions repeatedly inside the loop
+                if (!merged_ids.empty()) {
+                    // printf("Merged IDs:\n");
+                    // for (const auto &id : merged_ids)
+                    //     std::cout << id << std::endl;
+                    for (bod_t &b : bods) {
+                        if constexpr (mem) {
+                            b.add_pos_vel_ke();
+                        }
+                        if constexpr (file) {
+                            // WRITE TO FILE
+                        }
+                    }
+                    return;
+                }
+                if (merged_ids.size() < pe.size()) {
+                    for (bod_t &b : bods) {
+                        if constexpr (mem) {
+                            b.add_pos_vel_ke();
+                        }
+                        // bod_o->rec_counter = steps;
+                        if constexpr (memFreq) {
+                            if (!merged_ids.contains(b.id)) {
+                                pe.emplace(b.id, std::vector<T>{}); // add a std::vector to store its potential energies
+                                energy.emplace(b.id, std::vector<T>{}); // same for its total energy (stores its own KE)
+                            }
+                        }
+                        if constexpr (file) {
+                            // WRITE TO FILE
+                        }
+                    }
+                    return;
+                }
+                for (bod_t &b : bods) {
+                    if constexpr (mem) {
+                        b.add_pos_vel_ke();
+                    }
+                    // bod_o->rec_counter = steps;
+                    if constexpr (memFreq) {
+                        pe.emplace(b.id, std::vector<T>{}); // add a std::vector to store its potential energies
+                        energy.emplace(b.id, std::vector<T>{}); // same for its total energy (it stores its own KE)
+                    }
+                    if constexpr (file) {
+                        // WRITE TO FILE
+                    }
+                }
+            }
         }
+    public:
+        void analysis() requires (memFreq != 0) { // debugging method - mark for removal
+            printf("---------------ANALYSIS--------------\nBods:\n");
+            for (const auto& bod : bods) {
+                std::cout << "\nBody: " << bod <<
+                          "\nPositions size: " << bod.positions.size() <<
+                          ", Velocity size: " << bod.velocities.size() <<
+                          "\nKE size: " << bod.energies.size() << ", PE size: " << pe[bod.id].size() <<
+                          ", Energy size: " << energy[bod.id].size() << '\n' << std::endl;
+            }
+            printf("-----------\nDel_Bods:\n");
+            for (const auto& [it, bod] : *del_bods_m) {
+                std::cout << "Iteration: " << it << "\nBody: " << bod <<
+                "\nPositions size: " << bod.positions.size() <<
+                ", Velocity size: " << bod.velocities.size() <<
+                "\nKE size: " << bod.energies.size() << ", PE size: " << pe[bod.id].size() <<
+                ", Energy size: " << energy[bod.id].size() << '\n' << std::endl;
+            }
+        }
+        std::vector<bod_t>& get_bods() {
+            return this->bods;
+        }
+        std::set<std::pair<ull_t, bod_t>, decltype(pair_bods_func)>& get_del_bods() requires (memFreq != 0) {
+            return *this->del_bods_m;
+        }
+    private:
         static inline bool check_option(int option) noexcept {
             unsigned short loword = option & 0x0000ffff;
             unsigned short hiword = option >> 16;
@@ -1269,16 +1369,23 @@ namespace gtd {
                 return false;
             // unsigned long long count = 0;
             vec_size_t i;
-            const ull_t num_max_els = (prev_iterations + 1)/memFreq; // CHECK THIS IS CORRECT
-            std::cout << "size of bods: " << bods.size() << ", size of del_bods: " << del_bods_m->size() << std::endl;
+            const ull_t num_max_els = (prev_iterations + (memFreq != 1))/memFreq; // CHECK THIS IS CORRECT
+            // std::cout << "size of bods: " << bods.size() << ", size of del_bods: " << del_bods_m->size() << std::endl;
             if constexpr (collisions) {
                 ull_t d_i;
                 vec_size_t max_index;
                 for (const auto &[destruction_it, bod] : *del_bods_m) {
                     max_index = bod.positions.size();
-                    d_i = (destruction_it + memFreq)/memFreq - max_index;
-                    std::cout << "Positions size: " << bod.positions.size() << ", pe size: " << pe[bod.id].size()
-                    << std::endl;
+                    // d_i = (destruction_it + memFreq)/memFreq - max_index - 1;
+                    if (destruction_it % memFreq) {
+                        d_i = destruction_it/memFreq + 1 - max_index;
+                    } else {
+                        d_i = destruction_it/memFreq - max_index;
+                    }
+                    // d_i = destruction_it/memFreq;
+                    // d_i += (max_index > d_i) - max_index;
+                    // std::cout << "Positions size: " << bod.positions.size() << ", pe size: " << pe[bod.id].size()
+                    // << std::endl;
                     std::cout << "body id: " << bod.id << std::endl << std::endl;
                     out << "body_id,mass,radius\r\n" << bod.id << ',' << bod.mass_ << ',' << bod.radius << "\r\n"
                            "time_elapsed,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,"
@@ -1293,8 +1400,8 @@ namespace gtd {
                 for (const bod_t &bod : bods) {
                     max_index = bod.positions.size();
                     d_i = prev_iterations/memFreq - max_index + 1;
-                    std::cout << "max_index: " << max_index << ", d_i: " << d_i << std::endl;
-                    std::cout << "body id: " << bod.id << std::endl;
+                    // std::cout << "max_index: " << max_index << ", d_i: " << d_i << std::endl;
+                    // std::cout << "body id: " << bod.id << std::endl;
                     out << "body_id,mass,radius\r\n" << bod.id << ',' << bod.mass_ << ',' << bod.radius << "\r\n"
                            "time_elapsed,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,"
                            "kinetic_energy,potential_energy,total_energy\r\n";

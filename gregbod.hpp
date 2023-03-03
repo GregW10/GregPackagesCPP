@@ -128,7 +128,7 @@ namespace gtd {
             ids.insert(this->id);
             ++count;
         }
-        body_counter(body_counter &&other) noexcept {
+        body_counter(body_counter &&other) noexcept { // the noexcept here is a little fibby...
             this->id = other.id;
             other.id = -1; // would never, ever be reached (normally)
             std::lock_guard<std::mutex> lock{id_mutex};
@@ -694,9 +694,7 @@ namespace gtd {
         }
         template <ull_t rF>
         body<M, R, T, recFreq> &operator=(const body<M, R, T, rF> &other) {
-            if constexpr (recFreq == rF) // if rF != recFreq, other is actually an instance of another class, so the
-                if (&other == this) // comparison between these two addresses would be invalid
-                    return *this;
+            // no need to check for self-assignment here, as overload resolution would select above func. in that case
             this->mass_ = other.mass_;
             this->radius = other.radius;
             this->curr_pos = other.curr_pos;
@@ -735,6 +733,7 @@ namespace gtd {
             if constexpr (recFreq == rF)
                 if (&other == this)
                     return *this;
+            body_counter::operator=(std::move(other)); // all body<M, R, T, rF> objects are child objects of body_counter
             this->mass_ = std::move(other.mass_);
             this->radius = std::move(other.radius);
             this->curr_pos = std::move(other.curr_pos);
@@ -743,13 +742,15 @@ namespace gtd {
             this->acc = std::move(other.acc);
             this->pe = std::move(other.pe);
             this->rest_c = other.rest_c; // is long double, so not moved
-            if constexpr (recFreq) {
+            if constexpr (rF) {
                 this->positions = std::move(other.positions);
                 this->velocities = std::move(other.velocities);
                 this->energies = std::move(other.energies);
                 this->cref = std::move(other.cref);
                 this->rec_counter = other.rec_counter;
             }
+            else
+                this->clear();
             return *this;
         }
         vector3D<T> operator[](vec_s_t index) { // returns a copy
@@ -778,10 +779,10 @@ namespace gtd {
             this->rest_c = MEAN_AVG(this->rest_c, other.rest_c); // average coefficient of restitution
             this->mass_ += other.mass_;
             this->radius = cbrtl(this->radius*this->radius*this->radius + other.radius*other.radius*other.radius);
-            if (++rec_counter == recFreq) {
-                this->add_pos_vel_ke();
-                rec_counter = 0;
-            }
+            // if (!(++rec_counter % recFreq)) {
+            //     this->add_pos_vel_ke();
+            //     rec_counter = 0;
+            // }
             return *this;
         }
 #define BODY_FRIEND_DECLARATIONS \
@@ -873,36 +874,36 @@ namespace gtd {
     public:
         /* unfortunately, the constructors cannot be marked constexpr, because it is impossible for any body_counter
          * constructor to be constexpr (since ID must be dynamically determined) */
-        constexpr body() = default;
-        constexpr body(M &&body_mass, R &&body_radius) : mass_{std::move(body_mass)}, radius{std::move(body_radius)} {
+        body() = default;
+        body(M &&body_mass, R &&body_radius) : mass_{std::move(body_mass)}, radius{std::move(body_radius)} {
             check_mass();
             check_radius();
         }
-        constexpr body(const M &body_mass, const R &body_radius) : mass_{body_mass}, radius{body_radius} {
+        body(const M &body_mass, const R &body_radius) : mass_{body_mass}, radius{body_radius} {
             check_mass();
             check_radius();
         }
-        constexpr body(M &&body_mass, R &&body_radius, vector3D<T> &&pos, vector3D<T> &&vel) :
+        body(M &&body_mass, R &&body_radius, vector3D<T> &&pos, vector3D<T> &&vel) :
         mass_{std::move(body_mass)}, radius{std::move(body_radius)}, curr_pos{std::move(pos)}, curr_vel{std::move(vel)}{
             check_mass();
             check_radius();
         }
-        constexpr body(const M &body_mass, const R &body_radius, const vector3D<T> &pos, const vector3D<T> &vel) :
+        body(const M &body_mass, const R &body_radius, const vector3D<T> &pos, const vector3D<T> &vel) :
                 mass_{body_mass}, radius{body_radius}, curr_pos{pos}, curr_vel{vel} {check_mass(); check_radius();}
         template <ull_t rF>
-        constexpr body(const body<M, R, T, rF> &other) :
+        body(const body<M, R, T, rF> &other) :
                 mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos},
                 curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc}, rest_c{other.rest_c}, pe{other.pe} {}
         body(const body<M, R, T, 0> &other) : // cannot be defaulted as would be implicitly deleted
                 mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos},
                 curr_vel{other.curr_vel}, curr_ke{other.curr_ke}, acc{other.acc}, rest_c{other.rest_c}, pe{other.pe} {}
         template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t, ull_t rF>
-        constexpr body(const body<m, r, t, rF> &other) :
+        body(const body<m, r, t, rF> &other) :
                 mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos}, curr_vel{other.curr_vel},
                 curr_ke{other.curr_ke}, acc{other.acc}, rest_c{other.rest_c}, pe{other.pe} {}
         body(body<M, R, T, 0> &&other) noexcept = default;
         template <ull_t rF>
-        constexpr body(body<M, R, T, rF> &&other) noexcept :
+        body(body<M, R, T, rF> &&other) noexcept :
         body_counter{std::move(other)}, mass_{std::move(other.mass_)},
         radius{std::move(other.radius)}, curr_pos{std::move(other.curr_pos)}, curr_vel{std::move(other.curr_vel)},
         curr_ke{std::move(other.curr_ke)}, acc{std::move(other.acc)}, rest_c{other.rest_c}, pe{other.pe} {}
@@ -925,11 +926,27 @@ namespace gtd {
         //     this->rest_c = other.rest_c;
         //     return *this;
         // }
+        // implicit copy assignment operator is deleted, so must define my own:
+        body<M, R, T, 0> &operator=(const body<M, R, T, 0> &other) {
+            if (&other == this)
+                return *this;
+            this->mass_ = other.mass_;
+            this->radius = other.radius;
+            this->curr_pos = other.curr_pos;
+            this->curr_vel = other.curr_vel;
+            this ->curr_ke = other.curr_ke;
+            this->acc = other.acc;
+            this->pe = other.pe;
+            this->rest_c = other.rest_c;
+            return *this;
+        }
         template <ull_t rF>
         body<M, R, T, 0> &operator=(body<M, R, T, rF> &&other) noexcept {
+            // overload resolution would select this function in the case of self-assignment, so must check for this:
             if constexpr (!rF)
                 if (&other == this)
                     return *this;
+            body_counter::operator=(std::move(other));
             this->mass_ = std::move(other.mass_);
             this->radius = std::move(other.radius);
             this->curr_pos = std::move(other.curr_pos);
@@ -942,9 +959,7 @@ namespace gtd {
         }
         template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t, ull_t rF>
         body<M, R, T, 0> &operator=(const body<m, r, t, rF> &other) {
-            if constexpr (std::same_as<body<M, R, T, 0>, body<m, r, t, rF>>)
-                if (&other == this)
-                    return *this;
+            // no need to check for self-assignment here, as overload resolution would never select this for that case
             this->mass_ = other.mass_;
             this->radius = other.radius;
             this->curr_pos = other.curr_pos;
