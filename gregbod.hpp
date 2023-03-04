@@ -9,6 +9,12 @@
 #error "The gregbod.hpp header file is a C++ header file only."
 #endif
 
+#include <cstdint>
+
+#ifndef UINT64_MAX
+#error "64-bit (fixed width) integral data type not available. Compilation failed."
+#endif
+
 #include "gregvec.hpp"
 #include <set>
 #include <fstream>
@@ -91,7 +97,7 @@ namespace gtd {
             return msg.c_str();
         }
     };
-    template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool>
+    template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, uint64_t, uint64_t, bool>
     class system;
     /* body_counter was created because each instantiation of the body subclass with different template parameters is
      * actually a different class, so the count of bodies for each different class template instantiation would be
@@ -100,8 +106,8 @@ namespace gtd {
         /* A class that was created to manage the creation and deletion of unique IDs that each gtd::body is given to
          * ensure one body can be told apart from another. This class is abstract (has a pure virtual destructor) as it
          * should never be instantiated itself. */
-        static inline ull_t count = 0;
-        static inline std::set<ull_t> ids;
+        static inline uint64_t count = 0;
+        static inline std::set<uint64_t> ids;
         /* the below mutex is present to allow body_counter objects to be created concurrently in different threads,
          * without two IDs ever being the same */
         static inline std::mutex id_mutex;
@@ -116,7 +122,7 @@ namespace gtd {
         //     id = *(ids.end()--) + 1;
         // }
     protected:
-        ull_t id; // is immutable after the object has been constructed - unless the object is moved
+        uint64_t id; // is immutable after the object has been constructed - unless the object is moved
     public:
         body_counter() {
             // id = count;
@@ -138,18 +144,27 @@ namespace gtd {
             ++count; // this will prob. cause count to actually be the same as before the call to the constructor, since
         } // ... "other" is likely destroyed at the end of the call, reducing count by 1, so count must be incremented.
         body_counter(const body_counter &other) = delete; // again, all IDs must be unique
-        ull_t get_id() const noexcept {
+        uint64_t get_id() const noexcept {
             return id;
         }
-        static ull_t body_count() noexcept {
+        bool set_id(uint64_t new_id) {
+            std::lock_guard<std::mutex> guard{id_mutex};
+            std::pair<std::set<uint64_t>::iterator, bool> p = ids.insert(new_id);
+            if (!p.second)
+                return false;
+            ids.erase(this->id);
+            this->id = new_id;
+            return true;
+        }
+        static uint64_t body_count() noexcept {
             return count;
         }
-        static std::vector<ull_t> all_ids() {
+        static std::vector<uint64_t> all_ids() {
             return {ids.begin(), ids.end()};
         }
         static void print_all_ids() {
-            ull_t b_count = 0;
-            for (const ull_t &i : ids)
+            uint64_t b_count = 0;
+            for (const uint64_t &i : ids)
                 printf("ID: %llu, count: %llu/%llu\n", i, ++b_count, count);
         }
         virtual ~body_counter() = 0; // pure virtual destructor to make body_counter abstract (see definition below)
@@ -163,32 +178,32 @@ namespace gtd {
             ids.insert(other.id);
             return *this;
         }
-        explicit operator unsigned long long() const noexcept {
-            return this->id; // thus, if desired, a body_counter can be cast to an unsigned long long to get its ID
+        explicit operator uint64_t() const noexcept {
+            return this->id; // thus, if desired, a body_counter can be cast to an uint64_t to get its ID
         }
         /* the first three overloads (for <) are essential as they allow a transparent comparator to be used within any
          * std::set used to store bodies (so that lookup can be performed based on ID and not on a body itself, thus
          * allowing a std::set to be used instead of a std::map) */
         friend bool operator<(const body_counter&, const body_counter&);
-        friend bool operator<(const unsigned long long&, const body_counter&);
-        friend bool operator<(const body_counter&, const unsigned long long&);
+        friend bool operator<(const uint64_t&, const body_counter&);
+        friend bool operator<(const body_counter&, const uint64_t&);
         friend bool operator>(const body_counter&, const body_counter&);
-        friend bool operator>(const unsigned long long&, const body_counter&);
-        friend bool operator>(const body_counter&, const unsigned long long&);
+        friend bool operator>(const uint64_t&, const body_counter&);
+        friend bool operator>(const body_counter&, const uint64_t&);
         friend bool operator<=(const body_counter&, const body_counter&);
-        friend bool operator<=(const unsigned long long&, const body_counter&);
-        friend bool operator<=(const body_counter&, const unsigned long long&);
+        friend bool operator<=(const uint64_t&, const body_counter&);
+        friend bool operator<=(const body_counter&, const uint64_t&);
         friend bool operator>=(const body_counter&, const body_counter&);
-        friend bool operator>=(const unsigned long long&, const body_counter&);
-        friend bool operator>=(const body_counter&, const unsigned long long&);
+        friend bool operator>=(const uint64_t&, const body_counter&);
+        friend bool operator>=(const body_counter&, const uint64_t&);
         friend bool operator==(const body_counter&, const body_counter&);
-        friend bool operator==(const unsigned long long&, const body_counter&);
-        friend bool operator==(const body_counter&, const unsigned long long&);
+        friend bool operator==(const uint64_t&, const body_counter&);
+        friend bool operator==(const body_counter&, const uint64_t&);
         friend bool operator!=(const body_counter&, const body_counter&);
-        friend bool operator!=(const unsigned long long&, const body_counter&);
-        friend bool operator!=(const body_counter&, const unsigned long long&);
+        friend bool operator!=(const uint64_t&, const body_counter&);
+        friend bool operator!=(const body_counter&, const uint64_t&);
         friend std::ostream &operator<<(std::ostream&, const body_counter&);
-        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, uint64_t, uint64_t, bool>
         friend class system;
     };
     body_counter::~body_counter() {
@@ -199,62 +214,62 @@ namespace gtd {
     bool operator<(const body_counter &bc1, const body_counter &bc2) {
         return bc1.id < bc2.id;
     }
-    bool operator<(const unsigned long long &ID, const body_counter &bc) {
+    bool operator<(const uint64_t &ID, const body_counter &bc) {
         return ID < bc.id;
     }
-    bool operator<(const body_counter &bc, const unsigned long long &ID) {
+    bool operator<(const body_counter &bc, const uint64_t &ID) {
         return bc.id < ID;
     }
     bool operator>(const body_counter &bc1, const body_counter &bc2) {
         return bc1.id > bc2.id;
     }
-    bool operator>(const unsigned long long &ID, const body_counter &bc) {
+    bool operator>(const uint64_t &ID, const body_counter &bc) {
         return ID > bc.id;
     }
-    bool operator>(const body_counter &bc, const unsigned long long &ID) {
+    bool operator>(const body_counter &bc, const uint64_t &ID) {
         return bc.id > ID;
     }
     bool operator<=(const body_counter &bc1, const body_counter &bc2) {
         return bc1.id <= bc2.id;
     }
-    bool operator<=(const unsigned long long &ID, const body_counter &bc) {
+    bool operator<=(const uint64_t &ID, const body_counter &bc) {
         return ID <= bc.id;
     }
-    bool operator<=(const body_counter &bc, const unsigned long long &ID) {
+    bool operator<=(const body_counter &bc, const uint64_t &ID) {
         return bc.id <= ID;
     }
     bool operator>=(const body_counter &bc1, const body_counter &bc2) {
         return bc1.id >= bc2.id;
     }
-    bool operator>=(const unsigned long long &ID, const body_counter &bc) {
+    bool operator>=(const uint64_t &ID, const body_counter &bc) {
         return ID >= bc.id;
     }
-    bool operator>=(const body_counter &bc, const unsigned long long &ID) {
+    bool operator>=(const body_counter &bc, const uint64_t &ID) {
         return bc.id >= ID;
     }
     bool operator==(const body_counter &bc1, const body_counter &bc2) {
         return bc1.id == bc2.id;
     }
-    bool operator==(const unsigned long long &ID, const body_counter &bc) {
+    bool operator==(const uint64_t &ID, const body_counter &bc) {
         return ID == bc.id;
     }
-    bool operator==(const body_counter &bc, const unsigned long long &ID) {
+    bool operator==(const body_counter &bc, const uint64_t &ID) {
         return bc.id == ID;
     }
     bool operator!=(const body_counter &bc1, const body_counter &bc2) {
         return bc1.id != bc2.id;
     }
-    bool operator!=(const unsigned long long &ID, const body_counter &bc) {
+    bool operator!=(const uint64_t &ID, const body_counter &bc) {
         return ID != bc.id;
     }
-    bool operator!=(const body_counter &bc, const unsigned long long &ID) {
+    bool operator!=(const body_counter &bc, const uint64_t &ID) {
         return bc.id != ID;
     }
     std::ostream &operator<<(std::ostream &os, const body_counter &bc) {
         return os << "[gtd::body_counter@" << &bc << ":id=" << bc.id << ']';
     }
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
-              unsigned long long recFreq = 1>
+            uint64_t recFreq = 1>
     class body : public body_counter {
         /* A body object is one which represents a real, spherical object in 3D space. It has a mass & radius, as well
          * as a position & velocity at any given time. It is able to record its entire history of where it has been. */
@@ -283,7 +298,7 @@ namespace gtd {
         std::vector<vector3D<T>> positions; // these std::vectors will hold all the positions and velocities of the
         std::vector<vector3D<T>> velocities; // ... body as it moves
         std::vector<K> energies;
-        unsigned long long rec_counter = 0;
+        uint64_t rec_counter = 0;
         mutable std::vector<std::tuple<const vector3D<T>&, const vector3D<T>&, const K&>> cref;
         typedef typename std::vector<vector3D<T>>::size_type vec_s_t;
         static inline String def_path = get_home_path<String>() + FILE_SEP + "Body_Trajectory_";

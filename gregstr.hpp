@@ -1964,10 +1964,10 @@ namespace gtd {
     }
     inline void clear_cin() {
         std::cin.clear();
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // discards characters until newline found
     }
-    template<typename PATH>
-    PATH get_home_path();
+    template<typename charT = char*>
+    charT get_home_path() = delete;
     template<> char *get_home_path<char *>() {
 #ifdef _WIN32
         static char home_path_c[MAX_PATH];

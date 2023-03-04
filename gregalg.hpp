@@ -296,7 +296,7 @@ namespace gtd {
             *src++ = 0;
         }
     }
-    void copy(void *dest, void *source, size_t size) {
+    void copy(void *dest, const void *source, size_t size) {
         if (!dest || !source || !size)
             return;
         char *dst = (char *) dest;

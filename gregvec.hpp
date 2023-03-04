@@ -157,9 +157,9 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         constexpr vector2D() noexcept = default;
         constexpr vector2D(const vector2D<T> &other) : x{other.x}, y{other.y} {}
         constexpr vector2D(vector2D<T> &&other) noexcept : x{std::move(other.x)}, y{std::move(other.y)} {}
-        template <typename U> requires isConvertible<U, T>
+        template <isConvertible<T> U>
         constexpr vector2D(const vector2D<U> &other) noexcept : x{(T) other.x}, y{(T) other.y} {}
-        template <typename U> requires isConvertible<U, T>
+        template <isConvertible<T> U>
         constexpr vector2D(const vector2D<U> &&other) noexcept : x{(T) other.x}, y{(T) other.y} {}
         constexpr vector2D(const T &x_component, const T &y_component) noexcept : x{x_component}, y{y_component} {}
         constexpr vector2D(T &&x_component, T &&y_component) noexcept :

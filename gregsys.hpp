@@ -107,7 +107,7 @@ else \
 namespace gtd {
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
               bool prog = false, bool mergeOverlappingBodies = false, int collisions = 0,
-              ull_t memFreq = 0, ull_t fileFreq = 1, bool binaryFile = true>
+              uint64_t memFreq = 0, uint64_t fileFreq = 1, bool binaryFile = true>
     class system {
         /* The system class represents a system in 3D space that is composed of bodies which interact with each other
          * gravitationally (and through contact force in case of collisions - if this option is specified using the
@@ -146,7 +146,7 @@ namespace gtd {
         using vec_size_t = typename std::vector<bod_t>::size_type;
         using sys_t = system<M, R, T, prog, mergeOverlappingBodies, collisions, memFreq, fileFreq, binaryFile>;
         using mom_t = decltype(M{}*T{});
-        std::vector<bod_t> bods; // not using set or map as need fast random access to bodies
+        std::vector<bod_t> bods; // not using set, map or list as need fast random access to bodies
         // std::set<bod_t, std::less<>> del_bods; // set to store bodies removed from system after collision mergers
         /* Here I declare a std::set to store bodies that are removed from the evolution in the case of a merger. I have
          * declared the type of the comparator used by the std::set object to be that of an anonymous lambda type, which
@@ -156,29 +156,30 @@ namespace gtd {
         //         decltype([](const std::pair<ull_t, bod_t> &p1, const std::pair<ull_t, bod_t> &p2){
         //             return p1.first == p2.first ? p1.second < p2.second : p1.first < p2.first;
         //         })> del_bods;
-        static inline auto pair_bods_func = [](const std::pair<ull_t, bod_t> &p1, const std::pair<ull_t, bod_t> &p2) {
+        static inline auto pair_bods_func = [](const std::pair<uint64_t, bod_t> &p1,
+                                               const std::pair<uint64_t, bod_t> &p2) {
             return p1.first == p2.first ? p1.second < p2.second : p1.first < p2.first;
         };
         union {
             std::set<bod_t, std::less<>> *del_bods_n;
-            std::set<std::pair<ull_t, bod_t>, decltype(pair_bods_func)> *del_bods_m;
+            std::set<std::pair<uint64_t, bod_t>, decltype(pair_bods_func)> *del_bods_m;
         };
         long double dt = 1;
         long double half_dt = dt/2; // I gave it its own variable, since it is a commonly used quantity
-        ull_t iterations = 1'000;
+        uint64_t iterations = 1'000;
         long double prev_dt{}; // used in methods called after evolve(), since could be changed by setter
         long double time_elapsed{};
-        ull_t prev_iterations{}; // same here
+        uint64_t prev_iterations{}; // same here
         mom_t min_tot_com_mom{BILLION*10}; // minimum sum of magnitudes of COM momenta for two bodies to merge
         // using P = decltype((G*std::declval<M>()*std::declval<M>())/std::declval<T>()); // will be long double
-        ull_t steps{}; // defined as an instance variable since it's required in numerous functions
+        uint64_t steps{}; // defined as an instance variable since it's required in numerous functions
         T total_pe{}; // these 5 variables are defined as instance variables to avoid their redefinition in many funcs
         T total_ke{};
-        ull_t inner{};
-        ull_t outer{};
-        vec_size_t num_bods{};
-        std::map<ull_t, std::vector<T>> pe; // to store potential energies of bodies
-        std::map<ull_t, std::vector<T>> energy; // total energy for each body at each iteration (KE + PE)
+        uint64_t inner{};
+        uint64_t outer{};
+        mutable vec_size_t num_bods{};
+        std::map<uint64_t, std::vector<T>> pe; // to store potential energies of bodies
+        std::map<uint64_t, std::vector<T>> energy; // total energy for each body at each iteration (KE + PE)
         //std::map<unsigned long long, std::vector<T>> del_ke; // map to store KE vectors of deleted bodies from mergers
         /* it would have been nice to use std::maps to store potential and total energies for all bodies, as it would
          * have allowed lookup by body_id, but its lookup complexity is O(log(N)), whereas accessing an element in a
@@ -186,13 +187,14 @@ namespace gtd {
         std::vector<T> tot_pe; // total potential energy for the entire system at each iteration
         std::vector<T> tot_ke; // total kinetic energy for the entire system at each iteration
         std::vector<T> tot_e; // total energy for the entire system at each iteration (KE + PE)
-        bool evolved = false;
+        bool evolved = false; // indicates whether a gtd::system object is in an evolved state
+        mutable std::ofstream *stream = nullptr; // to write the system's data to a file
         static inline String def_path = get_home_path<String>() + FILE_SEP + "System_Trajectories_";
-        static inline ull_t to_ull(String &&str) {
+        static inline uint64_t to_ull(String &&str) {
             if (!str.isnumeric())
                 return -1;
             // str.strip();
-            ull_t total = 0;
+            uint64_t total = 0;
             for (const char &c : str) {
                 total *= 10;
                 total += c - 48;
@@ -211,21 +213,34 @@ namespace gtd {
             str.strip("MmDdTt ");
             size_t colon_index = str.find(':');
             size_t comma_index = str.find(',');
-            unsigned long long m_denom = to_ull(str.substr(0, colon_index)); // denominator
-            unsigned long long m_num = to_ull(str.substr(colon_index + 1, comma_index)); // numerator
+            uint64_t m_num = to_ull(str.substr(0, colon_index)); // denominator
+            uint64_t m_denom = to_ull(str.substr(colon_index + 1, comma_index)); // numerator
             str.erase_chars(0, comma_index + 1);
             colon_index = str.find(':');
             comma_index = str.find(',');
-            unsigned long long d_num = to_ull(str.substr(0, colon_index));
-            unsigned long long d_denom = to_ull(str.substr(colon_index + 1, comma_index));
+            uint64_t d_num = to_ull(str.substr(0, colon_index));
+            uint64_t d_denom = to_ull(str.substr(colon_index + 1, comma_index));
             str.erase_chars(0, comma_index + 1);
             colon_index = str.find(':');
             comma_index = str.find(',');
-            unsigned long long t_denom = to_ull(str.substr(0, colon_index));
-            unsigned long long t_num = to_ull(str.substr(colon_index + 1, comma_index));
+            uint64_t t_num = to_ull(str.substr(0, colon_index));
+            uint64_t t_denom = to_ull(str.substr(colon_index + 1, comma_index));
             G *= m_num*d_num*d_num*d_num*t_num*t_num;
             G /= m_denom*d_denom*d_denom*d_denom*t_denom*t_denom;
-            G /= 1000000000000000; // correcting for the original G being 10^(15) times larger than it should be
+            G /= 1'000'000'000'000'000; // correcting for the original G being 10^(15) times larger than it should be
+            if constexpr (fileFreq) {
+                uint64_t *ptr = G_vals();
+                *ptr++ = m_num;
+                *ptr++ = m_denom;
+                *ptr++ = d_num;
+                *ptr++ = d_denom;
+                *ptr++ = t_num;
+                *ptr   = t_denom;
+            }
+        }
+        uint64_t *G_vals() const noexcept {
+            static uint64_t vals[6];
+            return vals;
         }
         void set_set() requires (collisions != 0) {
             if constexpr (memFreq)
@@ -249,17 +264,19 @@ namespace gtd {
         void clear_bodies(vec_size_t &&as_of) requires (memFreq != 0) {
             clear_bodies(as_of);
         }
-        void check_overlap() {
+        void check_overlap(uint64_t as_of = 0) {
             bod_t *outer_b;
             bod_t *inner_b;
             num_bods = bods.size();
-            for (outer = 0; outer < num_bods; ++outer) {
+            for (outer = as_of; outer < num_bods; ++outer) {
                 outer_b = bods.data() + outer;
+                inner_b = outer_b + 1;
                 for (inner = outer + 1; inner < num_bods; ++inner) {
                     if constexpr (mergeOverlappingBodies)
-                        if (inner == outer) // will be true at some point if there has been a merger
+                        if (inner == outer) { // will be true at some point if there has been a merger
+                            ++inner_b;
                             continue;
-                    inner_b = bods.data() + inner;
+                        }
                     if ((outer_b->curr_pos - inner_b->curr_pos).magnitude() < outer_b->radius + inner_b->radius) {
                         if constexpr (!mergeOverlappingBodies) {
                             String str = "The bodies with id=";
@@ -269,9 +286,16 @@ namespace gtd {
                         }
                         *outer_b += *inner_b; // merges the two overlapping bodies
                         bods.erase(bods.begin() + inner); // thus the number of total bodies is reduced by 1
+                        if (inner < outer) {
+                            --outer;
+                            --outer_b;
+                        }
                         inner = 0; // have to recalculate possible mergers for newly created body
+                        inner_b = bods.data();
                         --num_bods;
+                        continue;
                     }
+                    ++inner_b;
                 }
             }
         }
@@ -311,10 +335,10 @@ namespace gtd {
         template <bool mem, bool file>
         void take_modified_euler_step(const std::vector<std::tuple<vector3D<T>, vector3D<T>, vector3D<T>>>
                                       &predicted_vals) {
-            unsigned long long count = 0;
+            outer = 0;
             for (bod_t &bod : bods) {
-                bod.curr_pos += half_dt*(bod.curr_vel + std::get<1>(predicted_vals[count]));
-                bod.curr_vel += half_dt*(bod.acc + std::get<2>(predicted_vals[count++]));
+                bod.curr_pos += half_dt*(bod.curr_vel + std::get<1>(predicted_vals[outer]));
+                bod.curr_vel += half_dt*(bod.acc + std::get<2>(predicted_vals[outer++]));
                 if constexpr (mem)
                     bod.add_pos_vel_ke();
                 if constexpr (file) {
@@ -325,10 +349,10 @@ namespace gtd {
         template <bool mem, bool file>
         void take_midpoint_step(const std::vector<std::tuple<vector3D<T>, vector3D<T>, vector3D<T>>>
                                 &predicted_vals) {
-            unsigned long long count = 0;
+            outer = 0;
             for (bod_t &bod : bods) {
-                bod.curr_pos += dt*std::get<1>(predicted_vals[count]);
-                bod.curr_vel += dt*std::get<2>(predicted_vals[count++]);
+                bod.curr_pos += dt*std::get<1>(predicted_vals[outer]);
+                bod.curr_vel += dt*std::get<2>(predicted_vals[outer++]);
                 if constexpr (mem)
                     bod.add_pos_vel_ke();
                 if constexpr (file) {
@@ -337,7 +361,7 @@ namespace gtd {
             }
         }
         void create_energy_vectors() requires (memFreq != 0) {
-            unsigned long long iters_p1 = (iterations + 1)/memFreq;
+            uint64_t iters_p1 = (iterations + 1)/memFreq;
             // pe.resize(bods_size);
             // energy.resize(bods_size);
             pe.clear();
@@ -544,7 +568,7 @@ namespace gtd {
             bool first_merged;
             bod_t *merged;
             alignas(bod_t) char fake_body[sizeof(bod_t)];
-            static std::set<ull_t> merged_ids;
+            static std::set<uint64_t> merged_ids;
             merged_ids.clear();
             while (outer < num_bods) {
                 first_merged = false;
@@ -736,13 +760,13 @@ namespace gtd {
         std::vector<bod_t>& get_bods() {
             return this->bods;
         }
-        std::set<std::pair<ull_t, bod_t>, decltype(pair_bods_func)>& get_del_bods() requires (memFreq != 0) {
+        std::set<std::pair<uint64_t, bod_t>, decltype(pair_bods_func)>& get_del_bods() requires (memFreq != 0) {
             return *this->del_bods_m;
         }
     private:
         static inline bool check_option(int option) noexcept {
-            unsigned short loword = option & 0x0000ffff;
-            unsigned short hiword = option >> 16;
+            uint16_t loword = option & 0x0000ffff;
+            uint16_t hiword = option >> 16;
             return !(loword & (loword - 1)) || !loword || loword > rk4 ||
                    !(hiword & (hiword - 1)) || hiword > 2;
         }
@@ -768,6 +792,39 @@ namespace gtd {
             RESET_TXT_FLAGS << std::endl;
         }
     public:
+        typedef struct nsys_file_header {
+            const char signature[2] = {'N', 'S'};
+            const char d_types = 1 + (std::floating_point<M> << 1) +
+                                     (std::floating_point<R> << 2) +
+                                     (std::floating_point<T> << 3) +
+                                     (std::signed_integral<M> << 4) +
+                                     (std::signed_integral<R> << 5) +
+                                     (std::signed_integral<T> << 6);
+            const char time_size = sizeof(long double);
+            char time_point[16]{};
+            const unsigned char M_size = sizeof(M);
+            const unsigned char R_size = sizeof(R);
+            const unsigned char T_size = sizeof(T);
+            const unsigned char rest_coeff_size = sizeof(long double);
+            uint64_t m_num{};
+            uint64_t m_denom{};
+            uint64_t d_num{};
+            uint64_t d_denom{};
+            uint64_t t_num{};
+            uint64_t t_denom{};
+            uint64_t num_bodies{};
+        } nsys_header;
+        typedef struct nsys_file_chunk {
+            long double r_coeff{};
+            M mass{};
+            R radius{};
+            T xpos{};
+            T ypos{};
+            T zpos{};
+            T xvel{};
+            T yvel{};
+            T zvel{};
+        } nsys_chunk;
         system() : G{G_SI} {this->check_coll(); if constexpr (collisions) this->set_set();}
         system(const std::initializer_list<bod_t> &list) : bods{list}, G{G_SI} {
             check_overlap();
@@ -785,7 +842,7 @@ namespace gtd {
             if constexpr (collisions)
                 this->set_set();
         }
-        explicit system(long double timestep, ull_t num_iterations, const char *units_format) :
+        explicit system(long double timestep, uint64_t num_iterations, const char *units_format) :
                 dt{timestep}, iterations{num_iterations} {
             /* units_format is a string with 3 ratios: it specifies the ratio of the units used for mass, distance and
              * time to kg, metres and seconds (SI units), respectively. This means any units can be used. */
@@ -794,9 +851,9 @@ namespace gtd {
             if constexpr (collisions)
                 this->set_set();
         }
-        template <ull_t mF>
+        template <uint64_t mF>
         system(const std::vector<body<M, R, T, mF>> &bodies, long double timestep = 1,
-               ull_t num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
+               uint64_t num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
                bods{bodies.begin(), bodies.end()}, dt{timestep}, iterations{num_iterations} {
             /* units_format is a string with 3 ratios: it specifies the ratio of the units used for mass, distance and
              * time to kg, metres and seconds (SI units), respectively. This means any units can be used. */
@@ -809,7 +866,7 @@ namespace gtd {
                 this->set_set();
         }
         system(std::vector<bod_t> &&bodies, long double timestep = 1,
-               ull_t num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
+               uint64_t num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
                bods{std::move(bodies)}, dt{timestep}, iterations{num_iterations} {
             check_overlap();
             check_coll();
@@ -819,9 +876,9 @@ namespace gtd {
             if constexpr (collisions)
                 this->set_set();
         }
-        template <ull_t mF>
+        template <uint64_t mF>
         system(std::vector<body<M, R, T, mF>> &&bodies, long double timestep = 1,
-               ull_t num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
+               uint64_t num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
                dt{timestep}, iterations{num_iterations} {
             std::for_each(bodies.begin(), bodies.end(),
                           [this](body<M, R, T, mF> &b){bods.emplace_back(std::move(b));});
@@ -835,7 +892,7 @@ namespace gtd {
         }
         /* copy constructors are made to only copy the variables seen below: it does not make sense for a new system
          * object (even when copy-constructed) to be "evolved" if it has not gone through the evolution itself */
-        template <bool prg, bool mrg, int coll, ull_t mF, ull_t fF, bool bF>
+        template <bool prg, bool mrg, int coll, uint64_t mF, uint64_t fF, bool bF>
         // so a system can be constructed from another without same checks
         system(const system<M, R, T, prg, mrg, coll, mF, fF, bF> &other) :
                bods{other.bods.begin(), other.bods.end()}, dt{other.dt}, iterations{other.iterations}, G{other.G} {
@@ -846,7 +903,7 @@ namespace gtd {
             if constexpr (collisions)
                 this->set_set();
         }
-        template <bool prg, bool mrg, int coll, ull_t fF, bool bF>
+        template <bool prg, bool mrg, int coll, uint64_t fF, bool bF>
         system(system<M, R, T, prg, mrg, coll, memFreq, fF, bF> &&other) :
                bods{std::move(other.bods)}, dt{other.dt}, iterations{other.iterations}, G{other.G} {
             check_overlap();
@@ -856,7 +913,7 @@ namespace gtd {
             if constexpr (collisions)
                 this->set_set();
         }
-        template <bool prg, bool mrg, int coll, ull_t mF, ull_t fF, bool bF>
+        template <bool prg, bool mrg, int coll, uint64_t mF, uint64_t fF, bool bF>
         system(system<M, R, T, prg, mrg, coll, mF, fF, bF> &&other) :
                dt{other.dt}, iterations{other.iterations}, G{other.G} {
             std::for_each(other.bods.begin(), other.bods.end(),
@@ -871,14 +928,11 @@ namespace gtd {
         vec_size_t num_bodies() {
             return bods.size();
         }
-        bool set_iterations(const ull_t &number) noexcept {
+        bool set_iterations(uint64_t number) noexcept {
             if (!number) // cannot have zero iterations
                 return false;
             iterations = number;
             return true;
-        }
-        bool set_iterations(const ull_t &&number) noexcept {
-            return set_iterations(number);
         }
         bool set_timestep(const long double &delta_t) noexcept {
             if (delta_t <= 0)
@@ -941,14 +995,14 @@ namespace gtd {
                 return this->bods.front();
             throw std::logic_error{"gtd::system<>::front cannot be called on an empty gtd::system object.\n"};
         }
-        const bod_t &get_body(unsigned long long id) const {
+        const bod_t &get_body(uint64_t id) const {
             for (const auto &b : *this) // this is where it would be nice to be using a set!!
                 if (b.id == id)
                     return b;
             throw std::invalid_argument("The id passed does not correspond to any body present in this system "
                                         "object.\n");
         }
-        bool remove_body(unsigned long long id) {
+        bool remove_body(uint64_t id) {
             auto end_it = bods.cend();
             for (typename std::vector<bod_t>::const_iterator it = bods.cbegin(); it < end_it; ++it)
                 if ((*it).id == id) {
@@ -972,6 +1026,7 @@ namespace gtd {
             tot_ke.clear();
             tot_e.clear();
             evolved = false;
+            time_elapsed = 0;
         }
         /* reset() deletes the evolution of the bodies AND returns them to their original positions, velocities, and
          * kinetic energies, whilst clear_evolution() deletes the evolution BUT retains the current positions,
@@ -990,6 +1045,7 @@ namespace gtd {
             tot_ke.clear();
             tot_e.clear();
             evolved = false;
+            time_elapsed = 0;
         }
     private:
         const char *&method_str() requires (prog) {
@@ -1347,6 +1403,47 @@ namespace gtd {
         }
         auto crend() const {
             return bods.crend();
+        }
+        std::streamoff to_nsys(const char *path) const requires (std::is_fundamental_v<M> &&
+                                                                 std::is_fundamental_v<R> &&
+                                                                 std::is_fundamental_v<T> && CHAR_BIT == 8) {
+            static nsys_header header;
+            static nsys_chunk chunk;
+            static char *ptr = nullptr;
+            static std::ofstream::pos_type tell;
+            if (path == nullptr)
+                return 0;
+            if (bods.empty())
+                return 0;
+            stream = new std::ofstream{path, std::ios_base::trunc | std::ios_base::binary};
+            if (!*stream)
+                return 0;
+            num_bods = this->bods.size();
+            copy(&header.time_point, &this->time_elapsed, sizeof(long double));
+            copy(&header.m_num, this->G_vals(), 6*sizeof(uint64_t)); // I include sizeof just so intent is clear
+            header.num_bodies = num_bods;
+            stream->write((char *) &header, sizeof(nsys_header));
+            for (const bod_t &bod : bods) {
+                chunk.r_coeff = bod.rest_c;
+                chunk.mass = bod.mass_;
+                chunk.radius = bod.radius;
+                chunk.xpos = bod.curr_pos.x;
+                chunk.ypos = bod.curr_pos.y;
+                chunk.zpos = bod.curr_pos.z;
+                chunk.xvel = bod.curr_vel.x;
+                chunk.yvel = bod.curr_vel.y;
+                chunk.zvel = bod.curr_vel.z;
+                stream->write((char *) &chunk, sizeof(nsys_chunk));
+            }
+            tell = stream->tellp();
+            if (char rem = (char) (tell % 4); rem) {
+                stream->write("\0\0\0", 4 - rem); // align EOF with dword boundary - at most 3 bytes would be written
+                return tell + (std::streamoff) (4 - rem);
+            }
+            return tell;
+        }
+        static sys_t load_nsys(const char *path) {
+
         }
         bool write_trajectories(const String &path = def_path, bool binary = false) requires (memFreq != 0) {
             /* This method can only be called if memFreq is non-zero, or else there would be no history to output. */
