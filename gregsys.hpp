@@ -105,6 +105,11 @@ else \
         bod.acc.make_zero();
 
 namespace gtd {
+    class nsys_load_error : public nbody_error {
+    public:
+        nsys_load_error() : nbody_error{"Error loading N-body data from .nsys file.\n"} {}
+        explicit nsys_load_error(const char *msg) : nbody_error{msg} {}
+    };
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
               bool prog = false, bool mergeOverlappingBodies = false, int collisions = 0,
               uint64_t memFreq = 0, uint64_t fileFreq = 1, bool binaryFile = true>
@@ -134,14 +139,14 @@ namespace gtd {
         static constexpr int leapfrog_dkd = 32;
         static constexpr int rk4 = 64;
         static constexpr int rk3_8 = 128;
-        static constexpr int barnes_hut = 65536; // static constants to determine the force approx. method to use
-        static constexpr int fast_multipole = 131072;
+        static constexpr int barnes_hut = 65'536; // static constants to determine the force approx. method to use
+        static constexpr int fast_multipole = 131'072;
         static constexpr int no_coll_check = 0;
         static constexpr int overlap_coll_check = 3;
         static constexpr int pred_coll_check = 7;
-        static constexpr long double G_SI = 0.00000000006743; // G in SI units (m^3 kg^-1 s^-2)
+        static constexpr long double G_SI = 0.000'000'000'066'743; // G in SI units (m^3 kg^-1 s^-2)
     private: // G, below, has not been made a static constant as it varies between objects, depending on units passed
-        long double G = 66743; // Newtonian constant of Gravitation (10^(-15) m^3 kg^-1 s^-2)
+        long double G = 66'743; // Newtonian constant of Gravitation (10^(-15) m^3 kg^-1 s^-2)
         using bod_t = body<M, R, T, memFreq>;
         using vec_size_t = typename std::vector<bod_t>::size_type;
         using sys_t = system<M, R, T, prog, mergeOverlappingBodies, collisions, memFreq, fileFreq, binaryFile>;
@@ -188,12 +193,15 @@ namespace gtd {
         std::vector<T> tot_ke; // total kinetic energy for the entire system at each iteration
         std::vector<T> tot_e; // total energy for the entire system at each iteration (KE + PE)
         bool evolved = false; // indicates whether a gtd::system object is in an evolved state
-        mutable std::ofstream *stream = nullptr; // to write the system's data to a file
+        uint64_t *G_vals = new uint64_t[6];
+        union {
+            mutable std::ofstream *ostream = nullptr; // to write the system's data to a file
+            mutable std::ifstream *istream; // to read data from .nsys files
+        };
         static inline String def_path = get_home_path<String>() + FILE_SEP + "System_Trajectories_";
         static inline uint64_t to_ull(String &&str) {
             if (!str.isnumeric())
                 return -1;
-            // str.strip();
             uint64_t total = 0;
             for (const char &c : str) {
                 total *= 10;
@@ -202,19 +210,21 @@ namespace gtd {
             return total;
         }
         void parse_units_format(String &&str) {
-            if (!std::regex_match(str.c_str(), std::regex(R"(^\s*(m|M)\s*\d{1,18}\s*:\s*\d{1,18}\s*,\s*(d|D)\s*\d{1,18}\s*:\s*\d{1,18}\s*,\s*(t|T)\s*\d{1,18}\s*:\s*\d{1,18}\s*$)"))) {
+            if (!std::regex_match(str.c_str(), std::regex(R"(^\s*(m|M)\s*(?=\d{1,18}\s*:)\d*[1-9]+\d*\s*:\s*(?=\d{1,18}\s*,)\d*[1-9]+\d*\s*,\s*(d|D)\s*(?=\d{1,18}\s*:)\d*[1-9]+\d*\s*:\s*(?=\d{1,18}\s*,)\d*[1-9]+\d*\s*,\s*(t|T)\s*(?=\d{1,18}\s*:)\d*[1-9]+\d*\s*:\s*(?=\d{1,18}\s*$)\d*[1-9]+\d*\s*$)"))) {
                 str.append_front("The units_format string passed, \"").append_back("\", does not match the format "
                                                                                    "required:\n\"Ma:b,Dc:x,Ty:z\", "
                                                                                    "where 'a', 'b', 'c', 'x', 'y', and "
-                                                                                   "'z' represent any integer number of"
-                                                                                   " 1-18 characters.");
+                                                                                   "'z' represent any positive integer "
+                                                                                   "number of 1-18 characters starting "
+                                                                                   "with at least one non-zero "
+                                                                                   "character.\n");
                 throw std::invalid_argument(str.c_str());
             }
             str.strip("MmDdTt ");
             size_t colon_index = str.find(':');
             size_t comma_index = str.find(',');
-            uint64_t m_num = to_ull(str.substr(0, colon_index)); // denominator
-            uint64_t m_denom = to_ull(str.substr(colon_index + 1, comma_index)); // numerator
+            uint64_t m_denom = to_ull(str.substr(0, colon_index)); // denominator
+            uint64_t m_num = to_ull(str.substr(colon_index + 1, comma_index)); // numerator
             str.erase_chars(0, comma_index + 1);
             colon_index = str.find(':');
             comma_index = str.find(',');
@@ -223,24 +233,19 @@ namespace gtd {
             str.erase_chars(0, comma_index + 1);
             colon_index = str.find(':');
             comma_index = str.find(',');
-            uint64_t t_num = to_ull(str.substr(0, colon_index));
-            uint64_t t_denom = to_ull(str.substr(colon_index + 1, comma_index));
+            uint64_t t_denom = to_ull(str.substr(0, colon_index));
+            uint64_t t_num = to_ull(str.substr(colon_index + 1, comma_index));
+            G = 66'743; // 10^(-15) m^3 kg^-1 s^-2
             G *= m_num*d_num*d_num*d_num*t_num*t_num;
             G /= m_denom*d_denom*d_denom*d_denom*t_denom*t_denom;
             G /= 1'000'000'000'000'000; // correcting for the original G being 10^(15) times larger than it should be
-            if constexpr (fileFreq) {
-                uint64_t *ptr = G_vals();
-                *ptr++ = m_num;
-                *ptr++ = m_denom;
-                *ptr++ = d_num;
-                *ptr++ = d_denom;
-                *ptr++ = t_num;
-                *ptr   = t_denom;
-            }
-        }
-        uint64_t *G_vals() const noexcept {
-            static uint64_t vals[6];
-            return vals;
+            *G_vals++ = m_num;
+            *G_vals++ = m_denom;
+            *G_vals++ = d_num;
+            *G_vals++ = d_denom;
+            *G_vals++ = t_num;
+            *G_vals = t_denom;
+            G_vals -= 5;
         }
         void set_set() requires (collisions != 0) {
             if constexpr (memFreq)
@@ -264,11 +269,11 @@ namespace gtd {
         void clear_bodies(vec_size_t &&as_of) requires (memFreq != 0) {
             clear_bodies(as_of);
         }
-        void check_overlap(uint64_t as_of = 0) {
+        void check_overlap() {
             bod_t *outer_b;
             bod_t *inner_b;
             num_bods = bods.size();
-            for (outer = as_of; outer < num_bods; ++outer) {
+            for (outer = 0; outer < num_bods; ++outer) {
                 outer_b = bods.data() + outer;
                 inner_b = outer_b + 1;
                 for (inner = outer + 1; inner < num_bods; ++inner) {
@@ -764,6 +769,175 @@ namespace gtd {
             return *this->del_bods_m;
         }
     private:
+        // path is guaranteed not to be nullptr here:
+        void load_from_nsys(const char *path) requires (std::is_fundamental_v<M> &&
+                                                        std::is_fundamental_v<R> &&
+                                                        std::is_fundamental_v<T> && CHAR_BIT == 8) {
+#ifndef _WIN32
+            /* Unfortunately, there is absolutely no POSIX-conforming standard way of ensuring that files larger than
+             * 2GB can be worked with. The size of off_t can be checked to ensure it is 64 bits wide, but nothing can be
+             * done if it is not. There are many non-standard extensions, such as defining the _FILE_OFFSET_BITS macro
+             * as 64 (as a GNU extension), but as these are not part of the standard, I do not include them. */
+            struct stat buffer{};
+            if (stat(path, &buffer) == -1)
+                throw nsys_load_error{"Error obtaining .nsys file information. No data loaded.\n"};
+            if (!S_ISREG(buffer.st_mode))
+                throw nsys_load_error{".nsys file provided is not a regular file. Could not load data.\n"};
+            if (buffer.st_size < sizeof(nsys_header))
+                throw nsys_load_error{"Insufficient .nsys file size. No data loaded.\n"};
+#else
+            WIN32_FILE_ATTRIBUTE_DATA buffer{};
+            if (!GetFileAttributesExA(path, GetFileExInfoStandard, &buffer))
+                throw nsys_load_error{"Error obtaining .nsys file attributes. No n-body data loaded.\n"};
+            if (buffer.dwFileAttributes != FILE_ATTRIBUTE_NORMAL)
+                throw nsys_load_error{".nsys file provided is not a regular file. No data loaded.\n"};
+            uint64_t fileSize = buffer.dwFileSizeLow + (buffer.dwFileSizeHigh << 32);
+            if (fileSize < sizeof(nsys_header))
+                throw nsys_load_error{".nsys file size insufficient. Could not load data."};
+#endif
+            istream = new std::ifstream{path, std::ios_base::in | std::ios_base::trunc | std::ios_base::binary};
+            if (!*istream) {
+                delete istream;
+                throw nsys_load_error{"Error opening .nsys file. Could not load data.\n"};
+            }
+            nsys_header header;
+            istream->read((char *) &header, sizeof(nsys_header));
+            if (header.signature[0] != 'N' && header.signature[1] != 'S') {
+                delete istream;
+                throw nsys_load_error{"Invalid .nsys format: invalid header.\n"};
+            }
+            if ((header.d_types & 0b1000000) != 0) { // 0b10000000 == 128, but I use the binary repr. for clarity
+                delete istream;
+                throw nsys_load_error{"Invalid .nsys format: msb occupied in d_types field (should be zero).\n"};
+            } // the following macro saves about 60 lines of code
+#define NSYS_TYPE_CHECK(type, bin_num1, bin_num2, str) \
+            if constexpr (std::floating_point<type>) { \
+                if (!(header.d_types & bin_num1)) { \
+                    delete istream; \
+                    throw nsys_load_error{"Invalid .nsys format: d_types field states that "#str" values are stored in"\
+                                          " floating-point format, but template parameter "#type" is integral.\n"}; \
+                } \
+            } \
+            else if constexpr (std::signed_integral<type>) { \
+                if (header.d_types & bin_num1) { \
+                    delete istream; \
+                    throw nsys_load_error{"Invalid .nsys format: d_types field states that "#str" values are stored in"\
+                                          " floating-point format, but template parameter "#type" is integral.\n"}; \
+                }/* I have a separate conditional for the case below so that a different error message can be logged */\
+                if (!(header.d_types & bin_num2)) { \
+                    delete istream; \
+                    throw nsys_load_error{"Invalid .nsys format: d_types field states that "#str" values are stored in"\
+                                          " unsigned integral format, but template parameter "#type" is signed " \
+                                          "integral.\n"}; \
+                } \
+            } \
+            else { \
+                if (header.d_types & bin_num1) { \
+                    delete istream; \
+                    throw nsys_load_error{"Invalid .nsys format: d_types field states that "#str" values are stored in"\
+                                          " floating-point format, but template parameter "#type" is integral.\n"}; \
+                } \
+                if (header.d_types & bin_num2) { \
+                    delete istream; \
+                    throw nsys_load_error{"Invalid .nsys format: d_types field states that "#str" values are stored in"\
+                                          "signed integral format, but template parameter "#type" is unsigned " \
+                                          "integral.\n"}; \
+                } \
+            }
+            NSYS_TYPE_CHECK(M, 0b00000010, 0b00010000, mass)
+            NSYS_TYPE_CHECK(R, 0b00000100, 0b00100000, radius)
+            NSYS_TYPE_CHECK(T, 0b00001000, 0b01000000, position and velocity)
+            switch (header.rest_coeff_size) {
+                case sizeof(float): { // almost certainly == 4
+                    if constexpr (sizeof(float) == sizeof(long double)) { // highly unlikely
+                        copy(&this->time_elapsed, &header.time_point, sizeof(float));
+                    }
+                    else {
+                        float time_point;
+                        copy(&time_point, &header.time_point, sizeof(float));
+                        this->time_elapsed = time_point;
+                    }
+                    break;
+                }
+                case sizeof(double): {
+                    if constexpr (sizeof(double) == sizeof(long double)) { // highly unlikely
+                        copy(&this->time_elapsed, &header.time_point, sizeof(double));
+                    }
+                    else {
+                        double time_point;
+                        copy(&time_point, &header.time_point, sizeof(double));
+                        this->time_elapsed = time_point;
+                    }
+                    break;
+                }
+                case sizeof(long double):
+                    copy(&this->time_elapsed, &header.time_point, sizeof(long double));
+                    break;
+                default:
+                    this->time_elapsed = std::numeric_limits<long double>::has_quiet_NaN ?
+                                         std::numeric_limits<long double>::quiet_NaN() :
+                                         std::numeric_limits<long double>::max(); // error case
+            }
+            /* For errors with the size of the data type of the time value, I do not throw any exception, as the time
+             * value is not needed for the functioning of the gtd::system<> class. Nonetheless, if there were errors
+             * present in its format, time_elapsed is set to the largest possible value of a long double. This can be
+             * queried via the gtd::system<>::elapsed_time member function. */
+            if (header.d_types & 0b00000001) { // case for floating-point time value
+                switch (header.time_size) {
+                    case sizeof(float): { // almost certainly == 4
+                        if constexpr (sizeof(float) == sizeof(long double)) { // highly unlikely
+                            copy(&this->time_elapsed, &header.time_point, sizeof(float));
+                        }
+                        else {
+                            float time_point;
+                            copy(&time_point, &header.time_point, sizeof(float));
+                            this->time_elapsed = time_point;
+                        }
+                        break;
+                    }
+                    case sizeof(double): {
+                        if constexpr (sizeof(double) == sizeof(long double)) { // highly unlikely
+                            copy(&this->time_elapsed, &header.time_point, sizeof(double));
+                        }
+                        else {
+                            double time_point;
+                            copy(&time_point, &header.time_point, sizeof(double));
+                            this->time_elapsed = time_point;
+                        }
+                        break;
+                    }
+                    case sizeof(long double):
+                        copy(&this->time_elapsed, &header.time_point, sizeof(long double));
+                        break;
+                    default:
+                        this->time_elapsed = std::numeric_limits<long double>::has_quiet_NaN ?
+                                             std::numeric_limits<long double>::quiet_NaN() :
+                                             std::numeric_limits<long double>::max(); // error case
+                }
+            }
+            else { // case for integral time value
+                if constexpr (sizeof(unsigned long long) >= sizeof(uint64_t)) {
+                    if (header.time_size > sizeof(unsigned long long)) {
+                        this->time_elapsed = std::numeric_limits<long double>::has_quiet_NaN ?
+                                             std::numeric_limits<long double>::quiet_NaN() :
+                                             std::numeric_limits<long double>::max(); // error case
+                    }
+                    unsigned long long time_point = 0;
+                    copy(&time_point, &header.time_point, header.time_size);
+                    this->time_elapsed = time_point;
+                }
+                else {
+                    if (header.time_size > sizeof(uint64_t)) {
+                        this->time_elapsed = std::numeric_limits<long double>::has_quiet_NaN ?
+                                             std::numeric_limits<long double>::quiet_NaN() :
+                                             std::numeric_limits<long double>::max(); // error case
+                    }
+                    uint64_t time_point = 0;
+                    copy(&time_point, &header.time_point, header.time_size);
+                    this->time_elapsed = time_point;
+                }
+            }
+        }
         static inline bool check_option(int option) noexcept {
             uint16_t loword = option & 0x0000ffff;
             uint16_t hiword = option >> 16;
@@ -813,7 +987,7 @@ namespace gtd {
             uint64_t t_num{};
             uint64_t t_denom{};
             uint64_t num_bodies{};
-        } nsys_header;
+        } nsys_header; // size == 80 bytes
         typedef struct nsys_file_chunk {
             long double r_coeff{};
             M mass{};
@@ -853,7 +1027,7 @@ namespace gtd {
         }
         template <uint64_t mF>
         system(const std::vector<body<M, R, T, mF>> &bodies, long double timestep = 1,
-               uint64_t num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
+               uint64_t num_iterations = 1'000, const char *units_format = "M1:1,D1:1,T1:1") :
                bods{bodies.begin(), bodies.end()}, dt{timestep}, iterations{num_iterations} {
             /* units_format is a string with 3 ratios: it specifies the ratio of the units used for mass, distance and
              * time to kg, metres and seconds (SI units), respectively. This means any units can be used. */
@@ -866,7 +1040,7 @@ namespace gtd {
                 this->set_set();
         }
         system(std::vector<bod_t> &&bodies, long double timestep = 1,
-               uint64_t num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
+               uint64_t num_iterations = 1'000, const char *units_format = "M1:1,D1:1,T1:1") :
                bods{std::move(bodies)}, dt{timestep}, iterations{num_iterations} {
             check_overlap();
             check_coll();
@@ -878,7 +1052,7 @@ namespace gtd {
         }
         template <uint64_t mF>
         system(std::vector<body<M, R, T, mF>> &&bodies, long double timestep = 1,
-               uint64_t num_iterations = 1000, const char *units_format = "M1:1,D1:1,T1:1") :
+               uint64_t num_iterations = 1'000, const char *units_format = "M1:1,D1:1,T1:1") :
                dt{timestep}, iterations{num_iterations} {
             std::for_each(bodies.begin(), bodies.end(),
                           [this](body<M, R, T, mF> &b){bods.emplace_back(std::move(b));});
@@ -928,6 +1102,9 @@ namespace gtd {
         vec_size_t num_bodies() {
             return bods.size();
         }
+        long double elapsed_time() const noexcept {
+            return this->time_elapsed; // will either be NaN or LDBL_MAX if bad value read in from .nsys file
+        }
         bool set_iterations(uint64_t number) noexcept {
             if (!number) // cannot have zero iterations
                 return false;
@@ -943,6 +1120,9 @@ namespace gtd {
         }
         bool set_timestep(const long double &&delta_t) noexcept {
             return set_timestep(delta_t);
+        }
+        void set_G_units(const char *units_format) {
+            this->parse_units_format(units_format);
         }
         sys_t &add_body(const bod_t &bod) {
             bods.emplace_back(bod);
@@ -1409,20 +1589,20 @@ namespace gtd {
                                                                  std::is_fundamental_v<T> && CHAR_BIT == 8) {
             static nsys_header header;
             static nsys_chunk chunk;
-            static char *ptr = nullptr;
             static std::ofstream::pos_type tell;
             if (path == nullptr)
                 return 0;
             if (bods.empty())
                 return 0;
-            stream = new std::ofstream{path, std::ios_base::trunc | std::ios_base::binary};
-            if (!*stream)
+            ostream = new std::ofstream{path, std::ios_base::trunc | std::ios_base::binary};
+            if (!*ostream) {
+                delete ostream;
                 return 0;
-            num_bods = this->bods.size();
+            }
             copy(&header.time_point, &this->time_elapsed, sizeof(long double));
-            copy(&header.m_num, this->G_vals(), 6*sizeof(uint64_t)); // I include sizeof just so intent is clear
-            header.num_bodies = num_bods;
-            stream->write((char *) &header, sizeof(nsys_header));
+            copy(&header.m_num, this->G_vals, 6*sizeof(uint64_t)); // I include sizeof just so intent is clear
+            header.num_bodies = this->bods.size();
+            ostream->write((char *) &header, sizeof(nsys_header));
             for (const bod_t &bod : bods) {
                 chunk.r_coeff = bod.rest_c;
                 chunk.mass = bod.mass_;
@@ -1433,18 +1613,21 @@ namespace gtd {
                 chunk.xvel = bod.curr_vel.x;
                 chunk.yvel = bod.curr_vel.y;
                 chunk.zvel = bod.curr_vel.z;
-                stream->write((char *) &chunk, sizeof(nsys_chunk));
+                ostream->write((char *) &chunk, sizeof(nsys_chunk));
             }
-            tell = stream->tellp();
+            tell = ostream->tellp();
             if (char rem = (char) (tell % 4); rem) {
-                stream->write("\0\0\0", 4 - rem); // align EOF with dword boundary - at most 3 bytes would be written
-                return tell + (std::streamoff) (4 - rem);
+                ostream->write("\0\0\0", 4 - rem); // align EOF with dword boundary - at most 3 bytes would be written
+                tell += (std::streamoff) (4 - rem);
             }
+            ostream->close();
+            delete ostream;
             return tell;
         }
-        static sys_t load_nsys(const char *path) {
-
-        }
+        // static std::pair<nsys_header, std::vector<bod_t>> load_nsys(const char *path, bool only_header = false) {
+        //     if (path == nullptr)
+        //         return {};
+        // }
         bool write_trajectories(const String &path = def_path, bool binary = false) requires (memFreq != 0) {
             /* This method can only be called if memFreq is non-zero, or else there would be no history to output. */
             /* Writes the trajectories (historically) of all the bodies to a file, including all the energy values. For
@@ -1557,51 +1740,76 @@ namespace gtd {
                 else
                     delete del_bods_n;
             }
+            delete [] G_vals;
         }
         const bod_t &operator[](vec_size_t index) const {
             if (index >= bods.size())
                 throw std::out_of_range("The requested body does not exist (index out of range).\n");
             return bods[index];
         }
-        template <isNumWrapper m, isNumWrapper r, isNumWrapper t,
-                  bool prg, bool mrg, int coll, ull_t mF, ull_t fF, bool bF>
-        sys_t &operator=(const system<m, r, t, prg, mrg, coll, mF, fF, bF> &other) {
+        // implicitly-declared copy assignment operator is deleted, so must define my own:
+        sys_t &operator=(const sys_t &other) {
             if (this == &other)
                 return *this;
             this->dt = other.dt;
+            this->half_dt = other.half_dt;
             this->iterations = other.iterations;
             this->G = other.G;
             this->bods = other.bods;
+            copy(this->G_vals, other.G_vals, 6*sizeof(uint64_t));
             if constexpr (memFreq)
                 this->clear_evolution();
+            return *this;
+        }
+        template <isNumWrapper m, isNumWrapper r, isNumWrapper t,
+                  bool prg, bool mrg, int coll, uint64_t mF, uint64_t fF, bool bF>
+        sys_t &operator=(const system<m, r, t, prg, mrg, coll, mF, fF, bF> &other) {
+            if constexpr (std::same_as<sys_t, decltype(other)>) {
+                if (this == &other)
+                    return *this;
+            }
+            this->dt = other.dt;
+            this->half_dt = other.half_dt;
+            this->iterations = other.iterations;
+            this->G = other.G;
+            this->bods.assign(other.bods.begin(), other.bods.end());
+            copy(this->G_vals, other.G_vals, 6*sizeof(uint64_t));
+            if constexpr (memFreq) {
+                this->clear_evolution();
+                // if constexpr (mF) {
+                //     this->del_bods_m->insert(other.del_bods_m.begin(), other.del_bods_m.end());
+                // }
+            }
             return *this;
         }
         sys_t &operator=(sys_t &&other) noexcept {
             if (this == &other)
                 return *this;
             this->dt = std::move(other.dt);
+            this->half_dt = other.half_dt;
             this->iterations = std::move(other.iterations);
             this->G = std::move(other.G);
-            this->bods = std::move(other.bods);
+            this->bods.assign(std::make_move_iterator(other.bods.begin()), std::make_move_iterator(other.bods.end()));
+            move(this->G_vals, other.G_vals, 6*sizeof(uint64_t));
             if constexpr (memFreq)
                 this->clear_evolution();
             return *this;
         }
         template <isNumWrapper m, isNumWrapper r, isNumWrapper t,
-                  bool prg, bool mrg, int coll, ull_t mF, ull_t fF, bool bF>
+                  bool prg, bool mrg, int coll, uint64_t mF, uint64_t fF, bool bF>
         friend std::ostream &operator<<(std::ostream&, const system<m, r, t, prg, mrg, coll, mF, fF, bF>&);
         template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prg1, bool prg2, bool mrg1, bool mrg2,
-                  int c1, int c2, ull_t mF1, ull_t mF2, ull_t fF1, ull_t fF2, bool bF1, bool bF2>
+                  int c1, int c2, uint64_t mF1, uint64_t mF2, uint64_t fF1, uint64_t fF2, bool bF1, bool bF2>
         friend system<m, r, t, prg1 & prg2, mrg1 & mrg2, c1 & c2, MEAN_AVG(mF1, mF2), MEAN_AVG(fF1, fF2), bF1 & bF2>
         operator+(const system<m, r, t, prg1, mrg1, c1, mF1, fF1, bF1>&,
                   const system<m, r, t, prg2, mrg2, c2, mF2, fF2, bF2>&);
-        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, uint64_t, uint64_t, bool>
         friend class system;
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
-                isNumWrapper, bool, ull_t>
+                isNumWrapper, bool, uint64_t>
         friend class astro_scene;
     }; // all these template parameters are driving me coocoo
-    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, bool prg, bool mrg, int coll, ull_t mF, ull_t fF, bool bF>
+    template <isNumWrapper M, isNumWrapper R, isNumWrapper T,bool prg,bool mrg,int coll,uint64_t mF,uint64_t fF,bool bF>
     std::ostream &operator<<(std::ostream &os, const system<M, R, T, prg, mrg, coll, mF, fF, bF> &sys) {
         typename std::vector<body<M, R, T, mF>>::size_type count = sys.bods.size();
         os << "[gtd::system@" << &sys << ",num_bodies=" << count;
@@ -1614,7 +1822,7 @@ namespace gtd {
         return os << ']';
     }
     template<isNumWrapper M, isNumWrapper R, isNumWrapper T, bool prg1, bool prg2, bool mrg1, bool mrg2, int c1, int c2,
-             ull_t mF1, ull_t mF2, ull_t fF1, ull_t fF2, bool bF1, bool bF2>
+             uint64_t mF1, uint64_t mF2, uint64_t fF1, uint64_t fF2, bool bF1, bool bF2>
     system<M, R, T, prg1 & prg2, mrg1 & mrg2, c1 & c2, MEAN_AVG(mF1, mF2), MEAN_AVG(fF1, fF2), bF1 & bF2>
     operator+(const system<M, R, T, prg1, mrg1, c1, mF1, fF1, bF1> &sys1,
               const system<M, R, T, prg2, mrg2, c2, mF2, fF2, bF2> &sys2) {
@@ -1638,6 +1846,7 @@ namespace gtd {
         //     }
         // }
         ret_sys.G = sys1.G;
+        copy(ret_sys.G_vals, sys1.G_vals, 6*sizeof(uint64_t));
         ret_sys.add_bodies(sys2.bods);
         return ret_sys;
     }
