@@ -341,6 +341,12 @@ namespace gtd {
             this->acc = acc_com(*one, *two);
             this->rest_c = MEAN_AVG(one->rest_c, two->rest_c);
         }
+        body(const M &body_mass, const R &body_radius, const T &xpos, const T &ypos, const T &zpos,
+             const T &xvel, const T &yvel, const T &zvel, const long double &restitution) : mass_{body_mass},
+             radius{body_radius}, curr_pos{xpos, ypos, zpos}, curr_vel{xvel, yvel, zvel}, rest_c{restitution} {
+            check_mass();
+            check_radius();
+        }
     public:
         /* unfortunately, the constructors cannot be marked constexpr, because it is impossible for any body_counter
          * constructor to be constexpr (since ID must be dynamically determined) */
@@ -365,6 +371,20 @@ namespace gtd {
         }
         body(const M &body_mass, const R &body_radius, const vector3D<T> &pos, const vector3D<T> &vel) :
         mass_{body_mass}, radius{body_radius}, curr_pos{pos}, curr_vel{vel} {
+            check_mass();
+            check_radius();
+            this->add_pos_vel_ke();
+        }
+        body(M &&body_mass, R &&body_radius, vector3D<T> &&pos, vector3D<T> &&vel, const long double &&restitution) :
+        mass_{std::move(body_mass)}, radius{std::move(body_radius)}, curr_pos{std::move(pos)}, curr_vel{std::move(vel)},
+        rest_c{restitution} {
+            check_mass();
+            check_radius();
+            this->add_pos_vel_ke();
+        }
+        body(const M &body_mass, const R &body_radius, const vector3D<T> &pos, const vector3D<T> &vel,
+             const long double &restitution) : mass_{body_mass}, radius{body_radius}, curr_pos{pos}, curr_vel{vel},
+             rest_c{restitution} {
             check_mass();
             check_radius();
             this->add_pos_vel_ke();
@@ -886,6 +906,20 @@ namespace gtd {
              const long double &&restitution) : mass_{std::move(body_mass)}, radius{std::move(body_radius)},
              curr_pos{std::move(pos)}, curr_vel{std::move(vel)}, acc{acceleration}, rest_c{restitution}
         {check_mass(); check_radius();} // private ctor as only needed for 1 func.
+        body(const body<M, R, T, 0> *one, const body<M, R, T, 0> *two) {
+            this->mass_ = one->mass_ + two->mass_;
+            this->radius = std::cbrtl(one->radius*one->radius*one->radius + two->radius*two->radius*two->radius);
+            this->curr_pos = com(*one, *two);
+            this->curr_vel = vel_com(*one, *two);
+            this->acc = acc_com(*one, *two);
+            this->rest_c = MEAN_AVG(one->rest_c, two->rest_c);
+        }
+        body(const M &body_mass, const R &body_radius, const T &xpos, const T &ypos, const T &zpos,
+             const T &xvel, const T &yvel, const T &zvel, const long double &restitution) : mass_{body_mass},
+             radius{body_radius}, curr_pos{xpos, ypos, zpos}, curr_vel{xvel, yvel, zvel}, rest_c{restitution} {
+            check_mass();
+            check_radius();
+        }
     public:
         /* unfortunately, the constructors cannot be marked constexpr, because it is impossible for any body_counter
          * constructor to be constexpr (since ID must be dynamically determined) */
@@ -905,6 +939,18 @@ namespace gtd {
         }
         body(const M &body_mass, const R &body_radius, const vector3D<T> &pos, const vector3D<T> &vel) :
                 mass_{body_mass}, radius{body_radius}, curr_pos{pos}, curr_vel{vel} {check_mass(); check_radius();}
+        body(M &&body_mass, R &&body_radius, vector3D<T> &&pos, vector3D<T> &&vel, const long double &&restitution) :
+        mass_{std::move(body_mass)}, radius{std::move(body_radius)}, curr_pos{std::move(pos)}, curr_vel{std::move(vel)},
+        rest_c{restitution} {
+            check_mass();
+            check_radius();
+        }
+        body(const M &body_mass, const R &body_radius, const vector3D<T> &pos, const vector3D<T> &vel,
+             const long double &restitution) : mass_{body_mass}, radius{body_radius}, curr_pos{pos}, curr_vel{vel},
+                                               rest_c{restitution} {
+            check_mass();
+            check_radius();
+        }
         template <ull_t rF>
         body(const body<M, R, T, rF> &other) :
                 mass_{other.mass_}, radius{other.radius}, curr_pos{other.curr_pos},
