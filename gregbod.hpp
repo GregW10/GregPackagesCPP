@@ -20,6 +20,7 @@
 #include <fstream>
 #include <map>
 #include <regex>
+#include <cinttypes>
 
 namespace gtd {
     class nbody_error : public std::logic_error {
@@ -341,12 +342,6 @@ namespace gtd {
             this->acc = acc_com(*one, *two);
             this->rest_c = MEAN_AVG(one->rest_c, two->rest_c);
         }
-        body(const M &body_mass, const R &body_radius, const T &xpos, const T &ypos, const T &zpos,
-             const T &xvel, const T &yvel, const T &zvel, const long double &restitution) : mass_{body_mass},
-             radius{body_radius}, curr_pos{xpos, ypos, zpos}, curr_vel{xvel, yvel, zvel}, rest_c{restitution} {
-            check_mass();
-            check_radius();
-        }
     public:
         /* unfortunately, the constructors cannot be marked constexpr, because it is impossible for any body_counter
          * constructor to be constexpr (since ID must be dynamically determined) */
@@ -388,6 +383,19 @@ namespace gtd {
             check_mass();
             check_radius();
             this->add_pos_vel_ke();
+        }
+        body(const M &body_mass, const R &body_radius, const T &xpos, const T &ypos, const T &zpos,
+             const T &xvel, const T &yvel, const T &zvel, const long double &restitution) : mass_{body_mass},
+             radius{body_radius}, curr_pos{xpos, ypos, zpos}, curr_vel{xvel, yvel, zvel}, rest_c{restitution} {
+            check_mass();
+            check_radius();
+        }
+        body(M &&body_mass, R &&body_radius, T &&xpos, T &&ypos, T &&zpos,
+             T &&xvel, T &&yvel, T &&zvel, const long double &&restitution) : mass_{std::move(body_mass)},
+             radius{std::move(body_radius)}, curr_pos{std::move(xpos), std::move(ypos), std::move(zpos)},
+             curr_vel{std::move(xvel), std::move(yvel), std::move(zvel)}, rest_c{restitution} {
+            check_mass();
+            check_radius();
         }
         template <ull_t rF>
         body(const body<M, R, T, rF> &other) :
@@ -914,12 +922,6 @@ namespace gtd {
             this->acc = acc_com(*one, *two);
             this->rest_c = MEAN_AVG(one->rest_c, two->rest_c);
         }
-        body(const M &body_mass, const R &body_radius, const T &xpos, const T &ypos, const T &zpos,
-             const T &xvel, const T &yvel, const T &zvel, const long double &restitution) : mass_{body_mass},
-             radius{body_radius}, curr_pos{xpos, ypos, zpos}, curr_vel{xvel, yvel, zvel}, rest_c{restitution} {
-            check_mass();
-            check_radius();
-        }
     public:
         /* unfortunately, the constructors cannot be marked constexpr, because it is impossible for any body_counter
          * constructor to be constexpr (since ID must be dynamically determined) */
@@ -948,6 +950,19 @@ namespace gtd {
         body(const M &body_mass, const R &body_radius, const vector3D<T> &pos, const vector3D<T> &vel,
              const long double &restitution) : mass_{body_mass}, radius{body_radius}, curr_pos{pos}, curr_vel{vel},
                                                rest_c{restitution} {
+            check_mass();
+            check_radius();
+        }
+        body(const M &body_mass, const R &body_radius, const T &xpos, const T &ypos, const T &zpos,
+             const T &xvel, const T &yvel, const T &zvel, const long double &restitution) : mass_{body_mass},
+             radius{body_radius}, curr_pos{xpos, ypos, zpos}, curr_vel{xvel, yvel, zvel}, rest_c{restitution} {
+            check_mass();
+            check_radius();
+        }
+        body(M &&body_mass, R &&body_radius, T &&xpos, T &&ypos, T &&zpos,
+             T &&xvel, T &&yvel, T &&zvel, const long double &&restitution) : mass_{std::move(body_mass)},
+             radius{std::move(body_radius)}, curr_pos{std::move(xpos), std::move(ypos), std::move(zpos)},
+             curr_vel{std::move(xvel), std::move(yvel), std::move(zvel)}, rest_c{restitution} {
             check_mass();
             check_radius();
         }

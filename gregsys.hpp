@@ -110,6 +110,11 @@ namespace gtd {
         nsys_load_error() : nbody_error{"Error loading N-body data from .nsys file.\n"} {}
         explicit nsys_load_error(const char *msg) : nbody_error{msg} {}
     };
+    class nsys_format_error : public nsys_load_error {
+    public:
+        nsys_format_error() : nsys_load_error{"Error loading N-body data from .nsys file.\n"} {}
+        explicit nsys_format_error(const char *msg) : nsys_load_error{msg} {}
+    };
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
               bool prog = false, bool mergeOverlappingBodies = false, int collisions = 0,
               uint64_t memFreq = 0, uint64_t fileFreq = 1, bool binaryFile = true>
@@ -743,8 +748,8 @@ namespace gtd {
                 }
             }
         }
-    public:
-        void analysis() requires (memFreq != 0) { // debugging method - mark for removal
+    public: // the 3 following methods are for debugging - mark for removal
+        void analysis() requires (memFreq != 0) {
             printf("---------------ANALYSIS--------------\nBods:\n");
             for (const auto& bod : bods) {
                 std::cout << "\nBody: " << bod <<
@@ -774,9 +779,16 @@ namespace gtd {
             return sizeof(nsys_header) + n_bods*sizeof(nsys_chunk) + (rem ? 4 - rem : 0);
         }
         // path is guaranteed not to be nullptr here:
-        void load_from_nsys(const char *path, bool alloc_chunks) requires (std::is_fundamental_v<M> &&
-                                                                           std::is_fundamental_v<R> &&
-                                                                           std::is_fundamental_v<T> && CHAR_BIT == 8) {
+        void load_from_nsys(const char *path, bool alloc_chunks, bool check_nan_inf)
+        requires (std::is_fundamental_v<M> && std::is_fundamental_v<R> && std::is_fundamental_v<T> && CHAR_BIT == 8) {
+            static auto final_handler = [this](uint64_t index, const char *str){
+                this->istream->close();
+                delete this->istream;
+                char msg[128];
+                snprintf(msg, 128, "Error: NaN or INF encountered in chunk with index %" PRIu64 // uint64_t format spec.
+                ". Invalid field: \"%s\"\n", index, str);
+                throw nsys_load_error{msg};
+            };
 #ifndef _WIN32
             /* Unfortunately, there is absolutely no POSIX-conforming standard way of ensuring that files larger than
              * 2GB can be worked with. The size of off_t can be checked to ensure it is 64 bits wide, but nothing can be
@@ -787,7 +799,7 @@ namespace gtd {
                 throw nsys_load_error{"Error obtaining .nsys file information. No data loaded.\n"};
             if (!S_ISREG(buffer.st_mode))
                 throw nsys_load_error{".nsys file provided is not a regular file. Could not load data.\n"};
-            if (buffer.st_size < sizeof(nsys_header))
+            if (buffer.st_size < (off_t) sizeof(nsys_header))
                 throw nsys_load_error{"Insufficient .nsys file size. No data loaded.\n"};
 #else
             WIN32_FILE_ATTRIBUTE_DATA buffer{};
@@ -809,12 +821,12 @@ namespace gtd {
             if (header.signature[0] != 'N' && header.signature[1] != 'S') {
                 istream->close();
                 delete istream;
-                throw nsys_load_error{"Invalid .nsys format: invalid file signature.\n"};
+                throw nsys_format_error{"Invalid .nsys format: invalid file signature.\n"};
             }
             if ((header.d_types & 0b1000000) != 0) { // 0b10000000 == 128, but I use the binary repr. for clarity
                 istream->close();
                 delete istream;
-                throw nsys_load_error{"Invalid .nsys format: msb occupied in d_types field (should be zero).\n"};
+                throw nsys_format_error{"Invalid .nsys format: msb occupied in d_types field (should be zero).\n"};
             } // the following macro saves about 60 lines of code
 #define NSYS_TYPE_CHECK(type, bin_num1, bin_num2, str) \
             if constexpr (std::floating_point<type>) { \
@@ -859,7 +871,7 @@ namespace gtd {
                 istream->close(); \
                 delete istream; \
                 char error_msg[128]; \
-                snprintf(error_msg, 128, "Size mismatch error: size of "#type" template parameter (%d bytes) does " \
+                snprintf(error_msg, 128, "Size mismatch error: size of "#type" template parameter (%zu bytes) does " \
                                          "not match its reported size (%d bytes) in the .nsys file.\n", \
                         sizeof(type), header.type##_size); /* includes null terminator */ \
                 throw nsys_load_error{error_msg}; \
@@ -873,16 +885,18 @@ namespace gtd {
                 delete istream;
                 char error_msg[156];
                 snprintf(error_msg, 156, "Size mismatch error: coefficient of restitution data size (%d bytes) larger "
-                                         "than widest floating point data type available (long double = %d bytes).\n",
+                                         "than widest floating point data type available (long double = %zu bytes).\n",
                          header.rest_coeff_size, sizeof(long double)); // includes null terminator
-                throw nsys_load_error{error_msg};
+                throw nsys_format_error{error_msg};
             }
-            void (*rest_c_func)(long double *, const char *) = +[](long double *coeff, const char *ptr) {
+            void (*rest_c_func)(long double *, const char *);
+            if (header.rest_coeff_size == sizeof(long double))
+                rest_c_func = +[](long double *coeff, const char *ptr) {
                 char *coeff_ptr = (char *) coeff;
                 for (unsigned char counter = 0; counter < sizeof(long double); ++counter)
                     *coeff_ptr++ = *ptr++;
             };
-            if (header.rest_coeff_size != sizeof(long double)) {
+            else {
                 if (header.rest_coeff_size == sizeof(double)) {
                     rest_c_func = +[](long double *coeff, const char *ptr) {
                         static double coeff_d;
@@ -909,31 +923,109 @@ namespace gtd {
                                              "double = %zu bytes,\n"
                                              "long double = %zu bytes.\n",
                              header.rest_coeff_size, sizeof(float), sizeof(double), sizeof(long double));
-                    throw nsys_load_error{error_msg};
+                    throw nsys_format_error{error_msg};
                 }
             }
 #ifndef _WIN32
-            if (buffer.st_size != nsys_file_size(header.num_bodies)) {
+            if (buffer.st_size != (off_t) nsys_file_size(header.num_bodies)) {
 #else
             if (fileSize != nsys_file_size(header.num_bodies)) {
 #endif
                 istream->close();
                 delete istream;
-                char error_msg[196];
-                snprintf(error_msg, 196, "Error: file size does not match expected file size based on number of bodies."
+                char error_msg[156];
+                snprintf(error_msg, 156, "Error: file size does not match expected file size based on number of bodies."
                                          "\nExpected: %llu bytes. Instead got: %zu bytes. No data loaded.\n",
 #ifndef _WIN32
                          (unsigned long long) nsys_file_size(header.num_bodies), (size_t) buffer.st_size);
 #else
                          (unsigned long long) nsys_file_size(header.num_bodies), (size_t) fileSize);
 #endif
-                throw nsys_load_error{error_msg};
+                throw nsys_format_error{error_msg};
             }
-            /* For errors with the size of the data type of the time value, I do not throw any exception, as the time
-             * value is not needed for the functioning of the gtd::system<> class. Nonetheless, if there were errors
-             * present in its format, time_elapsed is set to the largest possible value of a long double. This can be
-             * queried via the gtd::system<>::elapsed_time member function. */
             if (header.d_types & 0b00000001) { // case for floating-point time value
+                if constexpr (sizeof(long double) > sizeof(double) && sizeof(double) > sizeof(float)) {
+                    switch (header.time_size) {
+                        case sizeof(long double):
+#define NSYS_LDBL_TIME_CASE \
+                            copy(&this->time_elapsed, header.time_point, sizeof(long double)); \
+                            copy(&this->dt, header.delta_t, sizeof(long double));
+                            NSYS_LDBL_TIME_CASE
+                            break;
+                        case sizeof(double): {
+#define NSYS_DBL_TIME_CASE \
+                            double time_val; \
+                            copy(&time_val, header.time_point, sizeof(double)); \
+                            this->time_elapsed = time_val; \
+                            copy(&time_val, header.delta_t, sizeof(double)); \
+                            this->dt = time_val;
+                            NSYS_DBL_TIME_CASE
+                            break;
+                        }
+                        case sizeof(float): { // almost certainly == 4
+#define NSYS_FLT_TIME_CASE \
+                            float time_val; \
+                            copy(&time_val, header.time_point, sizeof(float)); \
+                            this->time_elapsed = time_val; \
+                            copy(&time_val, header.delta_t, sizeof(float)); \
+                            this->dt = time_val;
+                            NSYS_FLT_TIME_CASE
+                            break;
+                        }
+                        default:
+#define NSYS_TIME_SIZE_ERROR \
+                            istream->close(); \
+                            delete istream; \
+                            char error_msg[212]; \
+                            snprintf(error_msg, 212, "Size mismatch error: reported size of data type for time values" \
+                                                     " in .nsys file (%d bytes) does not match any floating " \
+                                                     "point data type available:\n" \
+                                                     "float = %zu bytes,\n" \
+                                                     "double = %zu bytes,\n" \
+                                                     "long double = %zu bytes.\n", \
+                                     header.time_size, sizeof(float), sizeof(double), sizeof(long double)); \
+                            throw nsys_format_error{error_msg};
+                            NSYS_TIME_SIZE_ERROR
+                            // this->time_elapsed = std::numeric_limits<long double>::has_quiet_NaN ?
+                            //                      std::numeric_limits<long double>::quiet_NaN() :
+                            //                      std::numeric_limits<long double>::max(); // error case
+                    }
+                }
+                else if constexpr (sizeof(long double) == sizeof(double) && sizeof(double) > sizeof(float)) {
+                    if (header.time_size == sizeof(long double)) {
+                        NSYS_LDBL_TIME_CASE
+                    }
+                    else if (header.time_size == sizeof(float)) {
+                        NSYS_FLT_TIME_CASE
+                    }
+                    else {
+                        NSYS_TIME_SIZE_ERROR
+                    }
+                }
+                else if constexpr (sizeof(long double) > sizeof(double) && sizeof(double) == sizeof(float)) {
+                    if (header.time_size == sizeof(long double)) {
+                        NSYS_LDBL_TIME_CASE
+                    }
+                    else if (header.time_size == sizeof(double)) {
+                        NSYS_DBL_TIME_CASE
+                    }
+                    else {
+                        NSYS_TIME_SIZE_ERROR
+                    }
+                }
+                else { // case for sizeof(long double) == sizeof(double) == sizeof(float)
+                    if (header.time_size == sizeof(long double)) {
+                        NSYS_LDBL_TIME_CASE
+                    }
+                    else {
+                        NSYS_TIME_SIZE_ERROR
+                    }
+                }
+#undef NSYS_TIME_SIZE_ERROR
+#undef NSYS_FLT_TIME_CASE
+#undef NSYS_DBL_TIME_CASE
+#undef NSYS_LDBL_TIME_CASE
+                /*
                 switch (header.time_size) {
                     case sizeof(long double):
                         copy(&this->time_elapsed, header.time_point, sizeof(long double));
@@ -958,47 +1050,68 @@ namespace gtd {
                     default:
                         istream->close();
                         delete istream;
-                        char error_msg[208];
-                        snprintf(error_msg, 208, "Size mismatch error: reported size of data type for time values in "
-                                                 ".nsys file (%d bytes) larger than any floating point data type "
+                        char error_msg[212];
+                        snprintf(error_msg, 212, "Size mismatch error: reported size of data type for time values in "
+                                                 ".nsys file (%d bytes) does not match any floating point data type "
                                                  "available:\n"
                                                  "float = %zu bytes,\n"
                                                  "double = %zu bytes,\n"
                                                  "long double = %zu bytes.\n",
                                  header.time_size, sizeof(float), sizeof(double), sizeof(long double));
-                        throw nsys_load_error{error_msg};
+                        throw nsys_format_error{error_msg};
                         // this->time_elapsed = std::numeric_limits<long double>::has_quiet_NaN ?
                         //                      std::numeric_limits<long double>::quiet_NaN() :
                         //                      std::numeric_limits<long double>::max(); // error case
-                }
+                } */
             }
             else { // case for integral time value
                 if constexpr (sizeof(unsigned long long) >= sizeof(uint64_t)) {
-                    if (header.time_size > sizeof(unsigned long long)) {
+                    if (header.time_size <= sizeof(unsigned long long)) {
                         // this->time_elapsed = std::numeric_limits<long double>::has_quiet_NaN ?
                         //                      std::numeric_limits<long double>::quiet_NaN() :
                         //                      std::numeric_limits<long double>::max(); // error case
+                        unsigned long long time_val = 0;
+                        copy(&time_val, header.time_point, header.time_size);
+                        this->time_elapsed = time_val;
+                        copy(&time_val, header.delta_t, header.time_size);
+                        this->dt = time_val;
+                        goto correct;
                     }
-                    unsigned long long time_val = 0;
-                    copy(&time_val, header.time_point, header.time_size);
-                    this->time_elapsed = time_val;
-                    copy(&time_val, header.delta_t, header.time_size);
-                    this->dt = time_val;
                 }
                 else {
-                    if (header.time_size > sizeof(uint64_t)) {
+                    if (header.time_size <= sizeof(uint64_t)) {
                         // this->time_elapsed = std::numeric_limits<long double>::has_quiet_NaN ?
                         //                      std::numeric_limits<long double>::quiet_NaN() :
                         //                      std::numeric_limits<long double>::max(); // error case
+                        uint64_t time_val = 0;
+                        copy(&time_val, header.time_point, header.time_size);
+                        this->time_elapsed = time_val;
+                        copy(&time_val, header.delta_t, header.time_size);
+                        this->dt = time_val;
+                        goto correct;
                     }
-                    uint64_t time_val = 0;
-                    copy(&time_val, header.time_point, header.time_size);
-                    this->time_elapsed = time_val;
-                    copy(&time_val, header.delta_t, header.time_size);
-                    this->dt = time_val;
                 }
+                istream->close();
+                delete istream;
+                char error_msg[204];
+                snprintf(error_msg, 204, "Size mismatch error: reported size of data type for time values in "
+                                         ".nsys file (%d bytes) larger than largest unsigned integral data types "
+                                         "available:\n"
+                                         "uint64_t = %zu bytes,\n"
+                                         "unsigned long long = %zu bytes\n",
+                         header.time_size, sizeof(uint64_t), sizeof(unsigned long long));
+                throw nsys_format_error{error_msg};
             }
-            this->half_dt = this->dt/2;
+            correct:
+            if (check_nan_inf && (std::isnan(this->dt) || std::isinf(this->dt))) {
+                istream->close();
+                delete istream;
+                throw nsys_format_error{"Error: time-step is NaN or INF."};
+            }
+            /* The above check is not performed on the time_elapsed variable as it is not necessary for the correct
+             * functioning of a gtd::system<> instance. */
+            this->check_dt();
+            // this->half_dt = this->dt/2;
             this->G = 66'743;
             this->G *= header.m_num*header.d_num*header.d_num*header.d_num*header.t_num*header.t_num;
             this->G /= header.m_denom*header.d_denom*header.d_denom*header.d_denom*header.t_denom*header.t_denom;
@@ -1017,7 +1130,8 @@ namespace gtd {
                 return;
             }
             this->bods.reserve(header.num_bodies); // avoids memory reallocation during the loop
-            long double *restitution;
+            long double restitution{};
+            uint64_t counter = 0;
             if (alloc_chunks) {
                 /* Option 1: read in all data from chunks into allocated memory, and construct bodies in the "bods"
                  * std::vector using the data from the chunks. Much faster than option 2, but uses much more memory. */
@@ -1026,13 +1140,48 @@ namespace gtd {
                 istream->read((char *) chunks, header.num_bodies*sizeof(nsys_chunk));
                 istream->close();
                 delete istream;
-                while (header.num_bodies --> 0) {
+                if (check_nan_inf) {
+                    while (counter < header.num_bodies) {
+                        rest_c_func(&restitution, chunk->r_coeff);
+                        if (std::isnan(restitution) || std::isinf(restitution))
+                            final_handler(counter, "r_coeff");
+                        if constexpr (std::is_floating_point_v<M>)
+                            if (std::isnan(chunk->mass) || std::isinf(chunk->mass))
+                                final_handler(counter, "mass");
+                        if constexpr (std::is_floating_point_v<R>)
+                            if (std::isnan(chunk->radius) || std::isinf(chunk->radius))
+                                final_handler(counter, "radius");
+                        if constexpr (std::is_floating_point_v<T>) {
+                            if (std::isnan(chunk->xpos) || std::isinf(chunk->xpos))
+                                final_handler(counter, "xpos");
+                            if (std::isnan(chunk->ypos) || std::isinf(chunk->ypos))
+                                final_handler(counter, "ypos");
+                            if (std::isnan(chunk->zpos) || std::isinf(chunk->zpos))
+                                final_handler(counter, "zpos");
+                            if (std::isnan(chunk->xvel) || std::isinf(chunk->xvel))
+                                final_handler(counter, "xvel");
+                            if (std::isnan(chunk->yvel) || std::isinf(chunk->yvel))
+                                final_handler(counter, "yvel");
+                            if (std::isnan(chunk->zvel) || std::isinf(chunk->zvel))
+                                final_handler(counter, "zvel");
+                        }
+                        /* I created a new, nasty constructor in the gtd::body<> class which accepts individual
+                         * components of the position and velocity (rather than two vectors) to avoid making any
+                         * unnecessary copies. */
+                        this->bods.emplace_back(chunk->mass, chunk->radius, chunk->xpos, chunk->ypos, chunk->zpos,
+                                                chunk->xvel, chunk->yvel, chunk->zvel, restitution);
+                        ++chunk;
+                        ++counter;
+                    }
+                    delete [] chunks;
+                    return;
+                }
+                while (counter < header.num_bodies) {
                     rest_c_func(&restitution, chunk->r_coeff);
-                    /* I create a new, nasty constructor in the gtd::body<> class which accepts individual components of
-                     * the position and velocity (rather than two vectors) to avoid making any unnecessary copies. */
                     this->bods.emplace_back(chunk->mass, chunk->radius, chunk->xpos, chunk->ypos, chunk->zpos,
                                             chunk->xvel, chunk->yvel, chunk->zvel, restitution);
                     ++chunk;
+                    ++counter;
                 }
                 delete [] chunks;
                 return;
@@ -1041,18 +1190,52 @@ namespace gtd {
              * std::vector after each read. Slower than option 1 as requires N times more I/O function calls (where N is
              * number of bodies), but reduces memory footprint. */
             nsys_chunk chunk;
-            while (header.num_bodies --> 0) {
-                istream->read((char *) &chunk, sizeof(nsys_chunk));
-                rest_c_func(&restitution, chunk.r_coeff);
-                this->bods.emplace_back(chunk.mass, chunk.radius, chunk.xpos, chunk.ypos, chunk.zpos,
-                                        chunk.xvel, chunk.yvel, chunk.zvel, restitution);
+            if (check_nan_inf) {
+                while (counter < header.num_bodies) {
+                    istream->read((char *) &chunk, sizeof(nsys_chunk));
+                    rest_c_func(&restitution, chunk.r_coeff);
+                    if (std::isnan(restitution) || std::isinf(restitution))
+                        final_handler(counter, "r_coeff");
+                    if constexpr (std::is_floating_point_v<M>)
+                        if (std::isnan(chunk.mass) || std::isinf(chunk.mass))
+                            final_handler(counter, "mass");
+                    if constexpr (std::is_floating_point_v<R>)
+                        if (std::isnan(chunk.radius) || std::isinf(chunk.radius))
+                            final_handler(counter, "radius");
+                    if constexpr (std::is_floating_point_v<T>) {
+                        if (std::isnan(chunk.xpos) || std::isinf(chunk.xpos))
+                            final_handler(counter, "xpos");
+                        if (std::isnan(chunk.ypos) || std::isinf(chunk.ypos))
+                            final_handler(counter, "ypos");
+                        if (std::isnan(chunk.zpos) || std::isinf(chunk.zpos))
+                            final_handler(counter, "zpos");
+                        if (std::isnan(chunk.xvel) || std::isinf(chunk.xvel))
+                            final_handler(counter, "xvel");
+                        if (std::isnan(chunk.yvel) || std::isinf(chunk.yvel))
+                            final_handler(counter, "yvel");
+                        if (std::isnan(chunk.zvel) || std::isinf(chunk.zvel))
+                            final_handler(counter, "zvel");
+                    }
+                    this->bods.emplace_back(chunk.mass, chunk.radius, chunk.xpos, chunk.ypos, chunk.zpos,
+                                            chunk.xvel, chunk.yvel, chunk.zvel, restitution);
+                    ++counter;
+                }
+            } else {
+                while (counter < header.num_bodies) {
+                    istream->read((char *) &chunk, sizeof(nsys_chunk));
+                    rest_c_func(&restitution, chunk.r_coeff);
+                    this->bods.emplace_back(chunk.mass, chunk.radius, chunk.xpos, chunk.ypos, chunk.zpos,
+                                            chunk.xvel, chunk.yvel, chunk.zvel, restitution);
+                    ++counter;
+                }
             }
             istream->close();
             delete istream;
         }
-        void check_dt() const {
-            if (this->dt < 0)
-                throw std::invalid_argument{"Time-step cannot be negative.\n"};
+        void check_dt() {
+            if (this->dt <= 0)
+                throw std::invalid_argument{"Time-step cannot be zero or negative.\n"};
+            this->half_dt = this->dt/2;
         }
         static inline bool check_option(int option) noexcept {
             uint16_t loword = option & 0x0000ffff;
@@ -1118,11 +1301,11 @@ namespace gtd {
             T yvel{};
             T zvel{};
         } nsys_chunk;
-        system() : G{G_SI} {this->check_coll(); if constexpr (collisions) this->set_set();}
-        explicit system(const char *nsys_path, bool allocate_chunks = false) {
+        system() : G{G_SI} {if constexpr (collisions) this->set_set();}
+        explicit system(const char *nsys_path, bool alloc_chunks = false, bool check_nan_inf = true) {
             if (nsys_path == nullptr)
                 throw std::invalid_argument{"nullptr passed as .nsys file path.\n"};
-            this->load_from_nsys(nsys_path);
+            this->load_from_nsys(nsys_path, alloc_chunks, check_nan_inf);
             this->check_overlap();
             if constexpr (collisions)
                 this->set_set();
