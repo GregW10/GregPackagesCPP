@@ -1464,7 +1464,7 @@ namespace gtd {
             return *this;
         }
         sys_t &add_bodies(const std::vector<bod_t> &bodies) {
-            if (!bodies.size())
+            if (bodies.empty())
                 return *this;
             num_bods = bods.size();
             bods.insert(bods.end(), bodies.begin(), bodies.end());
@@ -1474,7 +1474,7 @@ namespace gtd {
             return *this;
         }
         sys_t &add_bodies(std::vector<bod_t> &&bodies) {
-            if (!bodies.size())
+            if (bodies.empty())
                 return *this;
             for (auto &b : bodies) {
                 if constexpr (memFreq)
@@ -1484,13 +1484,21 @@ namespace gtd {
             check_overlap();
             return *this;
         }
+        template <bool progress, bool merging, int coll, uint64_t mF, uint64_t fF, bool bin>
+        sys_t &add_system(const system<M, R, T, progress, merging, coll, mF, fF, bin> &other) {
+            return this->add_bodies(other.bods);
+        }
+        template <bool progress, bool merging, int coll, uint64_t mF, uint64_t fF, bool bin>
+        sys_t &add_system(system<M, R, T, progress, merging, coll, mF, fF, bin> &&other) {
+            return this->add_bodies(std::move(other.bods));
+        }
         const bod_t &back() const {
-            if (this->bods.size())
+            if (!this->bods.empty())
                 return this->bods.back();
             throw std::logic_error{"gtd::system<>::back cannot be called on an empty gtd::system object.\n"};
         }
         const bod_t &front() const {
-            if (this->bods.size())
+            if (!this->bods.empty())
                 return this->bods.front();
             throw std::logic_error{"gtd::system<>::front cannot be called on an empty gtd::system object.\n"};
         }
@@ -1504,11 +1512,76 @@ namespace gtd {
         bool remove_body(uint64_t id) {
             auto end_it = bods.cend();
             for (typename std::vector<bod_t>::const_iterator it = bods.cbegin(); it < end_it; ++it)
-                if ((*it).id == id) {
+                if (it->id == id) {
                     bods.erase(it);
                     return true;
                 }
             return false;
+        }
+        static inline sys_t hcp_comet(const T &rad, const R &sep, const R &b_rad, const M &b_mass, long double r_coeff){
+            using vec = vector3D<T>;
+            if (rad <= 0)
+                throw negative_radius_error{"Error: comet radius must be larger than zero.\n"};
+            if (b_rad <= 0)
+                throw negative_radius_error{"Error: the radius each body will have must be larger than zero.\n"};
+            if (sep < 0)
+                throw std::invalid_argument{"Error: separation between bodies cannot be negative.\n"};
+            if (rad < b_rad)
+                throw std::invalid_argument{"Error: the radius of the comet must exceed the radius of a body.\n"};
+            if (r_coeff < 0 || r_coeff > 1)
+                throw std::invalid_argument{"Error: coefficient of restitution must be between 0 and 1.\n"};
+            uint64_t counter = 0;
+            const R b_sep = b_rad*2 + sep; // separation between the centres of adjacent bodies
+            const R b_halfsep = b_rad + sep/2.0l; // haven't done b_sep/2 to minimise f.p. error
+            const T radl = rad + rad*0.0625l; // slightly larger radius to create hcp cube
+            uint64_t lbods = radl / (2*b_rad); // number of bodies along length of cube
+            uint64_t whbods = radl / (std::sqrtl(3)*b_rad); // number of bodies along width and along height of cube
+            std::vector<vec> first_row; // first row of bodies
+            first_row.reserve(lbods);
+            while (counter < lbods) // create position vectors for all bodies in the first row
+                first_row.emplace_back(counter++*b_sep, 0); // z-coordinate automatically zero
+            std::vector<vec> second_row;
+            second_row.reserve(lbods);
+            T y_sep = std::sqrtl(3)*b_halfsep; // separation between adjacent rows, also the second row's y-coordinate
+            counter = 0;
+            while (counter < lbods)
+                second_row.emplace_back(b_halfsep + counter++*b_sep, y_sep);
+            std::vector<std::vector<vec>> plane_A;
+            plane_A.reserve(whbods);
+            plane_A.push_back(first_row);
+            plane_A.push_back(second_row);
+            std::vector<vec> row;
+            T y_coord{};
+            counter = 1;
+            while (++counter < whbods) {
+                row.clear();
+                row.reserve(lbods);
+                y_coord = counter*y_sep;
+                if (!(counter % 2))
+                    for (const vec &v : first_row)
+                        row.emplace_back(v.x, y_coord);
+                else
+                    for (const vec &v : second_row)
+                        row.emplace_back(v.x, y_coord);
+                plane_A.emplace_back(std::move(row));
+            }
+            y_coord = b_halfsep / std::sqrtl(3);
+            T y_coord2 = y_coord + y_sep;
+            T z_sep = b_sep*std::sqrtl(2.0l/3.0l);
+            T *ptr1 = first_row.data();
+            T *ptr2 = second_row.data();
+            counter = 0;
+            while (counter++ < lbods) {
+                ptr1->x += b_halfsep;
+                ptr1->y = y_coord;
+                ptr1++->z = z_sep;
+                ptr2->x += b_halfsep;
+                ptr2->y = y_coord2;
+                ptr2++->z = z_sep;
+            }
+            std::vector<std::vector<vec>> plane_B;
+            plane_B.emplace_back(first_row);
+            plane_B.emplace_back(second_row);
         }
         void reset() requires (memFreq != 0) {
             // for (bod_t &bod : bods)
