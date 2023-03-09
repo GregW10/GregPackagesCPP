@@ -53,70 +53,80 @@ concept isIntegralNumWrapper = isNumWrapper<T> && requires (T val, T val2, size_
 };
 
 namespace gtd { // forward declarations, to be able to use the functions inside the classes
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &vec1, const vector2D<V> &vec2);
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &vec1, const vector2D<V> &&vec2);
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &vec2);
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &&vec2);
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &vec1, const vector2D<V> &vec2);
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &vec1, const vector2D<V> &&vec2);
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &vec2);
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &vec1, const vector3D<V> &vec2);
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &vec1, const vector3D<V> &&vec2);
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &vec2);
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &vec1, const vector3D<V> &vec2);
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &vec1, const vector3D<V> &&vec2);
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &vec2);
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &&vec2);
+    namespace vec_ops {
+        template <isNumWrapper U, isNumWrapper V>
+        auto distance(const vector2D<U>& vec1, const vector2D<V>& vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        auto distance(const vector2D<U>& vec1, const vector3D<V>& vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        auto distance(const vector3D<U>& vec1, const vector2D<V>& vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        auto distance(const vector3D<U>& vec1, const vector3D<V>& vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &vec1, const vector3D<V> &&vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &vec2);
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &&vec2);
+    }
     class division_by_zero : public std::invalid_argument {
     public:
         division_by_zero() : std::invalid_argument("Cannot divide by zero.") {}
@@ -183,6 +193,16 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             y = value;
             return *this;
         }
+        virtual vector2D<T> &assign(const T& xcomp, const T& ycomp) {
+            this->x = xcomp;
+            this->y = ycomp;
+            return *this;
+        }
+        virtual vector2D<T> &assign(T&& xcomp, T&& ycomp) noexcept {
+            this->x = std::move(xcomp);
+            this->y = std::move(ycomp);
+            return *this;
+        }
         const T &get_x() const noexcept {
             return x;
         }
@@ -214,15 +234,13 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
                          static_cast<long double>(y)*static_cast<long double>(y)); // std::pow() where possible
         }
         vector2D<long double> unit_vector() const noexcept {
-            if (this->is_zero()) { // no place for a division_by_zero exception if x and y are zero themselves
+            if (this->is_zero()) // no place for a division_by_zero exception if x and y are zero themselves
                 return {};
-            }
             return *this / this->magnitude();
         }
         virtual vector2D<T> &normalise() noexcept {
-            if (this->is_zero()) {
+            if (this->is_zero())
                 return *this;
-            }
             long double mag = this->magnitude();
             this->x /= mag;
             this->y /= mag;
@@ -244,7 +262,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         virtual vector2D<T> &rotate_to(const vector2D<T> &new_direction) noexcept {
             if (this->is_zero())
                 return *this;
-            return this->rotate(angle_between(*this, new_direction));
+            return this->rotate(vec_ops::angle_between(*this, new_direction));
         }
         // template <isNumWrapper U = T>
         virtual vector2D<T> &rotate_to(const vector2D<T> &&new_direction) noexcept {
@@ -1114,37 +1132,53 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator^(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &vec1, const vector2D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &vec1, const vector2D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &&vec1, const vector2D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &&vec1, const vector2D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &vec1, const vector2D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &vec1, const vector2D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &&vec1, const vector2D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &&vec1, const vector2D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &vec1, const vector3D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &vec1, const vector3D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &&vec1, const vector3D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &&vec1, const vector3D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &vec1, const vector3D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &vec1, const vector3D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &&vec1, const vector3D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &&vec1, const vector3D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>; /*
         template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
         friend long double angle_between(const vector2D<U> &vec1, const vector2D<V> &vec2);
         template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
@@ -1176,7 +1210,15 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
         friend long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &vec2);
         template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-        friend long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &&vec2);
+        friend long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &&vec2); */
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto vec_ops::distance(const vector2D<U>& vec1, const vector2D<V>& vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto vec_ops::distance(const vector2D<U>& vec1, const vector3D<V>& vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto vec_ops::distance(const vector3D<U>& vec1, const vector2D<V>& vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto vec_ops::distance(const vector3D<U>& vec1, const vector3D<V>& vec2);
         template <isNumWrapper>
         friend class vector2D;
         template <isNumWrapper>
@@ -1930,6 +1972,30 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->z = value;
             return *this;
         }
+        vector3D<T> &assign(const T& xcomp, const T& ycomp) override {
+            this->x = xcomp;
+            this->y = ycomp;
+            this->z = T{};
+            return *this;
+        }
+        vector3D<T> &assign(T&& xcomp, T&& ycomp) noexcept override {
+            this->x = std::move(xcomp);
+            this->y = std::move(ycomp);
+            this->z = T{};
+            return *this;
+        }
+        vector3D<T> &assign(const T& xcomp, const T& ycomp, const T& zcomp) {
+            this->x = xcomp;
+            this->y = ycomp;
+            this->z = zcomp;
+            return *this;
+        }
+        vector3D<T> &assign(T&& xcomp, T&& ycomp, T&& zcomp) noexcept {
+            this->x = std::move(xcomp);
+            this->y = std::move(ycomp);
+            this->z = std::move(zcomp);
+            return *this;
+        }
         const T &get_z() const {
             return this->z;
         }
@@ -2000,7 +2066,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
                 return *this;
             vector3D<long double> about_unit = about.unit_vector();
             vector3D<long double> cpy(*this); // this assignment is done in case T is not a long double
-            return *this = cosl(angle)*cpy + sinl(angle)*cross(about_unit, cpy) +
+            return *this = cosl(angle)*cpy + sinl(angle)*vec_ops::cross(about_unit, cpy) +
                     (about_unit*cpy)*(1 - cosl(angle))*about_unit;
         }
         virtual vector3D<T> &rodrigues_rotate(const vector3D<T> &&about, long double angle = PI) noexcept {
@@ -2009,7 +2075,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         virtual vector3D<T> &rotate_to(const vector3D<T> &new_direction) noexcept {
             if (this->is_zero())
                 return *this;
-            return this->rodrigues_rotate(cross(*this, new_direction), angle_between(*this, new_direction));
+            return this->rodrigues_rotate(vec_ops::cross(*this, new_direction),
+                                          vec_ops::angle_between(*this, new_direction));
         }
         virtual vector3D<T> &rotate_to(const vector3D<T> &&new_direction) noexcept {
             return this->rotate_to(new_direction);
@@ -2019,7 +2086,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
                 return *this;
             vector2D<long double> about_unit = about.unit_vector();
             vector3D<long double> cpy(*this);
-            return *this = cosl(angle)*cpy + sinl(angle)*cross(about_unit, cpy) +
+            return *this = cosl(angle)*cpy + sinl(angle)*vec_ops::cross(about_unit, cpy) +
                     (about_unit*cpy)*(1 - cosl(angle))*about_unit;
         }
         virtual vector3D<T> &rodrigues_rotate(const vector2D<T> &&about, long double angle = PI) noexcept {
@@ -2028,7 +2095,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         vector3D<T> &rotate_to(const vector2D<T> &new_direction) noexcept override {
             if (this->is_zero())
                 return *this;
-            return this->rodrigues_rotate(cross(*this, new_direction), angle_between(*this, new_direction));
+            return this->rodrigues_rotate(vec_ops::cross(*this, new_direction),
+                                          vec_ops::angle_between(*this, new_direction));
         }
         vector3D<T> &rotate_to(const vector2D<T> &&new_direction) noexcept override {
             return this->rotate_to(new_direction);
@@ -2531,9 +2599,8 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return *this;
         }
         vector3D<T> &operator=(const vector<T> &other) noexcept override {
-            if (&other == this) {
+            if (&other == this)
                 return *this;
-            }
             try {
                 const vector3D<T> &oth = dynamic_cast<const vector3D<T>&>(other);
                 this->x = oth.x;
@@ -2556,14 +2623,14 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->z = other.z;
             return *this;
         }
-        template <typename U> requires (isConvertible<U, T>)
+        template <isConvertible<T> U>
         vector3D<T> &operator=(const vector3D<U> &other) noexcept {
             this->x = other.x;
             this->y = other.y;
             this->z = other.z;
             return *this;
         }
-        template <typename U> requires (isConvertible<U, T>)
+        template <isConvertible<T> U>
         vector3D<T> &operator=(const vector3D<U> &&other) noexcept {
             return *this = other;
         }
@@ -3158,37 +3225,53 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         template <typename U, typename V> requires bitwiseOperands<U, V>
         friend auto operator^(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &vec1, const vector2D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &vec1, const vector2D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &&vec1, const vector2D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &&vec1, const vector2D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &vec1, const vector2D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &vec1, const vector2D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &&vec1, const vector2D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &&vec1, const vector2D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &vec1, const vector3D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &vec1, const vector3D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &&vec1, const vector3D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector2D<U> &&vec1, const vector3D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &vec1, const vector3D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &vec1, const vector3D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &&vec1, const vector3D<V> &vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>;
         template <isNumWrapper U, isNumWrapper V>
-        friend auto cross(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)>;
+        friend auto vec_ops::cross(const vector3D<U> &&vec1, const vector3D<V> &&vec2) ->
+        vector3D<decltype(vec1.x * vec2.y)>; /*
         template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
         friend long double angle_between(const vector2D<U> &vec1, const vector2D<V> &vec2);
         template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
@@ -3220,7 +3303,15 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
         friend long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &vec2);
         template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-        friend long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &&vec2);
+        friend long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &&vec2); */
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto vec_ops::distance(const vector2D<U>& vec1, const vector2D<V>& vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto vec_ops::distance(const vector2D<U>& vec1, const vector3D<V>& vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto vec_ops::distance(const vector3D<U>& vec1, const vector2D<V>& vec2);
+        template <isNumWrapper U, isNumWrapper V>
+        friend auto vec_ops::distance(const vector3D<U>& vec1, const vector3D<V>& vec2);
         template <isNumWrapper>
         friend class vector2D;
         template <isNumWrapper>
@@ -4487,185 +4578,200 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
     auto operator^(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x ^ vec2.x)> {
         return vector3D<decltype(vec1.x ^ vec2.x)>(vec1.x ^ vec2.x, vec1.y ^ vec2.y, vec2.z);
     }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(0, 0, vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(0, 0, vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(0, 0, vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(0, 0, vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(-vec1.z*vec2.y, // vec2.z is zero
-                                                   vec1.z*vec2.x,
-                                                   vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(-vec1.z*vec2.y,
-                                                   vec1.z*vec2.x,
-                                                   vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(-vec1.z*vec2.y,
-                                                   vec1.z*vec2.x,
-                                                   vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(-vec1.z*vec2.y,
-                                                   vec1.z*vec2.x,
-                                                   vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z, // vec1.z is zero
-                                                   -vec1.x*vec2.z,
-                                                   vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z,
-                                                   -vec1.x*vec2.z,
-                                                   vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z,
-                                                   -vec1.x*vec2.z,
-                                                   vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z,
-                                                   -vec1.x*vec2.z,
-                                                   vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z - vec1.z*vec2.y,
-                                                   vec1.z*vec2.x - vec1.x*vec2.z,
-                                                   vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z - vec1.z*vec2.y,
-                                                   vec1.z*vec2.x - vec1.x*vec2.z,
-                                                   vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z - vec1.z*vec2.y,
-                                                   vec1.z*vec2.x - vec1.x*vec2.z,
-                                                   vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V>
-    auto cross(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
-        return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z - vec1.z*vec2.y,
-                                                   vec1.z*vec2.x - vec1.x*vec2.z,
-                                                   vec1.x*vec2.y - vec1.y*vec2.x);
-    }
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &vec1, const vector2D<V> &vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    } // have to check for less than -1 or greater than 1 because of f. p. rounding errors
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &vec1, const vector2D<V> &&vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    }
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    }
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &&vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    }
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &vec1, const vector2D<V> &vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    }
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &vec1, const vector2D<V> &&vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    }
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    }
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &&vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    }
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &vec1, const vector3D<V> &vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    }
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &vec1, const vector3D<V> &&vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    }
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    }
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &&vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    }
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &vec1, const vector3D<V> &vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    }
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &vec1, const vector3D<V> &&vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    }
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    }
-    template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V, long double>
-    long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &&vec2) {
-        long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
-        return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
-    }
-    inline long double rad_to_deg(const long double &radians) {
-        return (radians*180)/PI;
-    }
-    inline long double deg_to_rad(const long double &degrees) {
-        return (degrees*PI)/180;
-    }
-    inline long double rad_to_deg(const long double &&radians) {
-        return (radians*180)/PI;
-    }
-    inline long double deg_to_rad(const long double &&degrees) {
-        return (degrees*PI)/180;
+    namespace vec_ops {
+        template <isNumWrapper U, isNumWrapper V>
+        auto distance(const vector2D<U>& vec1, const vector2D<V>& vec2) {
+            auto dist_x = vec2.x - vec1.x;
+            auto dist_y = vec2.y - vec1.y;
+            return std::sqrtl(dist_x*dist_x + dist_y*dist_y);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto distance(const vector2D<U>& vec1, const vector3D<V>& vec2) {
+            auto dist_x = vec2.x - vec1.x;
+            auto dist_y = vec2.y - vec1.y;
+            return std::sqrtl(dist_x*dist_x + dist_y*dist_y + vec2.z*vec2.z);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto distance(const vector3D<U>& vec1, const vector2D<V>& vec2) {
+            auto dist_x = vec2.x - vec1.x;
+            auto dist_y = vec2.y - vec1.y;
+            return std::sqrtl(dist_x*dist_x + dist_y*dist_y + vec1.z*vec1.z);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto distance(const vector3D<U>& vec1, const vector3D<V>& vec2) {
+            auto dist_x = vec2.x - vec1.x;
+            auto dist_y = vec2.y - vec1.y;
+            auto dist_z = vec2.z - vec1.z;
+            return std::sqrtl(dist_x*dist_x + dist_y*dist_y + dist_z*dist_z);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(0, 0, vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(0, 0, vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(0, 0, vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(0, 0, vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(-vec1.z*vec2.y, // vec2.z is zero
+                                                       vec1.z*vec2.x,
+                                                       vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(-vec1.z*vec2.y,
+                                                       vec1.z*vec2.x,
+                                                       vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &&vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(-vec1.z*vec2.y,
+                                                       vec1.z*vec2.x,
+                                                       vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &&vec1, const vector2D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(-vec1.z*vec2.y,
+                                                       vec1.z*vec2.x,
+                                                       vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z, // vec1.z is zero
+                                                       -vec1.x*vec2.z,
+                                                       vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z,
+                                                       -vec1.x*vec2.z,
+                                                       vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z,
+                                                       -vec1.x*vec2.z,
+                                                       vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector2D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z,
+                                                       -vec1.x*vec2.z,
+                                                       vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z - vec1.z*vec2.y,
+                                                       vec1.z*vec2.x - vec1.x*vec2.z,
+                                                       vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z - vec1.z*vec2.y,
+                                                       vec1.z*vec2.x - vec1.x*vec2.z,
+                                                       vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &&vec1, const vector3D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z - vec1.z*vec2.y,
+                                                       vec1.z*vec2.x - vec1.x*vec2.z,
+                                                       vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        auto cross(const vector3D<U> &&vec1, const vector3D<V> &&vec2) -> vector3D<decltype(vec1.x * vec2.y)> {
+            return vector3D<decltype(vec1.x * vec2.y)>(vec1.y*vec2.z - vec1.z*vec2.y,
+                                                       vec1.z*vec2.x - vec1.x*vec2.z,
+                                                       vec1.x*vec2.y - vec1.y*vec2.x);
+        }
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &vec1, const vector2D<V> &vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        } // have to check for less than -1 or greater than 1 because of f. p. rounding errors
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &vec1, const vector2D<V> &&vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        }
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        }
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &&vec1, const vector2D<V> &&vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        }
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &vec1, const vector2D<V> &vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        }
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &vec1, const vector2D<V> &&vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        }
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        }
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &&vec1, const vector2D<V> &&vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        }
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &vec1, const vector3D<V> &vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        }
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &vec1, const vector3D<V> &&vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        }
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        }
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector2D<U> &&vec1, const vector3D<V> &&vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        }
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &vec1, const vector3D<V> &vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        }
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &vec1, const vector3D<V> &&vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        }
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        }
+        template <isNumWrapper U, isNumWrapper V> requires isConvertible<U, long double> && isConvertible<V,long double>
+        long double angle_between(const vector3D<U> &&vec1, const vector3D<V> &&vec2) {
+            long double cosine_of_angle = (vec1*vec2)/(vec1.magnitude()*vec2.magnitude());
+            return cosine_of_angle > 1 ? 0 : (cosine_of_angle < -1 ? PI : acosl(cosine_of_angle));
+        }
     }
     typedef vector2D<long double> vec2;
     typedef vector3D<long double> vec3;

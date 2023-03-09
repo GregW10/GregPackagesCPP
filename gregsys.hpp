@@ -427,50 +427,89 @@ namespace gtd {
                 tot_e.push_back(total_pe + total_ke);
             }
         }
-        void leapfrog_kdk_acc_e_and_step() {
-            MEM_LOOP
-            static auto loop = [this]<bool mem, bool file, bool only_e = false>{
-                num_bods = bods.size();
-                for (outer = 0; outer < num_bods; ++outer) {
-                    bod_t &ref = bods[outer];
-                    for (inner = outer + 1; inner < num_bods; ++inner) {
-                        if constexpr (mem)
-                            this->cumulative_acc_and_pe(ref, bods[inner]);
-                        else if constexpr (only_e)
-                            this->cumulative_pe(ref, bods[inner]);
-                        else
-                            this->cumulative_acc(ref, bods[inner]);
-                    }
-                    if constexpr (only_e) {
+        template <bool mem, bool file, bool only_e = false>
+        void loop_kdk() {
+            num_bods = bods.size();
+            for (outer = 0; outer < num_bods; ++outer) {
+                bod_t &ref = bods[outer];
+                for (inner = outer + 1; inner < num_bods; ++inner) {
+                    if constexpr (mem && memFreq)
+                        this->cumulative_acc_and_pe(ref, bods[inner]);
+                    else if constexpr (only_e && memFreq)
+                        this->cumulative_pe(ref, bods[inner]);
+                    else
+                        this->cumulative_acc(ref, bods[inner]);
+                }
+                if constexpr (only_e && memFreq) {
+                    ref.pe /= T{2};
+                    pe[ref.id].push_back(ref.pe);
+                    energy[ref.id].push_back(ref.curr_ke + ref.pe);
+                    total_pe += ref.pe;
+                    total_ke += ref.curr_ke;
+                }
+                else {
+                    /* KICK for half a step */
+                    ref.curr_vel += half_dt*ref.acc;
+                    if constexpr (mem && memFreq) {
                         ref.pe /= T{2};
+                        ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
                         pe[ref.id].push_back(ref.pe);
                         energy[ref.id].push_back(ref.curr_ke + ref.pe);
                         total_pe += ref.pe;
                         total_ke += ref.curr_ke;
                     }
-                    else {
-                        /* KICK for half a step */
-                        ref.curr_vel += half_dt*ref.acc;
-                        if constexpr (mem) {
-                            ref.pe /= T{2};
-                            ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
-                            pe[ref.id].push_back(ref.pe);
-                            energy[ref.id].push_back(ref.curr_ke + ref.pe);
-                            total_pe += ref.pe;
-                            total_ke += ref.curr_ke;
-                        }
-                        if constexpr (file) {
-                            // WRITE TO FILE
-                        }
+                    if constexpr (file && fileFreq) {
+                        // WRITE TO FILE
                     }
                 }
-            };
-            FUNC_TEMPL_SELECT(loop.template operator(), return;)
+            }
+        }
+        void leapfrog_kdk_acc_e_and_step() {
+            MEM_LOOP
+            // static auto loop = [this]<bool mem, bool file, bool only_e = false>{
+            //     num_bods = bods.size();
+            //     for (outer = 0; outer < num_bods; ++outer) {
+            //         bod_t &ref = bods[outer];
+            //         for (inner = outer + 1; inner < num_bods; ++inner) {
+            //             if constexpr (mem && memFreq)
+            //                 this->cumulative_acc_and_pe(ref, bods[inner]);
+            //             else if constexpr (only_e && memFreq)
+            //                 this->cumulative_pe(ref, bods[inner]);
+            //             else
+            //                 this->cumulative_acc(ref, bods[inner]);
+            //         }
+            //         if constexpr (only_e && memFreq) {
+            //             ref.pe /= T{2};
+            //             pe[ref.id].push_back(ref.pe);
+            //             energy[ref.id].push_back(ref.curr_ke + ref.pe);
+            //             total_pe += ref.pe;
+            //             total_ke += ref.curr_ke;
+            //         }
+            //         else {
+            //             /* KICK for half a step */
+            //             ref.curr_vel += half_dt*ref.acc;
+            //             if constexpr (mem && memFreq) {
+            //                 ref.pe /= T{2};
+            //                 ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
+            //                 pe[ref.id].push_back(ref.pe);
+            //                 energy[ref.id].push_back(ref.curr_ke + ref.pe);
+            //                 total_pe += ref.pe;
+            //                 total_ke += ref.curr_ke;
+            //             }
+            //             if constexpr (file && fileFreq) {
+            //                 // WRITE TO FILE
+            //             }
+            //         }
+            //     }
+            // };
+            // FUNC_TEMPL_SELECT(loop.template operator(), return;)
+            FUNC_TEMPL_SELECT(loop_kdk, return;)
             /* repeatedly evaluating the same if constexpr conditions DOES NOT MATTER (apart from slightly increasing
              * compilation time) given that they are evaluated at compile time, so there is never any runtime overhead*/
             if constexpr (collisions == overlap_coll_check) {
                 // std::cout << "never get here!" << std::endl;
-                loop.template operator()<false, false, true>();
+                // loop.template operator()<false, false, true>();
+                loop_kdk<false, false, true>();
             }
             // for (outer = 0; outer < num_bods; ++outer) {
             //     bod_t &ref = bods[outer];
@@ -491,33 +530,58 @@ namespace gtd {
                 tot_e.push_back(total_pe + total_ke);
             }
         }
+        template <bool mem, bool file>
+        void loop_dkd() {
+            for (outer = 0; outer < num_bods; ++outer) {
+                bod_t &ref = bods[outer];
+                for (inner = outer + 1; inner < num_bods; ++inner)
+                    cumulative_acc(ref, bods[inner]);
+                /* KICK for a full step */
+                ref.curr_vel += dt*ref.acc;
+                /* DRIFT for half a step */
+                ref.curr_pos += half_dt*ref.curr_vel;
+                /* the reason it is possible to update the outer body's position within the outer loop (without
+                 * affecting the synchronisation of the particles) is because, by here, its effect (at its
+                 * now-previous position) on all the other particles in the system has been calculated (all
+                 * subsequent updates of the accelerations of the other particles no longer depend on the position
+                 * of the outer body) */
+                if constexpr (mem && memFreq) {
+                    ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
+                    total_ke += ref.curr_ke;
+                }
+                if (file && fileFreq) {
+                    // WRITE TO FILE
+                }
+            }
+        }
         void leapfrog_dkd_acc_e_and_step() {
             MEM_LOOP
             num_bods = bods.size();
-            static auto loop = [this]<bool mem, bool file>{
-                for (outer = 0; outer < num_bods; ++outer) {
-                    bod_t &ref = bods[outer];
-                    for (inner = outer + 1; inner < num_bods; ++inner)
-                        cumulative_acc(ref, bods[inner]);
-                    /* KICK for a full step */
-                    ref.curr_vel += dt*ref.acc;
-                    /* DRIFT for half a step */
-                    ref.curr_pos += half_dt*ref.curr_vel;
-                    /* the reason it is possible to update the outer body's position within the outer loop (without
-                     * affecting the synchronisation of the particles) is because, by here, its effect (at its
-                     * now-previous position) on all the other particles in the system has been calculated (all
-                     * subsequent updates of the accelerations of the other particles no longer depend on the position
-                     * of the outer body) */
-                    if (mem) {
-                        ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
-                        total_ke += ref.curr_ke;
-                    }
-                    if (file) {
-                        // WRITE TO FILE
-                    }
-                }
-            };
-            FUNC_TEMPL_SELECT(loop.template operator(), return;)
+            // static auto loop = [this]<bool mem, bool file>{
+            //     for (outer = 0; outer < num_bods; ++outer) {
+            //         bod_t &ref = bods[outer];
+            //         for (inner = outer + 1; inner < num_bods; ++inner)
+            //             cumulative_acc(ref, bods[inner]);
+            //         /* KICK for a full step */
+            //         ref.curr_vel += dt*ref.acc;
+            //         /* DRIFT for half a step */
+            //         ref.curr_pos += half_dt*ref.curr_vel;
+            //         /* the reason it is possible to update the outer body's position within the outer loop (without
+            //          * affecting the synchronisation of the particles) is because, by here, its effect (at its
+            //          * now-previous position) on all the other particles in the system has been calculated (all
+            //          * subsequent updates of the accelerations of the other particles no longer depend on the position
+            //          * of the outer body) */
+            //         if constexpr (mem && memFreq) {
+            //             ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
+            //             total_ke += ref.curr_ke;
+            //         }
+            //         if (file && fileFreq) {
+            //             // WRITE TO FILE
+            //         }
+            //     }
+            // };
+            // FUNC_TEMPL_SELECT(loop.template operator(), return;)
+            FUNC_TEMPL_SELECT(loop_dkd, return;)
             /* a second loop is required to compute the potential energies based on the updated positions */
             if constexpr (memFreq) { // again, only reached if not steps % memFreq (checked within FUNC_TEMPL_SELECT)
                 for (outer = 0; outer < num_bods; ++outer) {
@@ -1518,7 +1582,10 @@ namespace gtd {
                 }
             return false;
         }
-        static inline sys_t hcp_comet(const T &rad, const R &sep, const R &b_rad, const M &b_mass, long double r_coeff){
+        static inline sys_t hcp_comet(const T &rad, const vector3D<T> &pos, const vector3D<T> &vel, const R &sep,
+                                      const M &b_mass, const R &b_rad, long double r_coeff,
+                                      bool force_central_body = false, long double timestep = 1,
+                                      uint64_t num_iterations = 1'000, const char *units_format = "M1:1,D1:1,T1:1") {
             using vec = vector3D<T>;
             if (rad <= 0)
                 throw negative_radius_error{"Error: comet radius must be larger than zero.\n"};
@@ -1534,8 +1601,13 @@ namespace gtd {
             const R b_sep = b_rad*2 + sep; // separation between the centres of adjacent bodies
             const R b_halfsep = b_rad + sep/2.0l; // haven't done b_sep/2 to minimise f.p. error
             const T radl = rad + rad*0.0625l; // slightly larger radius to create hcp cube
-            uint64_t lbods = radl / (2*b_rad); // number of bodies along length of cube
-            uint64_t whbods = radl / (std::sqrtl(3)*b_rad); // number of bodies along width and along height of cube
+            uint64_t lbods = std::llroundl(2*radl / (b_sep)); // number of bodies along length of cube
+            uint64_t whbods = std::llroundl((2*radl*std::sqrtl(3)) / b_sep); // num. along width and along height of cube
+            std::cout << "b_sep: " << b_sep << std::endl;
+            std::cout << "b_halfsep: " << b_halfsep << std::endl;
+            std::cout << "radl: " << radl << std::endl;
+            std::cout << "lbods: " << lbods << std::endl;
+            std::cout << "whbods: " << whbods << std::endl;
             std::vector<vec> first_row; // first row of bodies
             first_row.reserve(lbods);
             while (counter < lbods) // create position vectors for all bodies in the first row
@@ -1554,7 +1626,6 @@ namespace gtd {
             T y_coord{};
             counter = 1;
             while (++counter < whbods) {
-                row.clear();
                 row.reserve(lbods);
                 y_coord = counter*y_sep;
                 if (!(counter % 2))
@@ -1564,12 +1635,13 @@ namespace gtd {
                     for (const vec &v : second_row)
                         row.emplace_back(v.x, y_coord);
                 plane_A.emplace_back(std::move(row));
+                row.clear();
             }
             y_coord = b_halfsep / std::sqrtl(3);
             T y_coord2 = y_coord + y_sep;
             T z_sep = b_sep*std::sqrtl(2.0l/3.0l);
-            T *ptr1 = first_row.data();
-            T *ptr2 = second_row.data();
+            vec *ptr1 = first_row.data();
+            vec *ptr2 = second_row.data();
             counter = 0;
             while (counter++ < lbods) {
                 ptr1->x += b_halfsep;
@@ -1582,6 +1654,93 @@ namespace gtd {
             std::vector<std::vector<vec>> plane_B;
             plane_B.emplace_back(first_row);
             plane_B.emplace_back(second_row);
+            counter = 1;
+            while (++counter < whbods) {
+                row.reserve(lbods);
+                y_coord2 = y_coord + counter*y_sep;
+                if (!(counter % 2))
+                    for (const vec &v : first_row)
+                        row.emplace_back(v.x, y_coord2);
+                else
+                    for (const vec &v : second_row)
+                        row.emplace_back(v.x, y_coord2);
+                plane_B.emplace_back(std::move(row));
+                row.clear();
+            }
+            std::vector<std::vector<std::vector<vec>>> cube = {plane_A, plane_B};
+            std::vector<std::vector<vec>> plane;
+            counter = 1;
+            while (++counter < whbods) {
+                row.reserve(lbods);
+                plane.reserve(whbods);
+                y_coord2 = counter*z_sep; // reusing y_coord2 - actually represents z-coordinate in this loop
+                if (!(counter % 2))
+                    for (const std::vector<vec> &_row : plane_A) {
+                        for (const vec &v : _row) {
+                            row.emplace_back(v.x, v.y, y_coord2);
+                        }
+                        plane.emplace_back(std::move(row));
+                        row.clear();
+                    }
+                else
+                    for (const std::vector<vec> &_row : plane_B) {
+                        for (const vec &v : _row) {
+                            row.emplace_back(v.x, v.y, y_coord2);
+                        }
+                        plane.emplace_back(std::move(row));
+                        row.clear();
+                    }
+                cube.emplace_back(std::move(plane));
+                plane.clear();
+            }
+            /* By this point, the positions for the entire HCP-cube will have been generated. Now the central position
+             * will be selected, and the points that fall within the comet's radius of the central point will be used to
+             * construct gtd::body<> objects. */
+            vec centre;
+            if (force_central_body) { // comet will be centred on a particular body
+                centre = cube[whbods/2][whbods/2][lbods/2];
+            }
+            else { // comet will be centred on the geometrical centre of the HCP cube generated
+                centre.x = cube[0][1][lbods - 1].x - cube[0][0][0].x;
+                centre.y = cube[0][whbods - 1][0].y - cube[0][0][0].y;
+                centre.z = cube[whbods - 1][0][0].z - cube[0][0][0].z;
+            }
+            // for (typename std::vector<std::vector<std::vector<vec>>>::reverse_iterator rit = cube.rbegin(),
+            //         r_end = cube.rend(); rit != r_end; ++rit) {
+            // }
+            std::vector<bod_t> bodies;
+            uint64_t half_lbods = lbods/2;
+            vec *_beg;
+            vec *_end;
+            vec *_h1;
+            vec *_h2;
+            /* Now comes the juicy part. In this loop, every row of every plane in the cube is iterated over. The
+             * pointers _h1 and _h2 ( == half 1 and half 2) are made to point to the central two vectors within a single
+             * row. Whilst the vectors fall within the radius of the comet (by calculating their distances to its
+             * centre) _h1 and _h2 are decremented and incremented, respectively, whilst constructing bodies at those
+             * points. Once _h1 or _h2 point to a vector that falls outside the radius, the iteration stops, so as not
+             * to compute distances for the following vectors pointlessly, and the next row is moved on to. */
+            /* If lbods is even, lbods/2 iterations will be performed for _h1 and _h2. If lbods is odd, lbods/2.0 - 0.5
+             * iterations will be performed for _h1 and lbods/2.0 + 0.5 iterations for _h2 (1 more for _h2). */
+            for (std::vector<std::vector<vec>> &_plane : cube) {
+                for (std::vector<vec> &_row : _plane) {
+                    for (const auto & v : _row) {
+                        bodies.emplace_back(b_mass, b_rad, v, vec{});
+                    }
+                    continue;
+                    _beg = _row.data(); // first vector3D in row
+                    _end = _beg + lbods; // past the last vector3D in row
+                    _h1 = _beg + half_lbods;
+                    _h2 = _h1--;
+                    while (_h1 >= _beg && vec_ops::distance(*_h1, centre) <= rad)
+                        bodies.emplace_back(b_mass, b_rad, *_h1-- - centre + pos, vel, r_coeff);
+                    while (_h2 < _end && vec_ops::distance(*_h2, centre) <= rad)
+                        bodies.emplace_back(b_mass, b_rad, *_h2++ - centre + pos, vel, r_coeff);
+                }
+            }
+            /* As of C++17, copy elision GUARANTEES that a returned prvalue is constructed directly in the memory
+             * location of the return value, thus avoiding unnecessary copies. */
+            return sys_t{std::move(bodies), timestep, num_iterations, units_format};
         }
         void reset() requires (memFreq != 0) {
             // for (bod_t &bod : bods)

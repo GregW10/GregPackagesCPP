@@ -89,7 +89,7 @@ namespace gtd {
         unsigned int y;
     };
     template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper PosT, isNumWrapper, isNumWrapper, isNumWrapper,
-              ull_t> requires isConvertible<long double, PosT>
+              uint64_t> requires isConvertible<long double, PosT>
     class star;
     template <isNumWrapper PosT = long double, isNumWrapper DirT = long double, isNumWrapper LenT = long double>
     class ray : public vector3D<DirT> {
@@ -104,7 +104,7 @@ namespace gtd {
         static inline const vector3D<DirT> zero{};
         vector3D<PosT> pos; // origin of the ray
         LenT l{0}; // length of the ray
-        unsigned long long ibod_id = -1; // intersected body id - a ray stores the id of the body it intersects with
+        uint64_t ibod_id = -1; // intersected body id - a ray stores the id of the body it intersects with
         bool intersected = false;
         mutable vector3D<DirT> normal; // set during the reaches() method - used internally by astro_scene
         ray<PosT, DirT, LenT> &calc() {
@@ -220,7 +220,7 @@ namespace gtd {
                 throw no_intersection();
             return ibod_id;
         }
-        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, ull_t recFreq>
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t recFreq>
         bool intersects(const body<M, R, T, recFreq> &bod) {
             /* This method calculates whether the ray intersects with a given body, and if it does, stores the
              * intersection distance in l. The 'b' and 'c' variables below are quadratic formula coefficients - the 'a'
@@ -243,11 +243,11 @@ namespace gtd {
             ibod_id = bod.id;
             return (intersected = true);
         }
-        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, ull_t recFreq>
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t recFreq>
         bool intersects(const body<M, R, T, recFreq> &&bod) {
             return intersects(bod);
         }
-        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, ull_t recFreq, container C, typename ... except>
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t recFreq, container C, typename ... except>
         requires (std::same_as<typename C::mapped_type, const body<M, R, T, recFreq>*> ||
                   isConvertible<typename C::mapped_type, const body<M, R, T, recFreq>*>) &&
                   std::same_as<typename C::key_type, const unsigned long long>
@@ -304,110 +304,112 @@ namespace gtd {
             ibod_id = closest_body_id;
             return (intersected = true);
         }
-        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, ull_t rF>
+        template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
         bool reaches(const body<M, R, T, rF>* b, const vector3D<PosT> &point_on_body) const {
             return ibod_id == b->id && (this->normal = (point_on_body - b->curr_pos))*(*this) <= 0;
         }
         auto end_point() const {
             return pos + (*this)*l;
         }
-        // ray_t &set_x(DirT value) noexcept override {
-        //     vector3D<DirT>::x = value;
-        //     return *this;
-        // }
-        // ray_t &set_y(DirT value) noexcept override {
-        //     vector3D<DirT>::y = value;
-        //     return *this;
-        // }
-        // ray_t &set_z(DirT value) noexcept override {
-        //     vector3D<DirT>::z = value;
-        //     return *this;
-        // }
-        // ray_t &make_zero() override {
-        //     vector3D<DirT>::x = DirT{0};
-        //     vector3D<DirT>::y = DirT{0};
-        //     vector3D<DirT>::z = DirT{0};
-        //     return *this;
-        // }
-        // ray_t &set_length(const DirT &new_length) noexcept override {
-        //     long double frac = new_length/this->magnitude();
-        //     vector3D<DirT>::x *= frac;
-        //     vector3D<DirT>::y *= frac;
-        //     vector3D<DirT>::z *= frac;
-        //     return *this;
-        // }
-        // ray_t &set_length(const DirT &&new_length) noexcept override {
-        //     long double frac = new_length/this->magnitude();
-        //     vector3D<DirT>::x *= frac;
-        //     vector3D<DirT>::y *= frac;
-        //     vector3D<DirT>::z *= frac;
-        //     return *this;
-        // }
-        // ray_t &normalise() noexcept override { // makes the vector a unit vector
-        //     if (this->is_zero()) {
-        //         return *this;
-        //     }
-        //     long double mag = this->magnitude();
-        //     vector3D<DirT>::x /= mag;
-        //     vector3D<DirT>::y /= mag;
-        //     vector3D<DirT>::z /= mag;
-        //     return *this;
-        // }
-        // ray_t &rotate(const long double &&angle_in_rad = __PI__, char about = 'z') override {
-        //     this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
-        //     return *this;
-        // }
-        // ray_t &rotate(const long double &angle_in_rad = PI, char about = 'z') override {
-        //     this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
-        //     return *this;
-        // }
-        // // template <isNumWrapper U = T>
-        // ray_t &rodrigues_rotate(const vector3D<DirT> &about, long double angle = PI) noexcept override {
-        //     vector3D<DirT>::rodrigues_rotate(about, angle);
-        //     return *this;
-        // }
-        // // template <isNumWrapper U = T>
-        // ray_t &rodrigues_rotate(const vector3D<DirT> &&about, long double angle = PI) noexcept override {
-        //     return this->rodrigues_rotate(about, angle);
-        // }
-        // // template <isNumWrapper U = T>
-        // ray_t &rotate_to(const vector3D<DirT> &new_direction) noexcept override {
-        //     if (this->is_zero()) {
-        //         return *this;
-        //     }
-        //     return this->rodrigues_rotate(cross(*this, new_direction), angle_between(*this, new_direction));
-        // }
-        // // template <isNumWrapper U = T>
-        // ray_t &rotate_to(const vector3D<DirT> &&new_direction) noexcept override {
-        //     return this->rotate_to(new_direction);
-        // }
-        // // template <isNumWrapper U = T>
-        // ray_t &rodrigues_rotate(const vector2D<DirT> &about, long double angle = PI) noexcept override {
-        //     vector3D<DirT>::rodrigues_rotate(about, angle);
-        //     return *this;
-        // }
-        // // template <isNumWrapper U = T>
-        // ray_t &rodrigues_rotate(const vector2D<DirT> &&about, long double angle = PI) noexcept override {
-        //     return this->rodrigues_rotate(about, angle);
-        // }
-        // // template <isNumWrapper U = T>
-        // ray_t &rotate_to(const vector2D<DirT> &new_direction) noexcept override {
-        //     if (this->is_zero()) {
-        //         return *this;
-        //     }
-        //     return this->rodrigues_rotate(cross(*this, new_direction), angle_between(*this, new_direction));
-        // }
-        // // template <isNumWrapper U = T>
-        // ray_t &rotate_to(const vector2D<DirT> &&new_direction) noexcept override {
-        //     return this->rotate_to(new_direction);
-        // }
-        // ray_t &apply(const matrix<DirT> &transform) override {
-        //     vector3D<DirT>::apply(transform);
-        //     return *this;
-        // }
-        // ray_t &apply(const matrix<DirT> &&transform) override {
-        //     return this->apply(transform);
-        // }
+        ray_t &set_x(DirT value) noexcept override {
+            vector3D<DirT>::x = value;
+            return *this;
+        }
+        ray_t &set_y(DirT value) noexcept override {
+            vector3D<DirT>::y = value;
+            return *this;
+        }
+        ray_t &set_z(DirT value) noexcept override {
+            vector3D<DirT>::z = value;
+            return *this;
+        }
+        ray_t &make_zero() override {
+            vector3D<DirT>::x = DirT{0};
+            vector3D<DirT>::y = DirT{0};
+            vector3D<DirT>::z = DirT{0};
+            return *this;
+        }
+        ray_t &set_length(const DirT &new_length) noexcept override {
+            long double frac = new_length/this->magnitude();
+            vector3D<DirT>::x *= frac;
+            vector3D<DirT>::y *= frac;
+            vector3D<DirT>::z *= frac;
+            return *this;
+        }
+        ray_t &set_length(const DirT &&new_length) noexcept override {
+            long double frac = new_length/this->magnitude();
+            vector3D<DirT>::x *= frac;
+            vector3D<DirT>::y *= frac;
+            vector3D<DirT>::z *= frac;
+            return *this;
+        }
+        ray_t &normalise() noexcept override { // makes the vector a unit vector
+            if (this->is_zero()) {
+                return *this;
+            }
+            long double mag = this->magnitude();
+            vector3D<DirT>::x /= mag;
+            vector3D<DirT>::y /= mag;
+            vector3D<DirT>::z /= mag;
+            return *this;
+        }
+        ray_t &rotate(const long double &&angle_in_rad = __PI__, char about = 'z') override {
+            this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
+            return *this;
+        }
+        ray_t &rotate(const long double &angle_in_rad = PI, char about = 'z') override {
+            this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
+            return *this;
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rodrigues_rotate(const vector3D<DirT> &about, long double angle = PI) noexcept override {
+            vector3D<DirT>::rodrigues_rotate(about, angle);
+            return *this;
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rodrigues_rotate(const vector3D<DirT> &&about, long double angle = PI) noexcept override {
+            return this->rodrigues_rotate(about, angle);
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rotate_to(const vector3D<DirT> &new_direction) noexcept override {
+            if (this->is_zero()) {
+                return *this;
+            }
+            return this->rodrigues_rotate(vec_ops::cross(*this, new_direction),
+                                          vec_ops::angle_between(*this, new_direction));
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rotate_to(const vector3D<DirT> &&new_direction) noexcept override {
+            return this->rotate_to(new_direction);
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rodrigues_rotate(const vector2D<DirT> &about, long double angle = PI) noexcept override {
+            vector3D<DirT>::rodrigues_rotate(about, angle);
+            return *this;
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rodrigues_rotate(const vector2D<DirT> &&about, long double angle = PI) noexcept override {
+            return this->rodrigues_rotate(about, angle);
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rotate_to(const vector2D<DirT> &new_direction) noexcept override {
+            if (this->is_zero()) {
+                return *this;
+            }
+            return this->rodrigues_rotate(vec_ops::cross(*this, new_direction),
+                                          vec_ops::angle_between(*this, new_direction));
+        }
+        // template <isNumWrapper U = T>
+        ray_t &rotate_to(const vector2D<DirT> &&new_direction) noexcept override {
+            return this->rotate_to(new_direction);
+        }
+        ray_t &apply(const matrix<DirT> &transform) override {
+            vector3D<DirT>::apply(transform);
+            return *this;
+        }
+        ray_t &apply(const matrix<DirT> &&transform) override {
+            return this->apply(transform);
+        }
         ray_t &operator=(const vector<DirT> &other) noexcept override {
             vector3D<DirT>::operator=(other);
             this->calc();
@@ -418,19 +420,19 @@ namespace gtd {
             this->calc();
             return *this;
         }
-        template <typename U> requires (isConvertible<U, DirT>)
+        template <isConvertible<DirT> U>
         ray_t &operator=(const vector3D<U> &other) noexcept {
             vector3D<DirT>::operator=(other);
             this->calc();
             return *this;
         }
-        template <typename U> requires (isConvertible<U, DirT>)
+        template <isConvertible<DirT> U>
         ray_t &operator=(const vector3D<U> &&other) noexcept {
             vector3D<DirT>::operator=(other); // no need to use std::move() here
             this->calc();
             return *this;
         }
-        ray_t &operator=(const vector<DirT> &&other) noexcept override {
+        ray_t &operator=(vector<DirT> &&other) noexcept override {
             vector3D<DirT>::operator=(std::move(other));
             this->calc();
             return *this;
@@ -471,7 +473,7 @@ namespace gtd {
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper>
         friend class light_src;
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
-                  isNumWrapper, bool>
+                  isNumWrapper, bool, uint64_t>
         friend class astro_scene;
     };
     template <isNumWrapper PosT = long double, isNumWrapper DirT = long double,
@@ -548,7 +550,7 @@ namespace gtd {
         template <isNumWrapper PosU, isNumWrapper DirU, isNumWrapper LenU, isNumWrapper LumU>
         friend std::ostream &operator<<(std::ostream &os, const light_src<PosU, DirU, LenU, LumU> &src);
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
-                  isNumWrapper, bool, ull_t>
+                  isNumWrapper, bool, uint64_t>
         friend class astro_scene;
     };
     template <isNumWrapper PosT = long double, isNumWrapper DirT = long double, isNumWrapper DistT = long double>
@@ -599,12 +601,12 @@ namespace gtd {
                     angle_with_down = PI;
                 goto end;
             }
-            perp = cross(down, dir);
-            angle_with_down = angle_between(down, dir);
+            perp = vec_ops::cross(down, dir);
+            angle_with_down = vec_ops::angle_between(down, dir);
             if (dir.x < 0)
-                rotation_correction = angle_between(forwards, dir.xy_projection());
+                rotation_correction = vec_ops::angle_between(forwards, dir.xy_projection());
             else if (dir.x > 0)
-                rotation_correction = -angle_between(forwards, dir.xy_projection());
+                rotation_correction = -vec_ops::angle_between(forwards, dir.xy_projection());
             else if (dir.y < 0)
                 rotation_correction = PI;
             end:
@@ -727,10 +729,10 @@ namespace gtd {
             return *this;
         }
         long double fovh_rad() const noexcept { // horizontal field of view in radians
-            return dims.x <= dims.y ? 2*atanl(1.0l/dist) : 2*atanl(dims.x/(dims.y*dist));
+            return dims.x <= dims.y ? 2*std::atanl(1.0l/dist) : 2*std::atanl(dims.x/(dims.y*dist));
         }
         long double fovv_rad() const noexcept { // vertical field of view in radians
-            return dims.y <= dims.x ? 2*atanl(1.0l/dist) : 2*atanl(dims.y/(dims.x*dist));
+            return dims.y <= dims.x ? 2*std::atanl(1.0l/dist) : 2*std::atanl(dims.y/(dims.x*dist));
         }
         long double fovd_rad() const noexcept { // diagonal field of view in radians
             long double x_ratio;
@@ -743,7 +745,7 @@ namespace gtd {
                 x_ratio = 1;
                 y_ratio = ((long double) dims.y)/dims.x;
             }
-            return 2*atanl(sqrtl(x_ratio*x_ratio + y_ratio*y_ratio)/dist);
+            return 2*std::atanl(std::sqrtl(x_ratio*x_ratio + y_ratio*y_ratio)/dist);
         }
         long double fovh_deg() const noexcept { // horizontal field of view in degrees
             return rad_to_deg(fovh_rad());
@@ -764,12 +766,12 @@ namespace gtd {
             return ry.rodrigues_rotate(perp, angle_with_down).rodrigues_rotate(dir, -rotation_correction - rot);
         } // ^^^ rotate to camera's direction and rotate around camera's z-axis appropriately
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
-                  isNumWrapper, bool, ull_t>
+                  isNumWrapper, bool, uint64_t>
         friend class astro_scene;
     };
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
               isNumWrapper PosT = long double, isNumWrapper DirT = long double, isNumWrapper LenT = long double,
-              isNumWrapper LumT = long double, ull_t recFreq = 0> requires isConvertible<long double, PosT>
+              isNumWrapper LumT = long double, uint64_t recFreq = 0> requires isConvertible<long double, PosT>
     class star : public body<M, R, T, recFreq> {
         using bod_t = body<M, R, T, recFreq>;
         using src_t = light_src<PosT, DirT, LenT, LumT>;
@@ -815,11 +817,11 @@ namespace gtd {
         star(const M &star_mass, const R &star_radius, const vector3D<T> &pos, const vector3D<T> &vel,
              const LumT &luminosity, us num_light_sources = 1) :
         bod_t{star_mass, star_radius, pos, vel}, lum{luminosity} {create_sources(num_light_sources);}
-        template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t, ull_t rF>
+        template <isConvertible<M> m, isConvertible<R> r, isConvertible<T> t, uint64_t rF>
         explicit star(const body<m, r, t, rF> &other) : bod_t{other} {}
-        template <ull_t rF>
+        template <uint64_t rF>
         explicit star(const body<M, R, T, rF> &other) : bod_t{other} {}
-        template <ull_t rF>
+        template <uint64_t rF>
         explicit star(body<M, R, T, rF> &&other) noexcept : bod_t{std::move(other)} {}
         const std::vector<src_t> &light_sources() const {
             return sources;
@@ -839,13 +841,13 @@ namespace gtd {
             return (pnt - bod_t::curr_pos).normalise();
         }
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
-                  isNumWrapper, bool, ull_t>
+                  isNumWrapper, bool, uint64_t>
         friend class astro_scene;
     };
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
               isNumWrapper PosT = long double, isNumWrapper DirT = long double, isNumWrapper DistT = long double,
               isNumWrapper LenT = long double, isNumWrapper LumT = long double, bool modulatedBrightness = true,
-              ull_t recFreq = 0> // stars and bodies must have the same recFreq, or else a body is not a star's parent
+              uint64_t recFreq = 0> // stars and bodies must have the same recFreq, or else a body is not a star's parent
     class astro_scene : public bmp {
     private:
         using bod_t = body<M, R, T, recFreq>;
@@ -854,16 +856,16 @@ namespace gtd {
         using cam_t = camera<PosT, DirT, DistT>;
         using star_t = star<M, R, T, PosT, DirT, LenT, LumT, recFreq>;
         image_dimensions dims{bmp::width, bmp::height};
-        unsigned int num_decor_stars = 4*log(bmp::width*bmp::height);
-        long double star_radius = sqrt(bmp::width*bmp::width)/1000.0l; // in pixels
+        unsigned int num_decor_stars = 4*std::logl(bmp::width*bmp::height);
+        long double star_radius = std::sqrtl(bmp::width*bmp::width)/1000.0l; // in pixels
         std::vector<point> star_points;
         /* indeed, all the std::maps below lead to a larger memory footprint, but, they also allow certain algorithms
          * to be implemented faster */
-        std::map<const unsigned long long, const bod_t*> tot_map;
-        std::map<const unsigned long long, const bod_t*> bodies;
-        std::map<const unsigned long long, const star_t*> stars;
-        std::map<const unsigned long long, color> body_clrs;
-        std::map<const unsigned long long, color> star_clrs;
+        std::map<const uint64_t, const bod_t*> tot_map;
+        std::map<const uint64_t, const bod_t*> bodies;
+        std::map<const uint64_t, const star_t*> stars;
+        std::map<const uint64_t, color> body_clrs;
+        std::map<const uint64_t, color> star_clrs;
         cam_t cam{dims};
         const cam_t *pcam = &cam;
         bool def_cam = true;

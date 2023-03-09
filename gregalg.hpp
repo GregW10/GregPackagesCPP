@@ -303,6 +303,48 @@ namespace gtd {
         char *src = (char *) source;
         while (size --> 0) *dst++ = *src++;
     }
+    inline long double rad_to_deg(const long double &radians) {
+        return (radians*180)/PI;
+    }
+    inline long double deg_to_rad(const long double &degrees) {
+        return (degrees*PI)/180;
+    }
+    inline long double rad_to_deg(const long double &&radians) {
+        return (radians*180)/PI;
+    }
+    inline long double deg_to_rad(const long double &&degrees) {
+        return (degrees*PI)/180;
+    }
+    template <isNumWrapper T>
+    auto sqrt(const T& val, const T& epsilon = 0.00000001l) { // brute force
+        if (val < 0)
+            throw std::invalid_argument{"Error: cannot compute square root of a negative number.\n"};
+        // if (val == 0)
+        //     return 0.0l;
+        T guess = val < 10 ? val/2 : val/10;
+        T delta = guess/8;
+        T prev_guess;
+        T val_guess;
+        T diff;
+        bool is_under = false;
+        do {
+            prev_guess = guess;
+            if ((val_guess = guess*guess) < val) {
+                guess += delta;
+                if (!is_under)
+                    delta /= 8;
+                is_under = true;
+            }
+            else {
+                guess -= delta;
+                if (is_under)
+                    delta /= 8;
+                is_under = false;
+            }
+            diff = val_guess < val ? val - val_guess : val_guess - val;
+        } while (diff > epsilon);
+        return guess;
+    }
 }
 template <isPrintable T> // must be defined in the global namespace due to argument-dependent-lookup
 std::ostream &operator<<(std::ostream &os, const std::vector<T> &vec) {
