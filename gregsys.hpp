@@ -45,7 +45,9 @@ if constexpr (collisions == overlap_coll_check || !(memFreq && fileFreq)) { \
             } \
             this->s_coll<false, true>(); \
             cf \
-        } \
+        }                                \
+        else                             \
+            this->s_coll<false, false>();\
     }                                    \
     else { \
         cf                               \
@@ -287,7 +289,8 @@ namespace gtd {
                             ++inner_b;
                             continue;
                         }
-                    if ((outer_b->curr_pos - inner_b->curr_pos).magnitude() < outer_b->radius + inner_b->radius) {
+                    // if ((outer_b->curr_pos - inner_b->curr_pos).magnitude() < outer_b->radius + inner_b->radius)
+                    if (vec_ops::distance(outer_b->curr_pos, inner_b->curr_pos) < outer_b->radius + inner_b->radius) {
                         if constexpr (!mergeOverlappingBodies) {
                             String str = "The bodies with id=";
                             str.append_back(outer_b->id).append_back(" and id=").append_back(inner_b->id);
@@ -623,6 +626,7 @@ namespace gtd {
             tot_ke.push_back(total_ke);
             tot_e.push_back(total_pe + total_ke);
         }
+        bool have_nan = false;
         template <bool mem, bool file>
         void s_coll() { // "simple" (ahem, ahem) collision detection and evolution
             static std::map<long double, std::tuple<bod_t*, decltype(M{}*T{}), decltype(M{}*T{}), vector3D<T>>>
@@ -633,6 +637,7 @@ namespace gtd {
             bod_t *bod_i;
             bod_t *merging_bod;
             R rad_dist{};
+            long double dist;
             mom_t max_mom{min_tot_com_mom};
             mom_t curr_mom{};
             // long double min_dist = HUGE_VALL; // usually expands to infinity
@@ -657,13 +662,23 @@ namespace gtd {
                         continue;
                     rad_dist = bod_o->radius + bod_i->radius;
                     vector3D<T> &&r12 = bod_i->curr_pos - bod_o->curr_pos;
-                    long double &&dist = r12.magnitude(); // DEAL WITH ZERO DISTANCE CASE
+                    dist = r12.magnitude(); // DEAL WITH ZERO DISTANCE CASE
+                    if (std::isnan(dist) && !have_nan) {
+                        std::cout << "THERE IS A NAN HERE!!!!!" << std::endl;
+                        std::cout << "bod_o: " << *bod_o << std::endl;
+                        std::cout << "bod_i: " << *bod_i << std::endl;
+                        for (const auto &bodd : *this)
+                            std::cout << bodd << std::endl;
+                        abort();
+                        have_nan = true;
+                    }
                     r12.x /= dist; r12.y /= dist; r12.z /= dist; // more efficient than calling normalise()
                     if (rad_dist > dist) {
-                        vector3D<T> &&com_vel = vel_com(bod_o, bod_i);
+                        // vector3D<T> &&com_vel = vel_com(bod_o, bod_i);
                         axis_mom_o = bod_o->momentum()*r12;
                         axis_mom_i = bod_i->momentum()*r12;
-                        if((curr_mom = axis_mom_o - axis_mom_i - (bod_o->mass_ - bod_i->mass_)*(com_vel*r12))>=max_mom){
+                        if((curr_mom = axis_mom_o - axis_mom_i - (bod_o->mass_ - bod_i->mass_)*
+                                (vel_com(bod_o, bod_i)*r12)) >= max_mom) {
                             max_mom = curr_mom;
                             merging_bod = bod_i;
                             merging_index = inner;
@@ -1507,6 +1522,12 @@ namespace gtd {
                                             std::is_fundamental_v<T> && CHAR_BIT == 8) {
             return nsys_file_size(this->bods.size());
         }
+        bool set_min_tot_com_mom(const mom_t& total_momentum) requires (collisions != 0) {
+            if (total_momentum < mom_t{})
+                return false;
+            this->min_tot_com_mom = total_momentum;
+            return true;
+        }
         sys_t &add_body(const bod_t &bod) {
             bods.emplace_back(bod);
             if constexpr (memFreq)
@@ -1582,7 +1603,7 @@ namespace gtd {
                 }
             return false;
         }
-        static inline sys_t hcp_comet(const T &rad, const vector3D<T> &pos, const vector3D<T> &vel, const R &sep,
+        static inline sys_t hcp_comet(const T &rad, const vector3D<T> &pos, const vector3D<T> &vel, const R &spacing,
                                       const M &b_mass, const R &b_rad, long double r_coeff,
                                       bool force_central_body = false, long double timestep = 1,
                                       uint64_t num_iterations = 1'000, const char *units_format = "M1:1,D1:1,T1:1") {
@@ -1591,25 +1612,25 @@ namespace gtd {
                 throw negative_radius_error{"Error: comet radius must be larger than zero.\n"};
             if (b_rad <= 0)
                 throw negative_radius_error{"Error: the radius each body will have must be larger than zero.\n"};
-            if (sep < 0)
-                throw std::invalid_argument{"Error: separation between bodies cannot be negative.\n"};
+            if (spacing < 0)
+                throw std::invalid_argument{"Error: spacing between bodies cannot be negative.\n"};
             if (rad < b_rad)
                 throw std::invalid_argument{"Error: the radius of the comet must exceed the radius of a body.\n"};
             if (r_coeff < 0 || r_coeff > 1)
                 throw std::invalid_argument{"Error: coefficient of restitution must be between 0 and 1.\n"};
-            uint64_t counter = 0;
-            const R b_sep = b_rad*2 + sep; // separation between the centres of adjacent bodies
-            const R b_halfsep = b_rad + sep/2.0l; // haven't done b_sep/2 to minimise f.p. error
-            const T radl = rad + rad*0.0625l; // slightly larger radius to create hcp cube
-            uint64_t lbods = std::llroundl(2*radl / (b_sep)); // number of bodies along length of cube
-            uint64_t whbods = std::llroundl((2*radl*std::sqrtl(3)) / b_sep); // num. along width and along height of cube
-            std::cout << "b_sep: " << b_sep << std::endl;
-            std::cout << "b_halfsep: " << b_halfsep << std::endl;
-            std::cout << "radl: " << radl << std::endl;
-            std::cout << "lbods: " << lbods << std::endl;
-            std::cout << "whbods: " << whbods << std::endl;
+            const R b_sep = b_rad*2 + spacing; // separation between the centres of adjacent bodies
+            const R b_halfsep = b_rad + spacing/2.0l; // haven't done b_sep/2 to minimise f.p. error
+            const T diaml = 2*(rad + rad*0.0625l); // slightly larger diameter to create hcp cube
+            uint64_t lbods = std::llroundl(diaml / (b_sep)) + 1; // number of bodies along length of cube
+            uint64_t whbods = std::llroundl((diaml*std::sqrtl(3)) / b_sep) + 1; // along width and along height of cube
+            // std::cout << "b_sep: " << b_sep << std::endl;
+            // std::cout << "b_halfsep: " << b_halfsep << std::endl;
+            // std::cout << "radl: " << diaml << std::endl;
+            // std::cout << "lbods: " << lbods << std::endl;
+            // std::cout << "whbods: " << whbods << std::endl;
             std::vector<vec> first_row; // first row of bodies
             first_row.reserve(lbods);
+            uint64_t counter = 0;
             while (counter < lbods) // create position vectors for all bodies in the first row
                 first_row.emplace_back(counter++*b_sep, 0); // z-coordinate automatically zero
             std::vector<vec> second_row;
@@ -1660,10 +1681,10 @@ namespace gtd {
                 y_coord2 = y_coord + counter*y_sep;
                 if (!(counter % 2))
                     for (const vec &v : first_row)
-                        row.emplace_back(v.x, y_coord2);
+                        row.emplace_back(v.x, y_coord2, z_sep);
                 else
                     for (const vec &v : second_row)
-                        row.emplace_back(v.x, y_coord2);
+                        row.emplace_back(v.x, y_coord2, z_sep);
                 plane_B.emplace_back(std::move(row));
                 row.clear();
             }
@@ -1671,11 +1692,11 @@ namespace gtd {
             std::vector<std::vector<vec>> plane;
             counter = 1;
             while (++counter < whbods) {
-                row.reserve(lbods);
                 plane.reserve(whbods);
                 y_coord2 = counter*z_sep; // reusing y_coord2 - actually represents z-coordinate in this loop
                 if (!(counter % 2))
                     for (const std::vector<vec> &_row : plane_A) {
+                        row.reserve(lbods);
                         for (const vec &v : _row) {
                             row.emplace_back(v.x, v.y, y_coord2);
                         }
@@ -1684,6 +1705,7 @@ namespace gtd {
                     }
                 else
                     for (const std::vector<vec> &_row : plane_B) {
+                        row.reserve(lbods);
                         for (const vec &v : _row) {
                             row.emplace_back(v.x, v.y, y_coord2);
                         }
@@ -1701,13 +1723,23 @@ namespace gtd {
                 centre = cube[whbods/2][whbods/2][lbods/2];
             }
             else { // comet will be centred on the geometrical centre of the HCP cube generated
-                centre.x = cube[0][1][lbods - 1].x - cube[0][0][0].x;
-                centre.y = cube[0][whbods - 1][0].y - cube[0][0][0].y;
-                centre.z = cube[whbods - 1][0][0].z - cube[0][0][0].z;
+                centre.x = cube[0][1][lbods - 1].x/2.0l;// - cube[0][0][0].x;
+                centre.y = cube[0][whbods - 1][0].y/2.0l;// - cube[0][0][0].y;
+                centre.z = cube[whbods - 1][0][0].z/2.0l;// - cube[0][0][0].z;
             }
             // for (typename std::vector<std::vector<std::vector<vec>>>::reverse_iterator rit = cube.rbegin(),
             //         r_end = cube.rend(); rit != r_end; ++rit) {
             // }
+            // std::cout << "cube size: " << cube.size() << std::endl;
+            size_t c = 0;
+            size_t r;
+            for (const auto &_plane : cube) {
+                // std::cout << "plane " << c++ << ": " << _plane.size() << std::endl;
+                r = 0;
+                for (const auto &_row : _plane) {
+                    // std::cout << "row " << r++ << ": " << _row.size() << std::endl;
+                }
+            }
             std::vector<bod_t> bodies;
             uint64_t half_lbods = lbods/2;
             vec *_beg;
@@ -1722,20 +1754,26 @@ namespace gtd {
              * to compute distances for the following vectors pointlessly, and the next row is moved on to. */
             /* If lbods is even, lbods/2 iterations will be performed for _h1 and _h2. If lbods is odd, lbods/2.0 - 0.5
              * iterations will be performed for _h1 and lbods/2.0 + 0.5 iterations for _h2 (1 more for _h2). */
+            counter = 0;
             for (std::vector<std::vector<vec>> &_plane : cube) {
                 for (std::vector<vec> &_row : _plane) {
                     for (const auto & v : _row) {
-                        bodies.emplace_back(b_mass, b_rad, v, vec{});
+                        // bodies.emplace_back(b_mass, b_rad, v, vec{});
+                        // std::cout << "pos " << counter++ << ": " << v << std::endl;
                     }
-                    continue;
+                    // continue;
                     _beg = _row.data(); // first vector3D in row
                     _end = _beg + lbods; // past the last vector3D in row
                     _h1 = _beg + half_lbods;
                     _h2 = _h1--;
-                    while (_h1 >= _beg && vec_ops::distance(*_h1, centre) <= rad)
+                    while (_h1 >= _beg && vec_ops::distance(*_h1, centre) <= rad) {
+                        // std::cout << "pos: " << *_h1-- - centre + pos << std::endl;
                         bodies.emplace_back(b_mass, b_rad, *_h1-- - centre + pos, vel, r_coeff);
-                    while (_h2 < _end && vec_ops::distance(*_h2, centre) <= rad)
+                    }
+                    while (_h2 < _end && vec_ops::distance(*_h2, centre) <= rad) {
+                        // std::cout << "pos: " << *_h2++ - centre + pos << std::endl;
                         bodies.emplace_back(b_mass, b_rad, *_h2++ - centre + pos, vel, r_coeff);
+                    }
                 }
             }
             /* As of C++17, copy elision GUARANTEES that a returned prvalue is constructed directly in the memory
