@@ -834,6 +834,8 @@ namespace gtd {
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1, \
                   isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2> \
         friend inline auto com(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&); \
+        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, uint64_t rF> \
+        friend inline vector3D<t> com(const std::vector<body<m, r, t, rF>> &vec); \
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1, \
                   isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2> \
         friend inline auto vel_com(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&); \
@@ -868,7 +870,11 @@ namespace gtd {
         template <isNumWrapper, isNumWrapper, isNumWrapper, ull_t> \
         friend class body; \
         template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool> \
-        friend class system;
+        friend class system; \
+        template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t rF> \
+        friend class bh_cube; \
+        template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t rF> \
+        friend class bh_tree;
         BODY_FRIEND_DECLARATIONS // pre-processed code will not look pretty...
     };
     template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
@@ -1068,35 +1074,47 @@ namespace gtd {
         BODY_FRIEND_DECLARATIONS
 #undef BODY_FRIEND_DECLARATIONS
     };
-    template <isNumWrapper m, isNumWrapper r, isNumWrapper t, ull_t rF>
+    template <isNumWrapper m, isNumWrapper r, isNumWrapper t, uint64_t rF>
     std::ostream &operator<<(std::ostream &os, const body<m, r, t, rF> &bod) {
         return os << "[gtd::body@" << &bod << ":id=" << bod.id << ",m=" << +bod.mass_ << ",r=" << +bod.radius
                   << ",current_pos=(" << bod.curr_pos << "),current_vel=(" << bod.curr_vel << "),current_ke="
                   << bod.curr_ke << "]";
     }
-    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-              isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
+    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, uint64_t rF1,
+              isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, uint64_t rF2>
     inline auto com(const body<m1, r1, t1, rF1> &b1, const body<m2, r2, t2, rF2> &b2) { // centre of mass_ position
         return (b1.mass_*b1.curr_pos + b2.mass_*b2.curr_pos)/(b1.mass_ + b2.mass_);
     }
-    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-              isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
+    template <isNumWrapper m, isNumWrapper r, isNumWrapper t, uint64_t rF>
+    inline vector3D<t> com(const std::vector<body<m, r, t, rF>> &vec) {
+        if (vec.empty())
+            return {};
+        vector3D<t> tot_mr;
+        m tot_mass{};
+        for (const body<m, r, t, rF> &bod : vec) {
+            tot_mr += bod.mass_*bod.curr_pos;
+            tot_mass += bod.mass_;
+        }
+        return tot_mr/tot_mass;
+    };
+    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, uint64_t rF1,
+              isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, uint64_t rF2>
     inline auto vel_com(const body<m1, r1, t1, rF1> &b1, const body<m2, r2, t2, rF2> &b2) {
         /* centre-of-mass velocity, taking conservation of momentum into account */
         return (b1.momentum() + b2.momentum())/(b1.mass_ + b2.mass_);
     }
-    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-            isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
+    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, uint64_t rF1,
+            isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, uint64_t rF2>
     inline auto vel_com(const body<m1, r1, t1, rF1> *b1, const body<m2, r2, t2, rF2> *b2) {
         return (b1->momentum() + b2->momentum())/(b1->mass_ + b2->mass_);
     }
-    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-              isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
+    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, uint64_t rF1,
+              isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, uint64_t rF2>
     inline auto acc_com(const body<m1, r1, t1, rF1> &b1, const body<m2, r2, t2, rF2> &b2) {
         return (b1.mass_*b1.acc + b2.mass_*b2.acc)/(b1.mass_ + b2.mass_);
     }
-    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-              isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
+    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, uint64_t rF1,
+              isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, uint64_t rF2>
     inline auto operator+(const body<m1, r1, t1, rF1> &b1, const body<m2, r2, t2, rF2> &b2) {
         /* performs a "merging" of two bodies, with the new body having the sum of both masses, being at the
          * centre-of-mass of both bodies, having a volume equal to the sum of both volumes (using the radii), and a new
@@ -1107,27 +1125,27 @@ namespace gtd {
         cbrtl(b1.radius*b1.radius*b1.radius + b2.radius*b2.radius*b2.radius), com(b1, b2), vel_com(b1, b2),
         acc_com(b1, b2), MEAN_AVG(b1.rest_c, b2.rest_c));
     }
-    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-              isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
+    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, uint64_t rF1,
+              isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, uint64_t rF2>
     inline auto operator+(const body<m1, r1, t1, rF1> &b1, const body<m2, r2, t2, rF2> &&b2) {
         return b1 + b2;
     }
-    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-              isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
+    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, uint64_t rF1,
+              isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, uint64_t rF2>
     inline auto operator+(const body<m1, r1, t1, rF1> &&b1, const body<m2, r2, t2, rF2> &b2) {
         return b1 + b2;
     }
-    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, ull_t rF1,
-              isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, ull_t rF2>
+    template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, uint64_t rF1,
+              isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, uint64_t rF2>
     inline auto operator+(const body<m1, r1, t1, rF1> &&b1, const body<m2, r2, t2, rF2> &&b2) {
         return b1 + b2;
     }
-    typedef body<long double, long double, long double> bod; // recFreq == 1
-    typedef body<long double, long double, long double, 0> bod_0f;
+    template <uint64_t recFreq>
+    using bod = body<long double, long double, long double, recFreq>;
+    typedef body<long double, long double, long double, 0> bod_0f; // f == recFreq
+    typedef body<long double, long double, long double, 1> bod_1f;
     typedef body<long double, long double, long double, 10> bod_10f;
     typedef body<long double, long double, long double, 100> bod_100f;
     typedef body<long double, long double, long double, 1000> bod_1000f;
-    template <ull_t rF>
-    using bod_ld = body<long double, long double, long double, rF>;
 }
 #endif

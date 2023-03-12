@@ -252,6 +252,12 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         vector2D<T> y_projection() const {
             return {T{0}, this->y};
         }
+        template <isNumWrapper U, isNumWrapper V>
+        bool between(const vector2D<U> &v1, const vector2D<V> &v2) const noexcept {
+            /* Tests if the vector lies within the 2D square spanned by v1 & v2 */
+            return v1.x <= this->x && this->x < v2.x &&
+                   v1.y <= this->y && this->y < v2.y;
+        }
         virtual vector2D<T> &rotate(const long double &&angle_in_rad = __PI__) {
             return this->apply(matrix<long double>::get_2D_rotation_matrix(angle_in_rad));
         }
@@ -2055,6 +2061,27 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         vector3D<T> yz_projection() const {
             return {T{0}, this->y, this->z};
         }
+        template <isNumWrapper U, isNumWrapper V>
+        bool between(const vector2D<U> &v1, const vector3D<V> &v2) const noexcept {
+            /* Tests if the vector lies within the 3D cube spanned by v1 & v2 (v1 == bottom corner, v2 == top corner) */
+            return v1.x <= this->x && this->x < v2.x &&
+                   v1.y <= this->y && this->y < v2.y &&
+                   this->z >= T{} && this->z < v2.z;
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        bool between(const vector3D<U> &v1, const vector2D<V> &v2) const noexcept {
+            /* Tests if the vector lies within the 3D cube spanned by v1 & v2 (v1 == bottom corner, v2 == top corner) */
+            return v1.x <= this->x && this->x < v2.x &&
+                   v1.y <= this->y && this->y < v2.y &&
+                   this->z >= v1.z && this->z < T{};
+        }
+        template <isNumWrapper U, isNumWrapper V>
+        bool between(const vector3D<U> &v1, const vector3D<V> &v2) const noexcept {
+            /* Tests if the vector lies within the 3D cube spanned by v1 & v2 (v1 == bottom corner, v2 == top corner) */
+            return v1.x <= this->x && this->x < v2.x &&
+                   v1.y <= this->y && this->y < v2.y &&
+                   v1.z <= this->z && this->z < v2.z;
+        }
         virtual vector3D<T> &rotate(const long double &&angle_in_rad = __PI__, char about = 'z') {
             return this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
         }
@@ -3324,6 +3351,10 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend class camera;
         template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool>
         friend class system;
+        template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t rF>
+        friend class bh_cube;
+        template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t rF>
+        friend class bh_tree;
     };
     template <isNumWrapper U>
     std::ostream &operator<<(std::ostream &out, const vector3D<U> &vec) {
