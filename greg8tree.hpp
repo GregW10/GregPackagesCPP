@@ -1,8 +1,6 @@
 #ifndef GREG8TREE_H
 #define GREG8TREE_H
 
-#define RUNNING_MR_SUM
-
 #ifndef __cplusplus
 #error "greg8tree.hpp is a C++ header file only.\n"
 #endif
@@ -46,6 +44,16 @@ namespace gtd {
             return msg;
         }
     };
+    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
+    class bh_cube;
+    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
+    bool operator==(const typename bh_cube<M, R, T, rF>::iterator&, const typename bh_cube<M, R, T, rF>::iterator&);
+    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
+    bool operator!=(const typename bh_cube<M, R, T, rF>::iterator&, const typename bh_cube<M, R, T, rF>::iterator&);
+    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
+    std::ostream &operator<<(std::ostream&, const bh_cube<M, R, T, rF>&);
+    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
+    class bh_tree;
     template <isNumWrapper M = long double, isNumWrapper R = long double,
               isNumWrapper T = long double, uint64_t rF = 0>
     class bh_cube {
@@ -69,14 +77,6 @@ namespace gtd {
          * 2 -> (-,+,-), 3 -> (+,+,-), 4 -> (-,-,+), 5 -> (+,-,+), 6 -> (-,+,+), 7 -> (+,+,+), */
         cube_t *_sub[8]{}; // 8 pointers to child cubes
         std::pair<vec, vec> corners[8]; // bottom and top corners of child cubes
-        // cube_t *c1 = nullptr; // child cube 1
-        // cube_t *c2 = nullptr; // etc...
-        // cube_t *c3 = nullptr;
-        // cube_t *c4 = nullptr;
-        // cube_t *c5 = nullptr;
-        // cube_t *c6 = nullptr;
-        // cube_t *c7 = nullptr;
-        // cube_t *c8 = nullptr;
         void set_corners() {
             /* Method to set the bounds of the 8 child cubes (even if they are never created). */
             T half_x = (_btm.x + _top.x)/2.0l;
@@ -211,11 +211,11 @@ namespace gtd {
                 this->_com = this->_bod->curr_pos;
                 return;
             }
-            this->_com = this->mr_sum/this->_mass; // calculate com of this cube outside loop
             cube_t *cptr = this;
             cube_t **sptr = this->_sub;
             unsigned char i = 0;
 #ifdef RUNNING_MR_SUM
+            this->_com = this->mr_sum/this->_mass; // calculate com of this cube outside loop
             while (true) {
                 // cptr->_com = cptr->mr_sum/cptr->_mass;
                 // sptr = cptr->_sub;
@@ -242,10 +242,157 @@ namespace gtd {
                 cptr = cptr->parent;
             }
 #else
+            vec sub_mr{};
+            while (true) {
+                while (i++ < 8) {
+                    if (*sptr != nullptr) {
+                        if ((*sptr)->_bod == nullptr) {
+                            cptr = *sptr;
+                            sptr = cptr->_sub;
+                            i = 0;
+                            continue;
+                        } else {
+                            (*sptr)->_com = (*sptr)->_bod->curr_pos;
+                        }
+                    }
+                    ++sptr;
+                }
+                while (i --> 0) {
+                    if (*--sptr != nullptr) {
+                        sub_mr += (*sptr)->_mass*(*sptr)->_com;
+                    }
+                }
+                cptr->_com = sub_mr/cptr->_mass;
+                if (cptr->parent == nullptr)
+                    return;
+                i = 1;
+                sptr = cptr->parent->_sub;
+                while (*sptr++ != cptr) ++i;
+                cptr = cptr->parent;
+                sub_mr.x = T{}; // better not to call make_zero in case compiler doesn't optimise function call away
+                sub_mr.y = T{};
+                sub_mr.z = T{};
+            };
 #endif
         }
 #endif
     public:
+        class iterator {
+            const cube_t *_root;
+            const cube_t *_cptr; // pointer to current leaf node/cube
+            const cube_t *const *_sptr{}; // pointer to pointer to current node within parent node's array
+            unsigned char index{}; // position of _cptr within parent node's array
+            void find_next_leaf() {
+                index = 0;
+                _sptr = _cptr->_sub;
+                while (index < 8) {
+                    if (*_sptr != nullptr) {
+                        _cptr = *_sptr;
+                        if (_cptr->_bod != nullptr) { // means _cptr is pointing to leaf node
+                            return;
+                        }
+                        _sptr = _cptr->_sub;
+                        index = 0;
+                        continue;
+                    }
+                    ++index;
+                    ++_sptr;
+                }
+            }
+        public:
+            iterator(const cube_t *root, bool is_end = false) : _root{root} { // doesn't have to be root
+                /* The constructor initially points _cptr to the leaf node (containing a non-NULL pointer to a body)
+                 * with the lowest octant coordinates (according to how I have labelled them - see further up). */
+                if (root == nullptr) [[unlikely]]
+                    throw std::invalid_argument{"Error: nullptr passed as root cube.\n"};
+                if (is_end) {
+                    if (root->_bod != nullptr) {
+                        _cptr = root->parent;
+                        return;
+                    }
+                    _cptr = root;
+                    return;
+                }
+                _cptr = root;
+                this->find_next_leaf();
+            }
+            iterator(const iterator &other) = default;
+            iterator &operator++() {
+                if (_cptr == _root->parent) // means iterator is already pointing to end
+                    return *this;
+                if (_cptr == _root) { // the "end" for a non-leaf root is the root itself, else its parent
+                    if (_root->_bod != nullptr)
+                        _cptr = _root->parent;
+                    return *this;
+                }
+                if (index == 7) {
+                    loop_start:
+                    while (true) {
+                        if ((_cptr = _cptr->parent) == _root)
+                            return *this;
+                        index = 1;
+                        _sptr = _cptr->parent->_sub;
+                        while (*_sptr++ != _cptr) ++index;
+                        while (index < 8 && *_sptr == nullptr) {
+                            ++_sptr;
+                            ++index;
+                        }
+                        if (index != 8) {
+                            _cptr = *_sptr;
+                            break;
+                        }
+                    }
+                    // while (true) {
+                    //     index = 1;
+                    //     _sptr = _cptr->parent->_sub;
+                    //     while (*_sptr++ != _cptr) ++index;
+                    //     if (index != 8) {
+                    //         _cptr = *_sptr;
+                    //         break;
+                    //     }
+                    // }
+                } else {
+                    while (++index < 8 && *++_sptr == nullptr);
+                    if (index == 8) {
+                        goto loop_start;
+                    }
+                    _cptr = *_sptr;
+                }
+                if (_cptr->_bod != nullptr)
+                    return *this;
+                this->find_next_leaf();
+                return *this;
+            }
+            iterator operator++(int) {
+                iterator _copy = *this;
+                this->operator++();
+                return _copy;
+            }
+            bod_t &operator*() {
+                return const_cast<bod_t&>(*(_cptr->_bod));
+            }
+            bod_t *operator->() {
+                return const_cast<bod_t*>(_cptr->_bod);
+            }
+            /* Whilst it is not my taste to define overloads for binary operators (such as == and !=) as member
+             * functions (nor is it the convention), template argument deduction requires it, given that
+             * gtd::bh_cube<>::iterator is a nested class. */
+            bool operator==(const iterator &other) const noexcept {
+                return this->_cptr == other._cptr;
+            }
+            bool operator!=(const iterator &other) const noexcept {
+                return this->_cptr != other._cptr;
+            }
+            iterator &operator=(const iterator &other) = default;
+            iterator &operator=(const cube_t *cube) {
+                if (cube == nullptr) [[unlikely]]
+                    throw std::invalid_argument{"Error: nullptr passed as cube.\n"};
+                _cptr = cube;
+                _root = cube;
+                this->find_next_leaf();
+                return *this;
+            }
+        };
         // bh_cube() = default;
         // bh_cube(cube_t *parent_cube, const vec &btm, const vec &top) : parent{parent_cube},
         // _btm{btm}, _top{top} {this->set_corners();}
@@ -334,15 +481,6 @@ namespace gtd {
                     loop_end:
                     i = 0;
                 }
-                // while (cptr->_bod != nullptr) {
-                //     sptr = cptr->_sub;
-                //     for (i = 0; i < 8; ++i, ++sptr) {
-                //         if (*sptr != nullptr) {
-                //             cptr = *sptr;
-                //             break;
-                //         }
-                //     }
-                // }
             }
         }
         const cube_t &operator[](unsigned char index) {
@@ -353,10 +491,9 @@ namespace gtd {
                 throw std::invalid_argument{"Error: no gtd::bh_cube<> at index specified.\n"};
             return *(this->_sub[index]);
         }
-        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, uint64_t recFreq>
-        friend std::ostream &operator<<(std::ostream &os, const bh_cube<m, r, t, recFreq> &cube);
-        template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t>
-        friend class bh_tree;
+        // template <isNumWrapper m, isNumWrapper r, isNumWrapper t, uint64_t recFreq>
+        friend std::ostream &operator<< <M, R, T, rF>(std::ostream &os, const bh_cube &cube);
+        friend class bh_tree<M, R, T, rF>;
     };
     template <isNumWrapper m, isNumWrapper r, isNumWrapper t, uint64_t recFreq>
     std::ostream &operator<<(std::ostream &os, const bh_cube<m, r, t, recFreq> &cube) {
