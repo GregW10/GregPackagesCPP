@@ -570,6 +570,19 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->y = std::move(other.y);
             return *this;
         }
+        virtual vector2D<T> &operator=(const T &value) {
+            this->x = value;
+            this->y = value;
+        }
+        virtual vector2D<T> &operator=(T &&value) noexcept {
+            this->x = value;
+            this->y = std::move(value);
+        }
+        template <isConvertible<T> U>
+        vector2D<T> &operator=(const U &value) {
+            this->x = value;
+            this->y = value;
+        }
         virtual operator bool() const noexcept { // to allow a vector object to be used as a boolean
             return this->x != T{0} || this->y != T{0};
         }
@@ -2684,6 +2697,22 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->z = std::move(other.z);
             return *this;
         }
+        vector3D<T> &operator=(const T &value) override {
+            this->x = value;
+            this->y = value;
+            this->z = value;
+        }
+        vector3D<T> &operator=(T &&value) noexcept override {
+            this->x = value;
+            this->y = value;
+            this->z = std::move(value);
+        }
+        template <isConvertible<T> U>
+        vector3D<T> &operator=(const U &value) {
+            this->x = value;
+            this->y = value;
+            this->z = value;
+        }
         operator bool() const noexcept override {
             return this->x != T{0} || this->y != T{0} || this->z != T{0};
         }
@@ -3351,9 +3380,9 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend class camera;
         template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool>
         friend class system;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t rF>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t>
         friend class bh_cube;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t rF>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t>
         friend class bh_tree;
     };
     template <isNumWrapper U>

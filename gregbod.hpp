@@ -871,9 +871,9 @@ namespace gtd {
         friend class body; \
         template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool> \
         friend class system; \
-        template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t rF> \
+        template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t> \
         friend class bh_cube; \
-        template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t rF> \
+        template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t> \
         friend class bh_tree;
         BODY_FRIEND_DECLARATIONS // pre-processed code will not look pretty...
     };

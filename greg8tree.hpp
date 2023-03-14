@@ -14,22 +14,22 @@ namespace gtd {
         barnes_hut_error() :
         nbody_error{"An error occurred with the creation and/or usage of a gtd::bh_cube<> object.\n"} {}
     };
-    class invalid_body_placement : public nbody_error {
-        char msg[96]{};
+    class invalid_body_placement : public barnes_hut_error {
+        char msg[100]{};
     public:
         invalid_body_placement() : msg{"Error: body does not fall within the current Barnes-Hut cube.\n"} {}
         invalid_body_placement(const char *message) {
             strcpy_c(this->msg, message);
         }
         invalid_body_placement(uint64_t id) {
-            snprintf(msg, 96, "Error: body with ID = %" PRIu64" is not contained within the current Barnes-Hut cube.\n",
+            snprintf(msg, 100,"Error: body with ID = %" PRIu64" is not contained within the current Barnes-Hut cube.\n",
                      id);
         }
         const char *what() const noexcept override {
             return msg;
         }
     };
-    class indistinguishable_bodies : public nbody_error {
+    class indistinguishable_bodies : public barnes_hut_error {
         char msg[176]{};
     public:
         indistinguishable_bodies() : msg{"Error: body positions cannot be distinguished from one another.\n"} {}
@@ -390,6 +390,43 @@ namespace gtd {
                 _cptr = cube;
                 _root = cube;
                 this->find_next_leaf();
+                return *this;
+            }
+        };
+        class nn_iterator { // nearest-neighbour iterator - iterates over the bodies nearest to one
+            const cube_t *const _bc; // pointer to the bh_cube containing body around which bodies will be found
+            cube_t *_cptr{}; // pointer to current neighbouring body-containing cube
+            int64_t _h = 0; // height above the _bc cube in the tree (negative means below _bc cube - hence signed int)
+            uint64_t _mh = 0; // max. height reached above _bc
+            cube_t **_sptr{}; // pointer to array of pointers that _cptr resides in (in parent's array)
+            unsigned char index_m = 0; // index of cube that _bc resides in, at max. height reached
+            unsigned char index_i = 0; // index of cube in initial sibling array
+            unsigned char index = 0; // index of cube in parent array
+        public:
+            nn_iterator(const iterator &body_it) : _bc{body_it._cptr} {
+                if (_bc == nullptr || _bc->_bod == nullptr)
+                    throw std::invalid_argument{"Error: body iterator does not contain a pointer to a valid "
+                                                "body-containing gtd::bh_cube<> object.\n"};
+                if (_bc->parent == nullptr) {
+                    return; // _cptr is nullptr so is already pointing to end (no nearest neighbours to iterate over)
+                }
+                index_i = 0;
+                _sptr = _cptr->parent->_sub;
+                while (*_sptr != _cptr) {
+                    ++index_i;
+                    ++_sptr;
+                }
+                unsigned char non_null = 0;
+                _sptr = _cptr->parent->_sub;
+                while ((*_sptr) == nullptr) ++_sptr;
+
+            }
+            bool has_body() const noexcept {
+                return _cptr != nullptr;
+            }
+            nn_iterator &operator++() {
+                if (_cptr == nullptr)
+                    return *this;
                 return *this;
             }
         };
