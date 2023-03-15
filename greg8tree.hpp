@@ -44,15 +44,11 @@ namespace gtd {
             return msg;
         }
     };
-    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
+    template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t>
     class bh_cube;
     template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
-    bool operator==(const typename bh_cube<M, R, T, rF>::iterator&, const typename bh_cube<M, R, T, rF>::iterator&);
-    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
-    bool operator!=(const typename bh_cube<M, R, T, rF>::iterator&, const typename bh_cube<M, R, T, rF>::iterator&);
-    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
     std::ostream &operator<<(std::ostream&, const bh_cube<M, R, T, rF>&);
-    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
+    template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t>
     class bh_tree;
     template <isNumWrapper M = long double, isNumWrapper R = long double,
               isNumWrapper T = long double, uint64_t rF = 0>
@@ -77,6 +73,9 @@ namespace gtd {
          * 2 -> (-,+,-), 3 -> (+,+,-), 4 -> (-,-,+), 5 -> (+,-,+), 6 -> (-,+,+), 7 -> (+,+,+), */
         cube_t *_sub[8]{}; // 8 pointers to child cubes
         std::pair<vec, vec> corners[8]; // bottom and top corners of child cubes
+#ifdef BH_REC_NUM
+        uint64_t _num = 1; // number of bodies in cube - impossible to create empty cube, so initialised to 1
+#endif
         void set_corners() {
             /* Method to set the bounds of the 8 child cubes (even if they are never created). */
             T half_x = (_btm.x + _top.x)/2.0l;
@@ -190,6 +189,9 @@ namespace gtd {
 #else
                             cptr->_com = (cptr->_com*prev_mass + _body->mass_*_body->curr_pos)/cptr->_mass;
 #endif
+#ifdef BH_REC_NUM
+                            ++cptr->_num;
+#endif
                             break;
                         }
                     }
@@ -277,11 +279,105 @@ namespace gtd {
         }
 #endif
     public:
-        class iterator {
-            const cube_t *_root;
-            const cube_t *_cptr; // pointer to current leaf node/cube
+        class nn_iterator;
+        class body_iterator {
+        protected:
+            const cube_t *_cptr{}; // pointer to current leaf node/cube
             const cube_t *const *_sptr{}; // pointer to pointer to current node within parent node's array
             unsigned char index{}; // position of _cptr within parent node's array
+        public:
+            body_iterator() = default;
+            body_iterator(const cube_t *_cube) : _cptr{_cube} {}
+            void erase(bool adjust_com = true) { // for the future: make it return an iterator to the next body (use ++)
+                if (_cptr->parent == nullptr) {
+                    delete _cptr;
+                    return;
+                }
+                M mass = _cptr->_bod->mass_;
+                M mass_before;
+                vec pos = _cptr->_bod->curr_pos;
+                vec _bmr = mass*pos;
+                cube_t *_cpy = _cptr;
+                cube_t *_cpy_sub;
+                cube_t *to_update = _cptr->parent;
+                cube_t *to_delete = _cptr;
+                bod_t *to_assign_to_updated_cube = nullptr;
+                // bool assign_body_to_updated_cube = false; // really went to town with var. names here eh
+#ifndef BH_REC_NUM
+                uint64_t _num;
+#else
+                if (to_update->parent != nullptr && to_update->_num == 2) {
+                    _sptr = to_update->_sub;
+                    while (true) {
+                        if (*_sptr != nullptr && *_sptr != to_delete)
+                            break;
+                        ++_sptr;
+                    }
+                    to_assign_to_updated_cube = (*_sptr)->_bod;
+                    to_delete = to_update;
+                    to_update = to_update->parent;
+                }
+                while (to_update->parent != nullptr && to_update->_num == 2) { // separate into if and while
+                    to_delete = to_update;
+                    to_update = to_update->parent;
+                    // assign_body_to_updated_cube = true;
+                }
+                // --to_update->_num;
+#endif
+                if (to_assign_to_updated_cube != nullptr) {
+                    to_update->_bod = to_assign_to_updated_cube;
+                    to_delete->parent = nullptr; // setting the parent to nullptr and then deleting it will destroy all
+                    delete to_delete; // the cells below it recursively, destroying completely its part of the tree
+                }
+                if (!adjust_com) { // could be for when a tree is going to be destroyed or when COMs are not imp. anymo.
+                    return;
+                }
+                if (adjust_com) {
+                    do {
+                        _cpy_sub = _cpy;
+                        _cpy = _cpy->parent;
+                        index = 0;
+                        _sptr = _cpy->_sub;
+                        while (*_sptr != _cpy_sub) {
+                            ++index;
+                            ++_sptr;
+                        }
+                        delete _cpy_sub;
+                        _cpy->_sub[index] = nullptr;
+                        mass_before = _cpy->_mass;
+                        _cpy->_mass -= mass;
+                        _cpy->_com = (_cpy->_com*mass_before - _bmr)/_cpy->_mass;
+#ifdef RUNNING_MR_SUM
+                        _cptr->mr_sum -= _bmr;
+#endif
+                    } while (_cpy->parent != nullptr);
+                }
+            }
+            bod_t &operator*() {
+                return const_cast<bod_t&>(*(_cptr->_bod));
+            }
+            bod_t *operator->() {
+                return const_cast<bod_t*>(_cptr->_bod);
+            }
+            /* Whilst it is not my taste to define overloads for binary operators (such as == and !=) as member
+             * functions (nor is it the convention), template argument deduction requires it, given that
+             * gtd::bh_cube<>::iterator is a nested class. */
+            bool operator==(const body_iterator &other) const noexcept {
+                return this->_cptr == other._cptr;
+            }
+            bool operator!=(const body_iterator &other) const noexcept {
+                return this->_cptr != other._cptr;
+            }
+            friend class nn_iterator;
+        };
+        class iterator : public body_iterator {
+            const cube_t *_root;
+            using body_iterator::_cptr;
+            using body_iterator::_sptr;
+            using body_iterator::index;
+            // const cube_t *_cptr; // pointer to current leaf node/cube
+            // const cube_t *const *_sptr{}; // pointer to pointer to current node within parent node's array
+            // unsigned char index{}; // position of _cptr within parent node's array
             void find_next_leaf() {
                 index = 0;
                 _sptr = _cptr->_sub;
@@ -368,21 +464,6 @@ namespace gtd {
                 this->operator++();
                 return _copy;
             }
-            bod_t &operator*() {
-                return const_cast<bod_t&>(*(_cptr->_bod));
-            }
-            bod_t *operator->() {
-                return const_cast<bod_t*>(_cptr->_bod);
-            }
-            /* Whilst it is not my taste to define overloads for binary operators (such as == and !=) as member
-             * functions (nor is it the convention), template argument deduction requires it, given that
-             * gtd::bh_cube<>::iterator is a nested class. */
-            bool operator==(const iterator &other) const noexcept {
-                return this->_cptr == other._cptr;
-            }
-            bool operator!=(const iterator &other) const noexcept {
-                return this->_cptr != other._cptr;
-            }
             iterator &operator=(const iterator &other) = default;
             iterator &operator=(const cube_t *cube) {
                 if (cube == nullptr) [[unlikely]]
@@ -392,43 +473,90 @@ namespace gtd {
                 this->find_next_leaf();
                 return *this;
             }
+            friend class nn_iterator;
         };
-        class nn_iterator { // nearest-neighbour iterator - iterates over the bodies nearest to one
+        class nn_iterator : public body_iterator {// nearest-neighbour iterator: iterates over the bodies nearest to one
             const cube_t *const _bc; // pointer to the bh_cube containing body around which bodies will be found
-            cube_t *_cptr{}; // pointer to current neighbouring body-containing cube
-            int64_t _h = 0; // height above the _bc cube in the tree (negative means below _bc cube - hence signed int)
-            uint64_t _mh = 0; // max. height reached above _bc
-            cube_t **_sptr{}; // pointer to array of pointers that _cptr resides in (in parent's array)
-            unsigned char index_m = 0; // index of cube that _bc resides in, at max. height reached
-            unsigned char index_i = 0; // index of cube in initial sibling array
-            unsigned char index = 0; // index of cube in parent array
+            using body_iterator::_cptr;
+            using body_iterator::_sptr;
+            using body_iterator::index;
+            // const cube_t *_cptr{}; // pointer to current neighbouring body-containing cube
+            // int64_t _h = 0; // height above the _bc cube in the tree (negative means below _bc cube - hence signed int)
+            // uint64_t _mh = 0; // max. height reached above _bc
+            // const cube_t *const *_sptr{}; // pointer to array of pointers that _cptr resides in (in parent's array)
+            // unsigned char index = 0; // index of NEXT pointer to cube in parent array
+            bool touches(const cube_t *_cube) const noexcept { // tests whether the _bc cube is touching the _cptr cube
+                return !(_bc->_top.x < _cube->_btm.x || _bc->_btm.x > _cube->_top.x ||
+                         _bc->_top.y < _cube->_btm.y || _bc->_btm.y > _cube->_top.y ||
+                         _bc->_top.z < _cube->_btm.z || _bc->_btm.z > _cube->_top.z);
+            }
+            void find_next_neighbour() noexcept {
+                _sptr = _cptr->parent->_sub + index;
+                while (true) {
+                    while (index < 8) {
+                        if (*_sptr != nullptr && *_sptr != _bc && this->touches(*_sptr)) {
+                            if ((*_sptr)->_bod != nullptr) {
+                                _cptr = *_sptr;
+                                ++index;
+                                return;
+                            }
+                            _cptr = *_sptr;
+                            _sptr = _cptr->_sub;
+                            index = 0;
+                            continue;
+                        }
+                        ++index;
+                        ++_sptr;
+                    }
+                    if (_cptr->parent == nullptr) {
+                        _cptr = _bc;
+                        return;
+                    }
+                    _sptr = _cptr->parent->_sub;
+                    index = 1;
+                    while (*_sptr++ != _cptr) ++index;
+                    _cptr = _cptr->parent;
+                }
+            }
         public:
-            nn_iterator(const iterator &body_it) : _bc{body_it._cptr} {
+            nn_iterator(const body_iterator &body_it, bool is_end = false) : body_iterator{body_it._cptr}, _bc{_cptr} {
                 if (_bc == nullptr || _bc->_bod == nullptr)
                     throw std::invalid_argument{"Error: body iterator does not contain a pointer to a valid "
                                                 "body-containing gtd::bh_cube<> object.\n"};
-                if (_bc->parent == nullptr) {
-                    return; // _cptr is nullptr so is already pointing to end (no nearest neighbours to iterate over)
+                if (_bc->parent == nullptr || is_end) {
+                    // _cptr = _bc; // define _bc as end
+                    return; // _cptr is pointing to end (no nearest neighbours to iterate over)
                 }
-                index_i = 0;
-                _sptr = _cptr->parent->_sub;
-                while (*_sptr != _cptr) {
-                    ++index_i;
-                    ++_sptr;
-                }
-                unsigned char non_null = 0;
-                _sptr = _cptr->parent->_sub;
-                while ((*_sptr) == nullptr) ++_sptr;
-
+                while (_cptr->parent->parent != nullptr) // find children of root
+                    _cptr = _cptr->parent;
+                this->find_next_neighbour();
             }
+            // long long height() const noexcept {
+            //     return _h;
+            // }
             bool has_body() const noexcept {
-                return _cptr != nullptr;
+                return _cptr != _bc;
+            }
+            explicit operator bool() const noexcept {
+                return _cptr != _bc;
             }
             nn_iterator &operator++() {
-                if (_cptr == nullptr)
+                if (_cptr == _bc) [[unlikely]] // means _cptr is pointing to end
                     return *this;
+                this->find_next_neighbour();
                 return *this;
             }
+            nn_iterator operator++(int) {
+                nn_iterator cpy = *this;
+                this->operator++();
+                return cpy;
+            }
+            // bod_t &operator*() {
+            //     return const_cast<bod_t&>(*(this->_cptr->_bod));
+            // }
+            // bod_t *operator->() {
+            //     return const_cast<bod_t*>(this->_cptr->_bod);
+            // }
         };
         // bh_cube() = default;
         // bh_cube(cube_t *parent_cube, const vec &btm, const vec &top) : parent{parent_cube},
@@ -474,6 +602,9 @@ namespace gtd {
 #else
             this->_com = (this->_com*prev_mass + _body->mass_*_body->curr_pos)/this->_mass;
 #endif
+#ifdef BH_REC_NUM
+            ++this->_num;
+#endif
             this->dispatch(_body);
             return true;
         }
@@ -481,6 +612,11 @@ namespace gtd {
             // this->calc_com();
             return this->_com;
         }
+#ifdef BH_REC_NUM
+        uint64_t num_bods() const noexcept {
+            return this->_num;
+        }
+#endif
         ~bh_cube() {
             // std::cout << "Which dtor? this = " << this << std::endl;
             if (this->parent == nullptr) [[unlikely]] { // only root node should do the destructing
@@ -537,7 +673,13 @@ namespace gtd {
         /* The ONLY function in which I have allowed myself to use recursion (since it is not an important function).
          * Beware of stack overflows! */
         const bh_cube<m, r, t, recFreq> *const *ptr = cube._sub;
-        os << "[gtd::bh_cube@" << &cube << ":mass=" << cube._mass << ",com=" << cube._com << ",body=";
+        os << "[gtd::bh_cube@" << &cube <<
+#ifdef BH_REC_NUM
+        ":num_bods=" << cube._num << ",mass="
+#else
+        ":mass="
+#endif
+        << cube._mass << ",com=" << cube._com << ",body=";
         if (cube._bod == nullptr)
             os << "NULL";
         else
