@@ -282,76 +282,195 @@ namespace gtd {
         class nn_iterator;
         class body_iterator {
         protected:
-            const cube_t *_cptr{}; // pointer to current leaf node/cube
-            const cube_t *const *_sptr{}; // pointer to pointer to current node within parent node's array
+            cube_t *_cptr{}; // pointer to current leaf node/cube
+            cube_t **_sptr{}; // pointer to pointer to current node within parent node's array
             unsigned char index{}; // position of _cptr within parent node's array
         public:
             body_iterator() = default;
-            body_iterator(const cube_t *_cube) : _cptr{_cube} {}
-            void erase(bool adjust_com = true) { // for the future: make it return an iterator to the next body (use ++)
+            body_iterator(cube_t *_cube) : _cptr{_cube} {}
+            void erase(bool adjust_com = true) { // for the future: make it return an iterator to the next body
                 if (_cptr->parent == nullptr) {
                     delete _cptr;
                     return;
                 }
-                M mass = _cptr->_bod->mass_;
+                M mass = _cptr->_bod->mass_; // valid body iterators will always be pointing to some body
                 M mass_before;
                 vec pos = _cptr->_bod->curr_pos;
                 vec _bmr = mass*pos;
-                cube_t *_cpy = _cptr;
-                cube_t *_cpy_sub;
-                cube_t *to_update = _cptr->parent;
-                cube_t *to_delete = _cptr;
-                bod_t *to_assign_to_updated_cube = nullptr;
+                // cube_t *_cpy = _cptr;
+                // cube_t *_cpy_sub;
                 // bool assign_body_to_updated_cube = false; // really went to town with var. names here eh
 #ifndef BH_REC_NUM
                 uint64_t _num;
+#define BH_BODY_NUMBER(...) _num
+#define BH_CALC_BODY_NUMBER(cube_token) \
+                _num = 0; \
+                _sptr = cube_token->_sub; \
+                index = 8; \
+                while (index --> 0) { \
+                    if (*_sptr != nullptr) { \
+                        if ((*_sptr)->_bod == nullptr) { /* means a sibling cube has children, so > 1 body in it */ \
+                            _num = 3; /* could be any value that is NOT 2 */ \
+                            break; \
+                        } \
+                        ++_num; \
+                    } \
+                    ++_sptr; \
+                }
 #else
-                if (to_update->parent != nullptr && to_update->_num == 2) {
+#define BH_BODY_NUMBER(...) __VA_ARGS__
+#define BH_CALC_BODY_NUMBER(...)
+#endif
+                if (_cptr->parent->parent == nullptr) { // I'd rather deal with this explicitly to avoid everyth. below
+                    BH_CALC_BODY_NUMBER(_cptr->parent)
+                    if (BH_BODY_NUMBER(_cptr->parent->_num) == 2) { // case for when parent is root and entire tree has
+                        _sptr = _cptr->parent->_sub; // only two bodies
+                        index = 0;
+                        while (index++ < 8) {
+                            if (*_sptr != nullptr && *_sptr != _cptr)
+                                break;
+                            ++_sptr;
+                        }
+                        _cptr->parent->_bod = (*_sptr)->_bod;
+                        delete _cptr;
+                        _cptr = (*_sptr)->parent;
+                        delete *_sptr;
+                        _sptr = _cptr->_sub;
+                        index = 8;
+                        while (index --> 0) *_sptr++ = nullptr;
+                        if (adjust_com) {
+                            _cptr->_mass = _cptr->_bod->mass_;
+                            _cptr->_com = _cptr->_bod->curr_pos;
+                        }
+                        return;
+                    }
+                    _sptr = _cptr->parent->_sub;
+                    while (*_sptr != _cptr) ++_sptr;
+                    _cptr = _cptr->parent;
+                    delete *_sptr;
+                    *_sptr = nullptr;
+                    if (adjust_com) {
+                        mass_before = _cptr->_mass;
+                        _cptr->_mass -= mass;
+                        _cptr->_com = (_cptr->_com*mass_before - mass*pos)/_cptr->_mass;
+                    }
+                    return;
+                }
+                cube_t *to_update = _cptr->parent;
+                cube_t *to_delete = _cptr;
+                BH_CALC_BODY_NUMBER(to_update)
+                if (to_update->parent != nullptr && BH_BODY_NUMBER(to_update->_num) == 2) {
                     _sptr = to_update->_sub;
                     while (true) {
                         if (*_sptr != nullptr && *_sptr != to_delete)
                             break;
                         ++_sptr;
                     }
-                    to_assign_to_updated_cube = (*_sptr)->_bod;
-                    to_delete = to_update;
+                    const bod_t *to_assign_to_updated_cube = (*_sptr)->_bod;
+                    delete *_sptr;
+                    *_sptr = nullptr;
+                    cube_t *to_assign_to = to_update;
                     to_update = to_update->parent;
-                }
-                while (to_update->parent != nullptr && to_update->_num == 2) { // separate into if and while
-                    to_delete = to_update;
-                    to_update = to_update->parent;
-                    // assign_body_to_updated_cube = true;
-                }
-                // --to_update->_num;
+#ifndef BH_REC_NUM
+                    _sptr = to_update->_sub;
+                    index = 0;
+                    while (index++ < 8) {
+                        if (*_sptr != nullptr && *_sptr != to_assign_to)
+                            goto after_loop;
+                        ++_sptr;
+                    }
+                    // BH_CALC_BODY_NUMBER(to_update)
+                    while (to_update->parent != nullptr) {
+#else
+                    while (to_update->_num == 2 && to_update->parent != nullptr) {
 #endif
-                if (to_assign_to_updated_cube != nullptr) {
-                    to_update->_bod = to_assign_to_updated_cube;
-                    to_delete->parent = nullptr; // setting the parent to nullptr and then deleting it will destroy all
-                    delete to_delete; // the cells below it recursively, destroying completely its part of the tree
-                }
-                if (!adjust_com) { // could be for when a tree is going to be destroyed or when COMs are not imp. anymo.
-                    return;
-                }
-                if (adjust_com) {
-                    do {
-                        _cpy_sub = _cpy;
-                        _cpy = _cpy->parent;
+                        to_delete = to_assign_to;
+                        to_assign_to = to_update;
+                        to_update = to_update->parent;
+#ifndef BH_REC_NUM
+                        _sptr = to_update->_sub;
                         index = 0;
-                        _sptr = _cpy->_sub;
-                        while (*_sptr != _cpy_sub) {
-                            ++index;
+                        while (index++ < 8) {
+                            if (*_sptr != nullptr && *_sptr != to_assign_to)
+                                goto after_loop;
                             ++_sptr;
                         }
-                        delete _cpy_sub;
-                        _cpy->_sub[index] = nullptr;
-                        mass_before = _cpy->_mass;
-                        _cpy->_mass -= mass;
-                        _cpy->_com = (_cpy->_com*mass_before - _bmr)/_cpy->_mass;
-#ifdef RUNNING_MR_SUM
-                        _cptr->mr_sum -= _bmr;
 #endif
-                    } while (_cpy->parent != nullptr);
+                    }
+                    after_loop:
+                    // to_delete = to_update;
+                    // to_update = to_update->parent;
+                    // BH_CALC_BODY_NUMBER
+                    /*
+                    do {
+                        to_assign_to = to_update;
+                        to_update = to_update->parent;
+                        // assign_body_to_updated_cube = true;
+#ifndef BH_REC_NUM
+                        if (to_update->parent == nullptr)
+                            break;
+                        BH_CALC_BODY_NUMBER(to_update->parent)
+                    } while (BH_BODY_NUMBER(blah_blah_blah) == 2);
+#else
+                    } while (to_update->parent != nullptr && BH_BODY_NUMBER == 2);
+#endif
+                     */
+                    to_assign_to->_bod = to_assign_to_updated_cube;
+                    to_assign_to->_mass = to_assign_to_updated_cube->mass_;
+#ifdef RUNNING_COM
+                    to_assign_to->_com = to_assign_to_updated_cube->curr_pos;
+#else
+#ifdef RUNNING_MR_SUM
+                    to_assign_to->mr_sum = to_assign_to_updated_cube->mass_*to_assign_to_updated_cube->curr_pos;
+#endif
+#endif
+                    _sptr = to_assign_to->_sub;
                 }
+#undef BH_BODY_NUMBER
+#undef BH_CALC_BODY_NUMBER
+                else {
+                    _sptr = to_update->_sub;
+                }
+                // --to_update->_num;
+                while (*_sptr != to_delete) ++_sptr;
+                *_sptr = nullptr;
+                to_delete->parent = nullptr; // setting the parent to nullptr and then deleting it will destroy all the
+                delete to_delete; // cells below it recursively (if present), destroying completely its part of the tree
+                // if (to_assign_to_updated_cube != nullptr) {
+                //     to_update->_bod = to_assign_to_updated_cube;
+                //     // _sptr = to_update->_sub;
+                //     // index = 8;
+                //     // while (index --> 0) *_sptr++ = nullptr; // likely just as fast as first finding index
+                // }
+                if (!adjust_com) { // could be for when a tree is going to be destroyed or when COMs are not imp. anymo.
+#ifdef BH_REC_NUM
+                    do {
+                        --to_update->_num;
+                    } while ((to_update = to_update->parent) != nullptr);
+#endif
+                    return;
+                }
+                do {
+                    // _cpy_sub = _cpy;
+                    // _cpy = _cpy->parent;
+                    // index = 0;
+                    // _sptr = _cpy->_sub;
+                    // while (*_sptr != _cpy_sub) {
+                    //     ++index;
+                    //     ++_sptr;
+                    // }
+                    // delete _cpy_sub;
+                    // _cpy->_sub[index] = nullptr;
+                    mass_before = to_update->_mass;
+                    to_update->_mass -= mass;
+                    to_update->_com = (to_update->_com*mass_before - _bmr)/to_update->_mass;
+#ifdef RUNNING_MR_SUM
+                    to_update->mr_sum -= _bmr;
+#endif
+#ifdef BH_REC_NUM
+                    --to_update->_num;
+#endif
+                } while ((to_update = to_update->parent) != nullptr);
             }
             bod_t &operator*() {
                 return const_cast<bod_t&>(*(_cptr->_bod));
@@ -371,7 +490,7 @@ namespace gtd {
             friend class nn_iterator;
         };
         class iterator : public body_iterator {
-            const cube_t *_root;
+            cube_t *_root;
             using body_iterator::_cptr;
             using body_iterator::_sptr;
             using body_iterator::index;
@@ -396,7 +515,7 @@ namespace gtd {
                 }
             }
         public:
-            iterator(const cube_t *root, bool is_end = false) : _root{root} { // doesn't have to be root
+            iterator(cube_t *root, bool is_end = false) : _root{root} { // doesn't have to be root
                 /* The constructor initially points _cptr to the leaf node (containing a non-NULL pointer to a body)
                  * with the lowest octant coordinates (according to how I have labelled them - see further up). */
                 if (root == nullptr) [[unlikely]]
@@ -465,7 +584,7 @@ namespace gtd {
                 return _copy;
             }
             iterator &operator=(const iterator &other) = default;
-            iterator &operator=(const cube_t *cube) {
+            iterator &operator=(cube_t *cube) {
                 if (cube == nullptr) [[unlikely]]
                     throw std::invalid_argument{"Error: nullptr passed as cube.\n"};
                 _cptr = cube;
@@ -476,7 +595,7 @@ namespace gtd {
             friend class nn_iterator;
         };
         class nn_iterator : public body_iterator {// nearest-neighbour iterator: iterates over the bodies nearest to one
-            const cube_t *const _bc; // pointer to the bh_cube containing body around which bodies will be found
+            cube_t *_bc; // pointer to the bh_cube containing body around which bodies will be found
             using body_iterator::_cptr;
             using body_iterator::_sptr;
             using body_iterator::index;
@@ -558,6 +677,93 @@ namespace gtd {
             //     return const_cast<bod_t*>(this->_cptr->_bod);
             // }
         };
+        class cell_iterator { // does not inherit from body_iterator as does not necessarily iterate over bodies
+            const cube_t *_bc; // pointer to the leaf in which the body is contained
+            const cube_t *_root;
+            const cube_t *_cptr; // is const in cell_iterator since a cell_iterator cannot alter the cube
+            const cube_t *const *_sptr{};
+            unsigned char index = 0; // these variables have the same uses as in the body_iterator class
+            vec _bpos; // position of the body on which force will be calculated
+            long double _theta; // maximum opening angle from body to cell for cell not to be recursively subdivided
+            void find_first_cell() noexcept {
+                _sptr = _root->_sub;
+                while (index < 8) {
+                    if (*_sptr != nullptr && *_sptr != _bc) {
+                        if ((*_sptr)->_bod != nullptr || this->is_source_cell(*_sptr)) {
+                            _cptr = *_sptr++; // _sptr is left pointing to next cell to investigate
+                            ++index;
+                            return;
+                        }
+                        _sptr = (*_sptr)->_sub;
+                        index = 0;
+                        continue;
+                    }
+                    ++index;
+                    ++_sptr;
+                }
+                _cptr = _bc; // would only occur in the case of single body tree
+            }
+            void find_next_cell() noexcept {
+                while (true) {
+                    while (index < 8) {
+                        if (*_sptr != nullptr && *_sptr != _bc) {
+                            if ((*_sptr)->_bod != nullptr || this->is_source_cell(*_sptr)) {
+                                _cptr = *_sptr++; // _sptr is left pointing to next cell to investigate
+                                ++index;
+                                return;
+                            }
+                            // _cptr = *_sptr;
+                            _sptr = (*_sptr)->_sub;
+                            index = 0;
+                            continue;
+                        }
+                        ++_sptr;
+                        ++index;
+                    }
+                    if ((_cptr = _cptr->parent)->parent == nullptr)
+                        break;
+                    index = 1;
+                    _sptr = _cptr->parent->_sub;
+                    while (*_sptr++ != _cptr) ++index;
+                }
+                _cptr = _bc; // have reached end
+            }
+            bool is_source_cell(const cube_t *cell) { // banking on this being inlined by the compiler (if not, macro!)
+                return (cell->_top.x - cell->_btm.x)/vec_ops::distance(this->_bpos, cell->_com) < _theta;
+            }
+        public:
+            cell_iterator(cube_t *root, const vec &particle_pos, long double opening_angle) :
+            _root{root}, _cptr{root}, _bpos{particle_pos}, _theta{opening_angle} {
+                if (root->parent != nullptr)
+                    throw std::invalid_argument{"Error: root cube supplied is not root, as parent is not nullptr.\n"};
+                if (opening_angle >= PI)
+                    throw std::invalid_argument{"Error: opening angle cannot be equal to or larger than PI radians.\n"};
+                if ((_bc = root->find_leaf(particle_pos)) == nullptr)
+                    throw invalid_body_placement{"Error: particle does not lie within root cell.\n"};
+                this->find_first_cell();
+            }
+            cell_iterator &operator++() {
+                if (_cptr == _bc)
+                    return *this;
+                this->find_next_cell();
+                return *this;
+            }
+            cell_iterator operator++(int) {
+                cell_iterator _cpy = *this;
+                this->operator++();
+                return _cpy;
+            }
+            const cube_t &operator*() const noexcept {
+                return *_cptr;
+            }
+            const cube_t *operator->() const noexcept {
+                return _cptr;
+            }
+            explicit operator bool() const noexcept {
+                return _cptr != _bc;
+            }
+            cell_iterator &operator=(const cell_iterator &other) = default;
+        };
         // bh_cube() = default;
         // bh_cube(cube_t *parent_cube, const vec &btm, const vec &top) : parent{parent_cube},
         // _btm{btm}, _top{top} {this->set_corners();}
@@ -575,6 +781,32 @@ namespace gtd {
         }
         const bod_t *get_body() const noexcept {
             return this->_bod;
+        }
+        cube_t *root() noexcept {
+            cube_t *_cpy = this;
+            while (_cpy->parent != nullptr) {
+                _cpy = _cpy->parent;
+            }
+            return _cpy;
+        }
+        cube_t *find_leaf(const vec &pos) { // finds the leaf node which contains the given position (if present)
+            cube_t **sptr = this->_sub;
+            unsigned char i = 0;
+            while (i < 8) {
+                if (*sptr != nullptr) {
+                    if (pos.between((*sptr)->_btm, (*sptr)->_top)) {
+                        if ((*sptr)->_bod != nullptr) {
+                            return *sptr;
+                        }
+                        sptr = (*sptr)->_sub;
+                        i = 0;
+                        continue;
+                    }
+                }
+                ++i;
+                ++sptr;
+            }
+            return nullptr; // case for pos not being within any leaf node
         }
         bool add_body(const bod_t *_body) {
             if (_body == nullptr) [[unlikely]]
@@ -607,6 +839,9 @@ namespace gtd {
 #endif
             this->dispatch(_body);
             return true;
+        }
+        M cube_mass() const {
+            return this->_mass;
         }
         vec cube_com() const noexcept {
             // this->calc_com();
@@ -656,7 +891,7 @@ namespace gtd {
                 }
             }
         }
-        const cube_t &operator[](unsigned char index) {
+        const cube_t &operator[](unsigned char index) const {
             if (index > 7)
                 throw std::invalid_argument{"gtd::bh_cube<M, R, T, rF>::operator[] error: index cannot be greater than "
                                             "7.\n"};
