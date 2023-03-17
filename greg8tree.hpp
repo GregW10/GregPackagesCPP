@@ -48,6 +48,8 @@ namespace gtd {
     class bh_cube;
     template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
     std::ostream &operator<<(std::ostream&, const bh_cube<M, R, T, rF>&);
+    // template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, uint64_t, uint64_t, bool>
+    // class system;
     template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t>
     class bh_tree;
     template <isNumWrapper M = long double, isNumWrapper R = long double,
@@ -279,7 +281,8 @@ namespace gtd {
         }
 #endif
     public:
-        class nn_iterator;
+        class nn_iterator; // forward declarations required for in-class friend declarations
+        class cell_iterator;
         class body_iterator {
         protected:
             cube_t *_cptr{}; // pointer to current leaf node/cube
@@ -488,9 +491,10 @@ namespace gtd {
                 return this->_cptr != other._cptr;
             }
             friend class nn_iterator;
+            friend class cell_iterator;
         };
         class iterator : public body_iterator {
-            cube_t *_root;
+            cube_t *_root = nullptr;
             using body_iterator::_cptr;
             using body_iterator::_sptr;
             using body_iterator::index;
@@ -515,6 +519,7 @@ namespace gtd {
                 }
             }
         public:
+            iterator() = default; // iterator is unusable until assigned to a cube
             iterator(cube_t *root, bool is_end = false) : _root{root} { // doesn't have to be root
                 /* The constructor initially points _cptr to the leaf node (containing a non-NULL pointer to a body)
                  * with the lowest octant coordinates (according to how I have labelled them - see further up). */
@@ -583,16 +588,20 @@ namespace gtd {
                 this->operator++();
                 return _copy;
             }
+            explicit operator bool() const noexcept {
+                return _cptr->_bod != nullptr; // covers all cases
+            }
             iterator &operator=(const iterator &other) = default;
             iterator &operator=(cube_t *cube) {
                 if (cube == nullptr) [[unlikely]]
                     throw std::invalid_argument{"Error: nullptr passed as cube.\n"};
-                _cptr = cube;
-                _root = cube;
+                _cptr = _root = cube;
+                // _root = cube;
                 this->find_next_leaf();
                 return *this;
             }
             friend class nn_iterator;
+            friend class cell_iterator;
         };
         class nn_iterator : public body_iterator {// nearest-neighbour iterator: iterates over the bodies nearest to one
             cube_t *_bc; // pointer to the bh_cube containing body around which bodies will be found
@@ -676,14 +685,15 @@ namespace gtd {
             // bod_t *operator->() {
             //     return const_cast<bod_t*>(this->_cptr->_bod);
             // }
+            friend class cell_iterator;
         };
         class cell_iterator { // does not inherit from body_iterator as does not necessarily iterate over bodies
-            const cube_t *_bc; // pointer to the leaf in which the body is contained
-            const cube_t *_root;
-            const cube_t *_cptr; // is const in cell_iterator since a cell_iterator cannot alter the cube
+            const cube_t *_bc = nullptr; // pointer to the leaf in which the body is contained
+            const cube_t *_root = nullptr;
+            const cube_t *_cptr = nullptr; // is const in cell_iterator since a cell_iterator cannot alter the cube
             const cube_t *const *_sptr{};
             unsigned char index = 0; // these variables have the same uses as in the body_iterator class
-            vec _bpos; // position of the body on which force will be calculated
+            vec _bpos{}; // position of the body on which force will be calculated
             long double _theta; // maximum opening angle from body to cell for cell not to be recursively subdivided
             void find_first_cell() noexcept {
                 _sptr = _root->_sub;
@@ -731,16 +741,48 @@ namespace gtd {
             bool is_source_cell(const cube_t *cell) { // banking on this being inlined by the compiler (if not, macro!)
                 return (cell->_top.x - cell->_btm.x)/vec_ops::distance(this->_bpos, cell->_com) < _theta;
             }
+            void error_logging() {
+                if (_root == nullptr)
+                    throw std::invalid_argument{"Error: root cube passed is nullptr.\n"};
+                if (_root->parent != nullptr)
+                    throw std::invalid_argument{"Error: root cube supplied is not root, as parent is not nullptr.\n"};
+                if (_theta >= PI || _theta < 0)
+                    throw std::invalid_argument{"Error: opening angle cannot be negative or equal to or larger than PI "
+                                                "radians.\n"};
+            }
         public:
+            cell_iterator(long double opening_angle) : _theta{opening_angle} {
+                if (_theta >= PI || _theta < 0)
+                    throw std::invalid_argument{"Error: opening angle cannot be negative or equal to or larger than PI "
+                                                "radians.\n"};
+            }
+            cell_iterator(cube_t *root, long double opening_angle) : _root{root}, _theta{opening_angle}{
+                /* This constructor will construct a cell_iterator object that needs to be assigned to a body_iterator
+                 * before use (otherwise -> undefined behaviour (most likely seg. fault due to deref. nullptr)). */
+                this->error_logging();
+            }
             cell_iterator(cube_t *root, const vec &particle_pos, long double opening_angle) :
             _root{root}, _cptr{root}, _bpos{particle_pos}, _theta{opening_angle} {
-                if (root->parent != nullptr)
-                    throw std::invalid_argument{"Error: root cube supplied is not root, as parent is not nullptr.\n"};
-                if (opening_angle >= PI)
-                    throw std::invalid_argument{"Error: opening angle cannot be equal to or larger than PI radians.\n"};
+                this->error_logging();
                 if ((_bc = root->find_leaf(particle_pos)) == nullptr)
                     throw invalid_body_placement{"Error: particle does not lie within root cell.\n"};
                 this->find_first_cell();
+            }
+            cell_iterator(cube_t *root, const body_iterator &body_it, long double opening_angle) :
+            _root{root}, _cptr{body_it._cptr}, _bc{body_it._cptr}, _theta{opening_angle} {
+                this->error_logging();
+                if (_cptr->_bod == nullptr)
+                    throw std::invalid_argument{"Error: iterator passed does not point to a body-containing cell.\n"};
+                if (!(_bpos = _cptr->_bod->curr_pos).between(_root->_btm, _root->_top))
+                    throw invalid_body_placement{"Error: particle does not lie within root cell.\n"};
+                this->find_first_cell();
+            }
+            cell_iterator(const body_iterator &body_it, long double opening_angle) :
+            cell_iterator{body_it._cptr->root(), body_it, opening_angle} {}
+            void set_root(cube_t *root) { // could have been an assignment operator overload but this is more explicit
+                if (root == nullptr || root->parent == nullptr)
+                    throw std::invalid_argument{"Error: root cannot be nullptr and parent must be nullptr.\n"};
+                _root = root;
             }
             cell_iterator &operator++() {
                 if (_cptr == _bc)
@@ -763,6 +805,15 @@ namespace gtd {
                 return _cptr != _bc;
             }
             cell_iterator &operator=(const cell_iterator &other) = default;
+            cell_iterator &operator=(const body_iterator &body_it) {
+                if (body_it._cptr->_bod == nullptr)
+                    throw std::invalid_argument{"Error: body iterator does not point to body.\n"};
+                if (!body_it._cptr->_bod->curr_pos.between(_root->_btm, _root->_top))
+                    throw invalid_body_placement{body_it->_cptr->_bod->id};
+                this->_cptr = this->_bc = body_it._cptr;
+                this->find_first_cell();
+                return *this;
+            }
         };
         // bh_cube() = default;
         // bh_cube(cube_t *parent_cube, const vec &btm, const vec &top) : parent{parent_cube},
@@ -812,7 +863,7 @@ namespace gtd {
             if (_body == nullptr) [[unlikely]]
                 return false;
             if (!_body->curr_pos.between(this->_btm, this->_top)) [[unlikely]]
-                throw invalid_body_placement{this->_bod->id};
+                throw invalid_body_placement{_body->id};
             // if (this->_bod != nullptr) { // case for first split of cube into sub-cubes
             //     // if (!this->dispatch(this->_bod)) {
             //     //     throw invalid_body_placement{this->_bod->id};
@@ -902,11 +953,13 @@ namespace gtd {
         // template <isNumWrapper m, isNumWrapper r, isNumWrapper t, uint64_t recFreq>
         friend std::ostream &operator<< <M, R, T, rF>(std::ostream &os, const bh_cube &cube);
         friend class bh_tree<M, R, T, rF>;
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, uint64_t, uint64_t, bool>
+        friend class system; // friend class declaration cannot be a partial specialisation
     };
     template <isNumWrapper m, isNumWrapper r, isNumWrapper t, uint64_t recFreq>
     std::ostream &operator<<(std::ostream &os, const bh_cube<m, r, t, recFreq> &cube) {
         /* The ONLY function in which I have allowed myself to use recursion (since it is not an important function).
-         * Beware of stack overflows! */
+         * Beware of stack overflows (though unlikely to ever occur due to shallow recursion depth)! */
         const bh_cube<m, r, t, recFreq> *const *ptr = cube._sub;
         os << "[gtd::bh_cube@" << &cube <<
 #ifdef BH_REC_NUM
@@ -931,15 +984,119 @@ namespace gtd {
         return os << ']';
     }
     template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
+    std::ostream &operator<<(std::ostream&, const bh_tree<M, R, T, rF>&);
+    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
     class bh_tree {
-        using typename bh_cube<M, R, T, rF>::cube_t;
+        using cube_t = typename bh_cube<M, R, T, rF>::cube_t;
+        using bod_t = typename bh_cube<M, R, T, rF>::bod_t;
+        using vec = typename bh_cube<M, R, T, rF>::vec;
         cube_t *_root = nullptr;
+        vec _btm{};
+        vec _top{};
+        void find_min_max(const bod_t *_ptr, typename std::vector<bod_t>::size_type _size) {
+            T min_x = _ptr->curr_pos.x;
+            T min_y = _ptr->curr_pos.y;
+            T min_z = _ptr->curr_pos.z;
+            T max_x = _ptr->curr_pos.x;
+            T max_y = _ptr->curr_pos.y;
+            T max_z = _ptr++->curr_pos.z;
+            while (--_size > 0) {
+                if (_ptr->curr_pos.x < min_x)
+                    min_x = _ptr->curr_pos.x;
+                if (_ptr->curr_pos.y < min_y)
+                    min_y = _ptr->curr_pos.y;
+                if (_ptr->curr_pos.z < min_z)
+                    min_z = _ptr->curr_pos.z;
+                if (_ptr->curr_pos.x > max_x)
+                    max_x = _ptr->curr_pos.x;
+                if (_ptr->curr_pos.y > max_y)
+                    max_y = _ptr->curr_pos.y;
+                if (_ptr->curr_pos.z > max_z)
+                    max_z = _ptr->curr_pos.z;
+                ++_ptr;
+            }
+            T x_pad = (max_x - min_x)/20.0l; // to leave a little wiggle-room
+            T y_pad = (max_y - min_y)/20.0l;
+            T z_pad = (max_z - min_z)/20.0l;
+            _btm.x = min_x - x_pad;
+            _btm.y = min_y - y_pad;
+            _btm.z = min_z - z_pad;
+            _top.x = max_x + x_pad;
+            _top.y = max_y + y_pad;
+            _top.z = max_z + z_pad;
+        }
     public:
         bh_tree() = default;
-        ~bh_tree() {
-            delete _root;
+        vec bottom() {
+            return this->_btm;
         }
+        vec top() {
+            return this->_top;
+        }
+#ifdef BH_REC_NUM
+        uint64_t num_bods() const noexcept {
+            return _root == nullptr ? 0 : _root->num_bods();
+        }
+#endif
+#ifndef RUNNING_COM
+        void calc_com() {
+            _root->calc_com();
+        }
+#endif
+        void add_bodies(const std::vector<bod_t> &bods) {
+            if (bods.empty())
+                return;
+            const bod_t *ptr = bods.data();
+            typename std::vector<bod_t>::size_type _size = bods.size();
+            if (_root == nullptr) {
+                this->find_min_max(ptr, _size--);
+                _root = new cube_t{nullptr, _btm, _top, ptr++};
+            }
+            while (_size --> 0) {
+                _root->add_body(ptr++);
+            }
+        }
+        void assign_bodies(const std::vector<bod_t> &bods) {
+            delete _root;
+            _root = nullptr;
+            this->add_bodies(bods);
+        }
+        typename cube_t::iterator begin() {
+            return {_root};
+        }
+        typename cube_t::iterator end() {
+            return {_root, true};
+        }
+        typename cube_t::cell_iterator cell_begin(const typename cube_t::body_iterator &body_it,
+                                                  long double opening_angle) {
+            return {_root, body_it, opening_angle};
+        }
+        typename cube_t::nn_iterator nn_begin(const typename cube_t::body_iterator &body_it) {
+            return {body_it};
+        }
+        void delete_tree() noexcept {
+            delete _root;
+            _root = nullptr;
+            _btm.x = T{};
+            _btm.y = T{};
+            _btm.z = T{};
+            _top.x = T{};
+            _top.y = T{};
+            _top.z = T{};
+        };
+        ~bh_tree() {
+            delete _root; // safe to delete nullptr
+        }
+        friend std::ostream &operator<< <M, R, T, rF>(std::ostream&, const bh_tree<M, R, T, rF>&);
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, uint64_t, uint64_t, bool>
+        friend class system;
     };
+    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
+    std::ostream &operator<<(std::ostream &os, const bh_tree<M, R, T, rF> &tree) {
+        if (tree._root == nullptr)
+            return os << "NULL";
+        return os << *tree._root;
+    }
     template <uint64_t recFreq>
     using cube = bh_cube<long double, long double, long double, recFreq>;
     typedef bh_cube<long double, long double, long double, 0> cube_0f;
@@ -947,5 +1104,12 @@ namespace gtd {
     typedef bh_cube<long double, long double, long double, 10> cube_10f;
     typedef bh_cube<long double, long double, long double, 100> cube_100f;
     typedef bh_cube<long double, long double, long double, 1000> cube_1000f;
+    template <uint64_t recFreq>
+    using octree = bh_tree<long double, long double, long double, recFreq>;
+    typedef bh_tree<long double, long double, long double, 0> octree_0f;
+    typedef bh_tree<long double, long double, long double, 1> octree_1f;
+    typedef bh_tree<long double, long double, long double, 10> octree_10f;
+    typedef bh_tree<long double, long double, long double, 100> octree_100f;
+    typedef bh_tree<long double, long double, long double, 1000> octree_1000f;
 }
 #endif

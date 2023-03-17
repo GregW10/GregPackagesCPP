@@ -5,7 +5,7 @@
 #error "The gregsys.hpp header file is a C++ header file only."
 #endif
 
-#include "gregbod.hpp"
+#include "greg8tree.hpp"
 
 #define EMPTY
 
@@ -154,11 +154,15 @@ namespace gtd {
         static constexpr long double G_SI = 0.000'000'000'066'743; // G in SI units (m^3 kg^-1 s^-2)
     private: // G, below, has not been made a static constant as it varies between objects, depending on units passed
         long double G = 66'743; // Newtonian constant of Gravitation (10^(-15) m^3 kg^-1 s^-2)
+        using vec_t = vector3D<T>;
         using bod_t = body<M, R, T, memFreq>;
         using vec_size_t = typename std::vector<bod_t>::size_type;
         using sys_t = system<M, R, T, prog, mergeOverlappingBodies, collisions, memFreq, fileFreq, binaryFile>;
         using mom_t = decltype(M{}*T{});
+        using cube_t = bh_cube<M, R, T, memFreq>;
+        using tree_t = bh_tree<M, R, T, memFreq>;
         std::vector<bod_t> bods; // not using set, map or list as need fast random access to bodies
+        tree_t btree{}; // Barnes-Hut body tree - only used in evolve() if Barnes-Hut or fast multiple option selected
         // std::set<bod_t, std::less<>> del_bods; // set to store bodies removed from system after collision mergers
         /* Here I declare a std::set to store bodies that are removed from the evolution in the case of a merger. I have
          * declared the type of the comparator used by the std::set object to be that of an anonymous lambda type, which
@@ -176,6 +180,8 @@ namespace gtd {
             std::set<bod_t, std::less<>> *del_bods_n;
             std::set<std::pair<uint64_t, bod_t>, decltype(pair_bods_func)> *del_bods_m;
         };
+        long double eps = 0; // softening
+        long double eps_sq = eps*eps;
         long double dt = 1;
         long double half_dt = dt/2; // I gave it its own variable, since it is a commonly used quantity
         uint64_t iterations = 1'000;
@@ -184,6 +190,7 @@ namespace gtd {
         uint64_t prev_iterations{}; // same here
         mom_t min_tot_com_mom{BILLION*10}; // minimum sum of magnitudes of COM momenta for two bodies to merge
         // using P = decltype((G*std::declval<M>()*std::declval<M>())/std::declval<T>()); // will be long double
+        long double bh_theta = PI/3; // opening angle parameter for Barnes-Hut force approximation
         uint64_t steps{}; // defined as an instance variable since it's required in numerous functions
         T total_pe{}; // these 5 variables are defined as instance variables to avoid their redefinition in many funcs
         T total_ke{};
@@ -332,6 +339,22 @@ namespace gtd {
             auto &&pot_energy = -(G*b1.mass_*b2.mass_)/r12.magnitude();
             b1.pe += pot_energy;
             b2.pe += pot_energy;
+        }
+        void bh_acc_and_pe(bod_t *_bod, const cube_t *_src) requires (memFreq != 0) {
+            vec_t &&r12 = _src->_com - _bod->curr_pos;
+            auto &&r12_sq = r12*r12 + eps_sq;
+            auto &&r12_mag = std::sqrtl(r12_sq);
+            _bod->acc = this->G*(_src->_mass/(r12_sq))*(r12/r12_mag);
+            _bod->pe -= -(G*_bod->mass_*_src->_mass)/r12_mag;
+        }
+        void bh_acc(bod_t *_bod, const cube_t *_src) {
+            vec_t &&r12 = _src->_com - _bod->curr_pos;
+            auto &&r12_sq = r12*r12 + eps_sq;
+            _bod->acc = this->G*(_src->_mass/(r12_sq))*(r12/(std::sqrtl(r12_sq)));
+        }
+        void bh_pe(bod_t *_bod, const cube_t *_src) requires (memFreq != 0) {
+            vector3D<T> &&r12 = _src->_com - _bod->curr_pos;
+            _bod->pe -= (G*_bod->mass_*_src->_mass)/(std::sqrtl(r12*r12 + eps_sq));
         }
         template <bool mem, bool file>
         void take_euler_step() {
@@ -1522,6 +1545,19 @@ namespace gtd {
                                             std::is_fundamental_v<T> && CHAR_BIT == 8) {
             return nsys_file_size(this->bods.size());
         }
+        bool set_softening(long double _epsilon) noexcept {
+            if (_epsilon < std::sqrtl(std::numeric_limits<long double>::min()))
+                return false;
+            eps = _epsilon;
+            eps_sq = _epsilon*_epsilon;
+            return true;
+        }
+        bool set_bh_opening_angle(long double _theta) {
+            if (_theta < 0 || _theta >= PI)
+                return false;
+            bh_theta = _theta;
+            return true;
+        }
         bool set_min_tot_com_mom(const mom_t& total_momentum) requires (collisions != 0) {
             if (total_momentum < mom_t{})
                 return false;
@@ -1848,6 +1884,37 @@ namespace gtd {
             else if ((integration_method & euler) == euler) {
                 if ((integration_method & barnes_hut) == barnes_hut) {
                     // lots of stuff here
+                    typename cube_t::iterator it;
+                    typename cube_t::cell_iterator cit{bh_theta};
+                    while (steps < iterations) {
+                        btree.add_bodies(this->bods);
+                        it = btree.begin();
+                        cit.set_root(btree._root);
+                        if constexpr (memFreq && fileFreq) {
+                            if (!(steps % memFreq) || !(steps % fileFreq)) {
+                                while (it) {
+                                    cit = it;
+                                    while (cit) {
+                                        this->bh_acc_and_pe(it->_cptr->_bod, cit++->_cptr);
+                                    }
+                                    ++it;
+                                }
+                            }
+                            else {
+
+                            }
+                        }
+                        else if constexpr (memFreq) {
+
+                        }
+                        else if constexpr (fileFreq) {
+
+                        }
+                        else {
+
+                        }
+                        btree.delete_tree(); // has to be reconstructed at every step since particles positions change
+                    }
                 }
                 else {
                     while (steps < iterations) {
