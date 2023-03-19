@@ -263,6 +263,8 @@ namespace gtd {
     std::ostream &operator<<(std::ostream &os, const body_counter &bc) {
         return os << "[gtd::body_counter@" << &bc << ":id=" << bc.id << ']';
     }
+    template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t>
+    class body_tracker;
     template <isNumWrapper M = long double, isNumWrapper R = long double, isNumWrapper T = long double,
             uint64_t recFreq = 1>
     class body : public body_counter {
@@ -869,6 +871,7 @@ namespace gtd {
         friend class bh_cube; \
         template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t> \
         friend class bh_tree;
+        friend class body_tracker<M, R, T, recFreq>;
         BODY_FRIEND_DECLARATIONS // pre-processed code will not look pretty...
     };
     template <isNumWrapper M, isNumWrapper R, isNumWrapper T>
@@ -1064,9 +1067,10 @@ namespace gtd {
             this->radius = cbrtl(this->radius*this->radius*this->radius + other.radius*other.radius*other.radius);
             return *this;
         }
-        // all friend declarations have to re-declared for the partial template specialisation:
+        // all friend declarations have to be re-declared for the partial template specialisation:
         BODY_FRIEND_DECLARATIONS
 #undef BODY_FRIEND_DECLARATIONS
+        friend class body_tracker<M, R, T, 0>;
     };
     template <isNumWrapper m, isNumWrapper r, isNumWrapper t, uint64_t rF>
     std::ostream &operator<<(std::ostream &os, const body<m, r, t, rF> &bod) {

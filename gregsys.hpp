@@ -2466,6 +2466,7 @@ namespace gtd {
                   const system<m, r, t, prg2, mrg2, c2, mF2, fF2, bF2>&);
         template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, uint64_t, uint64_t, bool>
         friend class system;
+        friend class body_tracker<M, R, T, memFreq>;
         template <isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper, isNumWrapper,
                 isNumWrapper, bool, uint64_t>
         friend class astro_scene;
@@ -2511,6 +2512,63 @@ namespace gtd {
         ret_sys.add_bodies(sys2.bods);
         return ret_sys;
     }
+    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t rF>
+    class body_tracker {
+        /* Rudimentary convenience class - exists solely for the purpose of calculating the centre-of-mass of a subset
+         * of bodies within a gtd::system<> object (determined via the unary predicate passed to the ctor below). Note:
+         * usage of this class assumes that no mergers will take place within the gtd::system<> object, and that no
+         * subsequent bodies will be added to the system (which could result in a reallocation, invalidating all
+         * pointers to bodies within this class). */
+        using bod_t = body<M, R, T, rF>;
+        template <bool prog, bool merge, int coll, uint64_t fF, bool bin>
+        using sys_t = system<M, R, T, prog, merge, coll, rF, fF, bin>;
+        using vec = vector3D<decltype(std::declval<M>()*std::declval<T>()/std::declval<M>())>;
+        using vec_size_t = typename std::vector<const bod_t*>::size_type;
+        std::vector<const bod_t*> _bods; // pointers to all the bodies
+        // vec _com; // centre of mass of all bodies
+        // M _tmass; // total mass of all bodies
+        // void calc_mass() {
+        //
+        // }
+        // void calc_com() {
+        //     this->calc_mass();
+        // }
+    public:
+        template <bool prog, bool merge, int coll, uint64_t fF, bool bin, unaryPredicate<bod_t> func>
+        body_tracker(const sys_t<prog, merge, coll, fF, bin> &sys, const func &_f, vec_size_t reserve_bods = 0) {
+            if (sys.bods.empty())
+                return;
+            if (reserve_bods)
+                _bods.reserve(reserve_bods);
+            for (const bod_t &_b : sys)
+                if (_f(_b))
+                    _bods.push_back(&_b);
+        }
+        M mass() {
+            M _tmass{}; // total mass of bodies
+            for (const bod_t* const &_ptr : _bods)
+                _tmass += _ptr->mass_;
+            return _tmass;
+        }
+        vec com() {
+            M _tmass{}; // total mass of bodies
+            vec _mr_sum;
+            for (const bod_t* const &_ptr : _bods)
+                _tmass += _ptr->mass_;
+            for (const bod_t* const &_ptr : _bods)
+                _mr_sum += _ptr->mass_*_ptr->curr_pos;
+            return _mr_sum / _tmass; // guaranteed copy elision
+        }
+        vec com_vel() {
+            M _tmass{};
+            vec _mv_sum;
+            for (const bod_t* const &_ptr : _bods)
+                _tmass += _ptr->mass_;
+            for (const bod_t* const &_ptr : _bods)
+                _mv_sum += _ptr->mass_*_ptr->curr_vel;
+            return _mv_sum / _tmass;
+        }
+    };
     // std::set<unsigned long long> body_counter::ids;
     // unsigned long long body_counter::count = 0;
     typedef system<long double, long double, long double> sys;
@@ -2585,6 +2643,13 @@ namespace gtd {
     typedef system<long double, long double, long double, false, true, 7, 1, 1, false> sys_mC_MF_txt;
     typedef system<long double, long double, long double, true, true, 3, 1, 1, false> sys_pmc_MF_txt;
     typedef system<long double, long double, long double, true, true, 7, 1, 1, false> sys_pmC_MF_txt;
+    typedef body_tracker<long double, long double, long double, 0> btrk_0f;
+    typedef body_tracker<long double, long double, long double, 10> btrk_10f;
+    typedef body_tracker<long double, long double, long double, 10> btrk_10f;
+    typedef body_tracker<long double, long double, long double, 100> btrk_100f;
+    typedef body_tracker<long double, long double, long double, 1000> btrk_1000f;
+    template <uint64_t rF>
+    using btrk = body_tracker<long double, long double, long double, rF>;
 }
 #undef MEM_LOOP
 #undef FUNC_TEMPL_SELECT

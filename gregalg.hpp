@@ -91,6 +91,10 @@ template <typename F, typename T>
 concept binaryPredicate = requires (F f, T a, T b) {
     {f(a, b)} -> std::same_as<bool>;
 };
+template <typename F, typename T>
+concept unaryPredicate = requires (F f, T a) {
+    {f(a)} -> std::same_as<bool>;
+};
 template <typename IT>
 concept forwardIterator = requires (IT it, IT other) {
     {it++} -> std::same_as<IT>;
