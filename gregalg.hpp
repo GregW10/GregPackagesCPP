@@ -7,9 +7,18 @@
 #error "The gregalg.hpp header file is a C++ header file only."
 #endif
 
+#include <cstdint>
+
+#ifndef UINT64_MAX
+#error "64-bit (fixed width) integral data type not available. Compilation failed."
+#endif
+
 #include <iostream>
+#include <utility>
 #include <vector>
 #include <cmath>
+#include <cinttypes>
+#include <climits>
 
 #ifdef __PI__
 #undef __PI__
@@ -21,7 +30,7 @@
 
 #define MEAN_AVG(a, b) (((a) + (b))/2)
 
-typedef unsigned long long ull_t; // I know there is a typedef in stdint.h (or cstdint), but I like this one!
+typedef unsigned long long ull_t;
 
 template <typename From, typename To>
 concept isConvertible = std::is_convertible<From, To>::value;
@@ -188,7 +197,10 @@ namespace gtd {
     constexpr inline auto sd(const Args& ...args) {
         static_assert(sizeof...(args), "sd cannot be called with zero arguments.\n");
         auto &&mean = mean_avg(args...);
-        return std::sqrtl(mean_avg(args*args...) - mean*mean);
+        /* Although I would prefer using the mathematical functions within the 'std' namespace (such as std::sqrtl),
+         * there exist various standard non-conforming GCC (g++) versions (and other compilers) that do not have certain
+         * versions of the mathematical functions in the 'std' namespace, and only in the global namespace. */
+        return sqrtl(mean_avg(args*args...) - mean*mean);
     }
     template <typename T, binaryPredicate<const T&> F>
     requires requires (T first, T second) {{first < second} -> std::same_as<bool>;}

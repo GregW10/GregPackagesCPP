@@ -150,7 +150,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         virtual vector<T> &operator--() noexcept = 0;
         virtual vector<T> &operator=(const vector<T> &other) noexcept = 0; // copies other
         virtual vector<T> &operator=(vector<T> &&other) noexcept = 0; // copies other
-        virtual ~vector<T>() = default;
+        virtual ~vector() = default;
         template <isNumWrapper U>
         friend class vector;
     };
@@ -573,15 +573,18 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         virtual vector2D<T> &operator=(const T &value) {
             this->x = value;
             this->y = value;
+            return *this;
         }
         virtual vector2D<T> &operator=(T &&value) noexcept {
             this->x = value;
             this->y = std::move(value);
+            return *this;
         }
         template <isConvertible<T> U>
         vector2D<T> &operator=(const U &value) {
             this->x = value;
             this->y = value;
+            return *this;
         }
         virtual operator bool() const noexcept { // to allow a vector object to be used as a boolean
             return this->x != T{0} || this->y != T{0};
@@ -1242,7 +1245,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend class vector2D;
         template <isNumWrapper>
         friend class vector3D;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, ull_t>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t>
         friend class body;
         template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class ray;
@@ -2701,17 +2704,20 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->x = value;
             this->y = value;
             this->z = value;
+            return *this;
         }
         vector3D<T> &operator=(T &&value) noexcept override {
             this->x = value;
             this->y = value;
             this->z = std::move(value);
+            return *this;
         }
         template <isConvertible<T> U>
         vector3D<T> &operator=(const U &value) {
             this->x = value;
             this->y = value;
             this->z = value;
+            return *this;
         }
         operator bool() const noexcept override {
             return this->x != T{0} || this->y != T{0} || this->z != T{0};
@@ -3372,13 +3378,13 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         friend class vector2D;
         template <isNumWrapper>
         friend class vector3D;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, ull_t>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t>
         friend class body;
         template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class ray;
         template <isNumWrapper, isNumWrapper, isNumWrapper>
         friend class camera;
-        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, ull_t, ull_t, bool>
+        template <isNumWrapper, isNumWrapper, isNumWrapper, bool, bool, int, uint64_t, uint64_t, bool>
         friend class system;
         template <isNumWrapper, isNumWrapper, isNumWrapper, uint64_t>
         friend class bh_cube;
@@ -4643,26 +4649,26 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         auto distance(const vector2D<U>& vec1, const vector2D<V>& vec2) {
             auto dist_x = vec2.x - vec1.x;
             auto dist_y = vec2.y - vec1.y;
-            return std::sqrtl(dist_x*dist_x + dist_y*dist_y);
+            return sqrtl(dist_x*dist_x + dist_y*dist_y);
         }
         template <isNumWrapper U, isNumWrapper V>
         auto distance(const vector2D<U>& vec1, const vector3D<V>& vec2) {
             auto dist_x = vec2.x - vec1.x;
             auto dist_y = vec2.y - vec1.y;
-            return std::sqrtl(dist_x*dist_x + dist_y*dist_y + vec2.z*vec2.z);
+            return sqrtl(dist_x*dist_x + dist_y*dist_y + vec2.z*vec2.z);
         }
         template <isNumWrapper U, isNumWrapper V>
         auto distance(const vector3D<U>& vec1, const vector2D<V>& vec2) {
             auto dist_x = vec2.x - vec1.x;
             auto dist_y = vec2.y - vec1.y;
-            return std::sqrtl(dist_x*dist_x + dist_y*dist_y + vec1.z*vec1.z);
+            return sqrtl(dist_x*dist_x + dist_y*dist_y + vec1.z*vec1.z);
         }
         template <isNumWrapper U, isNumWrapper V>
         auto distance(const vector3D<U>& vec1, const vector3D<V>& vec2) {
             auto dist_x = vec2.x - vec1.x;
             auto dist_y = vec2.y - vec1.y;
             auto dist_z = vec2.z - vec1.z;
-            return std::sqrtl(dist_x*dist_x + dist_y*dist_y + dist_z*dist_z);
+            return sqrtl(dist_x*dist_x + dist_y*dist_y + dist_z*dist_z);
         }
         template <isNumWrapper U, isNumWrapper V>
         auto cross(const vector2D<U> &vec1, const vector2D<V> &vec2) -> vector3D<decltype(vec1.x * vec2.y)> {

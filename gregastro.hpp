@@ -119,14 +119,14 @@ namespace gtd {
             return first <= second ? std::move(first) : std::move(second);
         }
         template <typename ...Args>
-        bool contains_id(const unsigned long long &id, const unsigned long long &first, Args... args){
+        bool contains_id(const uint64_t &id, const uint64_t &first, Args... args){
             if constexpr (sizeof...(args) == 0)
                 return id == first;
             return id == first || contains_id(id, args...);
         };
         /* the (seemingly redundant) function below is used in a fold expression further down (the syntax requires it)*/
         static inline auto equal =
-                [](const unsigned long long &arg1, const unsigned long long &arg2){return arg1 == arg2;};
+                [](const uint64_t &arg1, const uint64_t &arg2){return arg1 == arg2;};
     public:
         ray() : vector3D<DirT>{0, 0, -1} {calc();}
         ray(const vector2D<DirT> &direction) noexcept : vector3D<DirT>(direction) {calc();}
@@ -215,7 +215,7 @@ namespace gtd {
         const LenT &length() const noexcept {
             return l;
         }
-        unsigned long long intersected_body_id() const {
+        uint64_t intersected_body_id() const {
             if (!intersected)
                 throw no_intersection();
             return ibod_id;
@@ -250,7 +250,7 @@ namespace gtd {
         template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t recFreq, container C, typename ... except>
         requires (std::same_as<typename C::mapped_type, const body<M, R, T, recFreq>*> ||
                   isConvertible<typename C::mapped_type, const body<M, R, T, recFreq>*>) &&
-                  std::same_as<typename C::key_type, const unsigned long long>
+                  std::same_as<typename C::key_type, const uint64_t>
         bool intersects(const C &bodies, except ...ids) {
             /* This method is similar to the other intersects() overloads, but it will set l to the distance between the
              * ray's origin and the closest body, and return true (if the ray intersects with at least one body). This
@@ -258,7 +258,7 @@ namespace gtd {
              * not continue through the object and then intersect with other objects behind it. */
             intersected = false;
             bool one_intersection = false;
-            unsigned long long closest_body_id;
+            uint64_t closest_body_id;
             LenT min_l;
             if constexpr (sizeof...(ids) == 0) {
                 for (const auto &[id, ptr] : bodies) {
@@ -729,10 +729,10 @@ namespace gtd {
             return *this;
         }
         long double fovh_rad() const noexcept { // horizontal field of view in radians
-            return dims.x <= dims.y ? 2*std::atanl(1.0l/dist) : 2*std::atanl(dims.x/(dims.y*dist));
+            return dims.x <= dims.y ? 2*atanl(1.0l/dist) : 2*atanl(dims.x/(dims.y*dist));
         }
         long double fovv_rad() const noexcept { // vertical field of view in radians
-            return dims.y <= dims.x ? 2*std::atanl(1.0l/dist) : 2*std::atanl(dims.y/(dims.x*dist));
+            return dims.y <= dims.x ? 2*atanl(1.0l/dist) : 2*atanl(dims.y/(dims.x*dist));
         }
         long double fovd_rad() const noexcept { // diagonal field of view in radians
             long double x_ratio;
@@ -745,7 +745,7 @@ namespace gtd {
                 x_ratio = 1;
                 y_ratio = ((long double) dims.y)/dims.x;
             }
-            return 2*std::atanl(std::sqrtl(x_ratio*x_ratio + y_ratio*y_ratio)/dist);
+            return 2*atanl(sqrtl(x_ratio*x_ratio + y_ratio*y_ratio)/dist);
         }
         long double fovh_deg() const noexcept { // horizontal field of view in degrees
             return rad_to_deg(fovh_rad());
@@ -856,8 +856,8 @@ namespace gtd {
         using cam_t = camera<PosT, DirT, DistT>;
         using star_t = star<M, R, T, PosT, DirT, LenT, LumT, recFreq>;
         image_dimensions dims{bmp::width, bmp::height};
-        unsigned int num_decor_stars = 4*std::logl(bmp::width*bmp::height);
-        long double star_radius = std::sqrtl(bmp::width*bmp::width)/1000.0l; // in pixels
+        unsigned int num_decor_stars = 4*logl(bmp::width*bmp::height);
+        long double star_radius = sqrtl(bmp::width*bmp::width)/1000.0l; // in pixels
         std::vector<point> star_points;
         /* indeed, all the std::maps below lead to a larger memory footprint, but, they also allow certain algorithms
          * to be implemented faster */
@@ -1001,7 +1001,7 @@ namespace gtd {
             LumT *pix_f; // a single pixel's cumulative flux - later converted to brightness - only if modBright true
             const star_t *sptr;
             LumT thread_max_flux{0}; // maximum flux falling on one of the visible points (in the thread) of any object
-            typename std::map<const unsigned long long, const star_t*>::iterator it;
+            typename std::map<const uint64_t, const star_t*>::iterator it;
             auto end_it = stars.end(); // thank goodness for auto ;)
             for (unsigned int y = start_y; y < end_y; ++y, ++row_c, ++row_f) {
                 pix_c = *row_c + start_x;
@@ -1183,35 +1183,35 @@ namespace gtd {
         const std::function<color()> &get_star_col_gen() const noexcept {
             return col_gen_s;
         }
-        color get_clr_by_id(const unsigned long long &id) {
+        color get_clr_by_id(const uint64_t &id) {
             if (body_clrs.contains(id))
                 return body_clrs[id];
             if (star_clrs.contains(id))
                 return star_clrs[id];
             throw invalid_id_error(id);
         }
-        typename std::map<const unsigned long long, const bod_t*>::size_type num_bodies() {
+        typename std::map<const uint64_t, const bod_t*>::size_type num_bodies() {
             return bodies.size();
         }
-        typename std::map<const unsigned long long, const star_t*>::size_type num_stars() {
+        typename std::map<const uint64_t, const star_t*>::size_type num_stars() {
             return stars.size();
         }
-        bool set_body_clr(const unsigned long long &id, color col) {
+        bool set_body_clr(const uint64_t &id, color col) {
             if (!bodies.contains(id))
                 return false;
             body_clrs[id] = col;
             return true;
         }
-        bool set_body_clr(unsigned long long &&id, color col) {
-            return set_body_clr(id, col);
-        }
-        bool set_star_clr(const unsigned long long &id, color col) {
+        // bool set_body_clr(unsigned long long &&id, color col) {
+        //     return set_body_clr(id, col);
+        // }
+        bool set_star_clr(const uint64_t &id, color col) {
             if (!stars.contains(id))
                 return false;
             star_clrs[id] = col;
             return true;
         }
-        bool set_star_clr(unsigned long long &&id, color col) {
+        bool set_star_clr(uint64_t &&id, color col) {
             return set_star_clr(id, col);
         }
         bool set_num_decor_stars(unsigned int num) {
@@ -1240,13 +1240,13 @@ namespace gtd {
             return pcam != &cam && (pcam = &cam);
         }
         void generate_body_clrs() {
-            std::for_each(bodies.begin(), bodies.end(), [this](const std::pair<const unsigned long long,
+            std::for_each(bodies.begin(), bodies.end(), [this](const std::pair<const uint64_t,
                                                                const bod_t*> &p) {
                 body_clrs[p.first] = col_gen_b(); // unfortunately, cannot iterate over keys only
             });
         }
         void generate_star_clrs() {
-            std::for_each(stars.begin(), stars.end(), [this](const std::pair<const unsigned long long,
+            std::for_each(stars.begin(), stars.end(), [this](const std::pair<const uint64_t,
                                                              const star_t*> &p){
                 star_clrs[p.first] = col_gen_s();
             });
@@ -1293,7 +1293,7 @@ namespace gtd {
         void add_stars(const std::vector<star_t*> &&new_stars) {//with these r-value overloads, init. syntax may be used
             this->add_stars(new_stars);
         }
-        template <bool progress, bool merge_if_overlapping, int coll, ull_t mF, ull_t fF, bool bF>
+        template <bool progress, bool merge_if_overlapping, int coll, uint64_t mF, uint64_t fF, bool bF>
         void add_system(const system<M, R, T, progress, merge_if_overlapping, coll, mF, fF, bF> &sy) {
             for (const bod_t &b : sy.bods) {
                 bodies.emplace(b.id, &b);
@@ -1585,11 +1585,19 @@ namespace gtd {
     }
     typedef ray<long double, long double, long double> ray_t;
     typedef light_src<long double, long double, long double, long double> src_t;
-    typedef star<long double, long double, long double, long double, long double, long double, long double> star_t;
+    typedef star<long double, long double, long double, long double, long double, long double, long double, 0> star_t;
     typedef camera<long double, long double, long double> cam;
     typedef astro_scene<long double, long double, long double, long double, long double, long double, long double,
-                        long double, true> asc;
+                        long double, true, 0> asc_0f;
     typedef astro_scene<long double, long double, long double, long double, long double, long double, long double,
-                        long double, false> asc_f;
+            long double, true, 1> asc_1f;
+    typedef astro_scene<long double, long double, long double, long double, long double, long double, long double,
+            long double, true, 10> asc_10f;
+    typedef astro_scene<long double, long double, long double, long double, long double, long double, long double,
+            long double, true, 100> asc_100f;
+    typedef astro_scene<long double, long double, long double, long double, long double, long double, long double,
+            long double, true, 1000> asc_1000f;
+    typedef astro_scene<long double, long double, long double, long double, long double, long double, long double,
+                        long double, false, 0> asc_n;
 }
 #endif

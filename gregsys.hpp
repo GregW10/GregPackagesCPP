@@ -343,18 +343,18 @@ namespace gtd {
         void bh_acc_and_pe(bod_t *_bod, const cube_t *_src) requires (memFreq != 0) {
             vec_t &&r12 = _src->_com - _bod->curr_pos;
             auto &&r12_sq = r12*r12 + eps_sq;
-            auto &&r12_mag = std::sqrtl(r12_sq);
+            auto &&r12_mag = sqrtl(r12_sq);
             _bod->acc = this->G*(_src->_mass/(r12_sq))*(r12/r12_mag);
             _bod->pe -= -(G*_bod->mass_*_src->_mass)/r12_mag;
         }
         void bh_acc(bod_t *_bod, const cube_t *_src) {
             vec_t &&r12 = _src->_com - _bod->curr_pos;
             auto &&r12_sq = r12*r12 + eps_sq;
-            _bod->acc = this->G*(_src->_mass/(r12_sq))*(r12/(std::sqrtl(r12_sq)));
+            _bod->acc = this->G*(_src->_mass/(r12_sq))*(r12/(sqrtl(r12_sq)));
         }
         void bh_pe(bod_t *_bod, const cube_t *_src) requires (memFreq != 0) {
             vector3D<T> &&r12 = _src->_com - _bod->curr_pos;
-            _bod->pe -= (G*_bod->mass_*_src->_mass)/(std::sqrtl(r12*r12 + eps_sq));
+            _bod->pe -= (G*_bod->mass_*_src->_mass)/(sqrtl(r12*r12 + eps_sq));
         }
         template <bool mem, bool file>
         void take_euler_step() {
@@ -765,7 +765,7 @@ namespace gtd {
                     long double avg_rest;
                     for (const auto &[_, tup] : overlapping) {
                         o_vel = std::get<1>(tup)/bod_o->mass_; // recalculating is cheaper than adding them to the tuple
-                        i_vel = std::get<2>(tup)/bod_i->mass_; // up above
+                        i_vel = std::get<2>(tup)/std::get<0>(tup)->mass_; // up above
                         o_minus_i = o_vel - i_vel; // v1 - v2
                         avg_rest = (bod_o->rest_c + std::get<0>(tup)->rest_c)/2;
                         if (o_vel > 0 || i_vel < 0) {
@@ -1351,10 +1351,10 @@ namespace gtd {
         // }
         void print_progress() const noexcept requires (prog) {
 #ifndef _WIN32
-            printf(CYAN_TXT_START "Iteration " BLUE_TXT_START "%llu" RED_TXT_START "/" MAGENTA_TXT_START
-                   "%llu\r", this->steps, this->iterations);
+            printf(CYAN_TXT_START "Iteration " BLUE_TXT_START "%" PRIu64 RED_TXT_START "/" MAGENTA_TXT_START
+                   "%" PRIu64"\r", this->steps, this->iterations);
 #else
-            printf("Iteration %llu/%llu\r", step, iterations);
+            printf("Iteration %" PRIu64"/%" PRIu64"\r", step, iterations);
 #endif
         }
         void print_conclusion(const std::chrono::time_point<std::chrono::high_resolution_clock> &start,
@@ -1546,7 +1546,7 @@ namespace gtd {
             return nsys_file_size(this->bods.size());
         }
         bool set_softening(long double _epsilon) noexcept {
-            if (_epsilon < std::sqrtl(std::numeric_limits<long double>::min()))
+            if (_epsilon < sqrtl(std::numeric_limits<long double>::min()))
                 return false;
             eps = _epsilon;
             eps_sq = _epsilon*_epsilon;
@@ -1657,8 +1657,8 @@ namespace gtd {
             const R b_sep = b_rad*2 + spacing; // separation between the centres of adjacent bodies
             const R b_halfsep = b_rad + spacing/2.0l; // haven't done b_sep/2 to minimise f.p. error
             const T diaml = 2*(rad + rad*0.0625l); // slightly larger diameter to create hcp cube
-            uint64_t lbods = std::llroundl(diaml / (b_sep)) + 1; // number of bodies along length of cube
-            uint64_t whbods = std::llroundl((diaml*std::sqrtl(3)) / b_sep) + 1; // along width and along height of cube
+            uint64_t lbods = llroundl(diaml / (b_sep)) + 1; // number of bodies along length of cube
+            uint64_t whbods = llroundl((diaml*sqrtl(3)) / b_sep) + 1; // along width and along height of cube
             // std::cout << "b_sep: " << b_sep << std::endl;
             // std::cout << "b_halfsep: " << b_halfsep << std::endl;
             // std::cout << "radl: " << diaml << std::endl;
@@ -1671,7 +1671,7 @@ namespace gtd {
                 first_row.emplace_back(counter++*b_sep, 0); // z-coordinate automatically zero
             std::vector<vec> second_row;
             second_row.reserve(lbods);
-            T y_sep = std::sqrtl(3)*b_halfsep; // separation between adjacent rows, also the second row's y-coordinate
+            T y_sep = sqrtl(3)*b_halfsep; // separation between adjacent rows, also the second row's y-coordinate
             counter = 0;
             while (counter < lbods)
                 second_row.emplace_back(b_halfsep + counter++*b_sep, y_sep);
@@ -1694,9 +1694,9 @@ namespace gtd {
                 plane_A.emplace_back(std::move(row));
                 row.clear();
             }
-            y_coord = b_halfsep / std::sqrtl(3);
+            y_coord = b_halfsep / sqrtl(3);
             T y_coord2 = y_coord + y_sep;
-            T z_sep = b_sep*std::sqrtl(2.0l/3.0l);
+            T z_sep = b_sep*sqrtl(2.0l/3.0l);
             vec *ptr1 = first_row.data();
             vec *ptr2 = second_row.data();
             counter = 0;
