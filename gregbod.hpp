@@ -277,6 +277,16 @@ namespace gtd {
          * velocity take place per single recording. A value of zero indicates no recording. */
         /* A body is not thread-safe and should never be modified by multiple threads. */
     public:
+        using bod_t = body<M, R, T, recFreq>;
+        using vec = vector3D<T>;
+        /* Below are some static methods which return instances of the planets in our solar system (and the Sun). The
+         * masses, radii, positions and velocities are in SI units (kg, m, m, m/s). All data are from NASA. */
+        static bod_t earth(const vec &pos = vec::zero, const vec &vel = vec::zero) {
+            return {59722*BILLION*BILLION*10*10, 6'371'000, pos, vel};
+        }
+        static bod_t jupiter(const vec &pos = vec::zero, const vec &vel = vec::zero) {
+            return {189813*BILLION*BILLION*10*10*10*10, 69'911'000, pos, vel};
+        }
         static inline bool allow_self_addition = false;
     protected:
         R radius{1};

@@ -46,8 +46,10 @@ if constexpr (collisions == overlap_coll_check || !(memFreq && fileFreq)) { \
             this->s_coll<false, true>(); \
             cf \
         }                                \
-        else                             \
+        else {                            \
             this->s_coll<false, false>();\
+            cf \
+        }\
     }                                    \
     else { \
         cf                               \
@@ -172,6 +174,7 @@ namespace gtd {
         //         decltype([](const std::pair<ull_t, bod_t> &p1, const std::pair<ull_t, bod_t> &p2){
         //             return p1.first == p2.first ? p1.second < p2.second : p1.first < p2.first;
         //         })> del_bods;
+#ifdef GREGSYS_MERGERS
         static inline auto pair_bods_func = [](const std::pair<uint64_t, bod_t> &p1,
                                                const std::pair<uint64_t, bod_t> &p2) {
             return p1.first == p2.first ? p1.second < p2.second : p1.first < p2.first;
@@ -180,6 +183,7 @@ namespace gtd {
             std::set<bod_t, std::less<>> *del_bods_n;
             std::set<std::pair<uint64_t, bod_t>, decltype(pair_bods_func)> *del_bods_m;
         };
+#endif
         long double eps = 0; // softening
         long double eps_sq = eps*eps;
         long double dt = 1;
@@ -188,7 +192,9 @@ namespace gtd {
         long double prev_dt{}; // used in methods called after evolve(), since could be changed by setter
         long double time_elapsed{};
         uint64_t prev_iterations{}; // same here
+#ifdef GREGSYS_MERGERS
         mom_t min_tot_com_mom{BILLION*10}; // minimum sum of magnitudes of COM momenta for two bodies to merge
+#endif
         // using P = decltype((G*std::declval<M>()*std::declval<M>())/std::declval<T>()); // will be long double
         long double bh_theta = PI/3; // opening angle parameter for Barnes-Hut force approximation
         uint64_t steps{}; // defined as an instance variable since it's required in numerous functions
@@ -261,12 +267,14 @@ namespace gtd {
             *G_vals = t_denom;
             G_vals -= 5;
         }
+#ifdef GREGSYS_MERGERS
         void set_set() requires (collisions != 0) {
             if constexpr (memFreq)
                 del_bods_m = new std::set<std::pair<ull_t, bod_t>, decltype(pair_bods_func)>{pair_bods_func};
             else
                 del_bods_n = new std::set<bod_t, std::less<>>;
         }
+#endif
         void clear_bodies() requires (memFreq != 0) { // makes sure the trajectories of all bodies are deleted
             // for (bod_t &bod : bods)
             //     bod.clear();
@@ -649,7 +657,66 @@ namespace gtd {
             tot_ke.push_back(total_ke);
             tot_e.push_back(total_pe + total_ke);
         }
-        bool have_nan = false;
+        void bh_s_coll() {
+            static std::map<long double, std::tuple<bod_t*, decltype(M{}*T{}), decltype(M{}*T{}), vector3D<T>>>
+                    overlapping;
+            bod_t *bod_o;
+            bod_t *bod_i;
+            R rad_dist{};
+            long double dist;
+            mom_t axis_mom_o;
+            mom_t axis_mom_i;
+            auto it = btree.begin();
+            while (it) {
+                overlapping.clear();
+                typename cube_t::nn_iterator nit{it};
+                bod_o = const_cast<bod_t*>(it._cptr->_bod);
+                while (nit) {
+                    bod_i = const_cast<bod_t*>(nit++._cptr->_bod);
+                    rad_dist = bod_o->radius + bod_i->radius;
+                    vector3D<T> &&r12 = bod_i->curr_pos - bod_o->curr_pos;
+                    dist = r12.magnitude(); // DEAL WITH ZERO DISTANCE CASE
+                    r12.x /= dist; r12.y /= dist; r12.z /= dist; // more efficient than calling normalise()
+                    if (rad_dist > dist) {
+                        axis_mom_o = bod_o->momentum()*r12;
+                        axis_mom_i = bod_i->momentum()*r12;
+                        overlapping.emplace(std::piecewise_construct, std::forward_as_tuple(dist),
+                                            std::forward_as_tuple(bod_i, axis_mom_o, axis_mom_i, r12));
+                    }
+                }
+                if (!overlapping.empty()) {
+                    T o_vel;
+                    T i_vel;
+                    T o_minus_i;
+                    T new_o_vel;
+                    T new_i_vel;
+                    long double avg_rest;
+                    for (const auto &[_, tup] : overlapping) {
+                        o_vel = std::get<1>(tup)/bod_o->mass_; // recalculating is cheaper than adding them to the tuple
+                        i_vel = std::get<2>(tup)/std::get<0>(tup)->mass_; // up above
+                        o_minus_i = o_vel - i_vel; // v1 - v2
+                        avg_rest = (bod_o->rest_c + std::get<0>(tup)->rest_c)/2;
+                        if (o_vel > 0 || i_vel < 0) {
+                            if (o_vel <= 0 && i_vel < 0)
+                                if (o_vel < i_vel) // bodies are already separating
+                                    continue; // case for bodies having passed through each other
+                            if (o_vel > 0 && i_vel >= 0)
+                                if (o_vel < i_vel)
+                                    continue; // case for bodies having passed through each other
+                            new_o_vel = (std::get<1>(tup) + std::get<2>(tup) -
+                                         std::get<0>(tup)->mass_*avg_rest*o_minus_i)/(bod_o->mass_ +
+                                                                                      std::get<0>(tup)->mass_);
+                            new_i_vel = (std::get<1>(tup) + std::get<2>(tup) +
+                                         bod_o->mass_*avg_rest*o_minus_i)/(bod_o->mass_ + std::get<0>(tup)->mass_);
+                            bod_o->curr_vel += (new_o_vel - o_vel)*std::get<3>(tup);
+                            std::get<0>(tup)->curr_vel += (new_i_vel - i_vel)*std::get<3>(tup);
+                        }
+                    }
+                }
+                ++it;
+            }
+        }
+        // bool have_nan = false;
         template <bool mem, bool file>
         void s_coll() { // "simple" (ahem, ahem) collision detection and evolution
             static std::map<long double, std::tuple<bod_t*, decltype(M{}*T{}), decltype(M{}*T{}), vector3D<T>>>
@@ -661,32 +728,40 @@ namespace gtd {
             bod_t *merging_bod;
             R rad_dist{};
             long double dist;
+#ifdef GREGSYS_MERGERS
+            mom_t axis_mom_o;
+            mom_t axis_mom_i;
             mom_t max_mom{min_tot_com_mom};
             mom_t curr_mom{};
             // long double min_dist = HUGE_VALL; // usually expands to infinity
-            mom_t axis_mom_o;
-            mom_t axis_mom_i;
             vec_size_t merging_index;
             bool first_merged;
             bod_t *merged;
             alignas(bod_t) char fake_body[sizeof(bod_t)];
             static std::set<uint64_t> merged_ids;
             merged_ids.clear();
+#else
+            bod_o = bods.data();
+#endif
             while (outer < num_bods) {
+#ifdef GREGSYS_MERGERS
                 first_merged = false;
                 merging_bod = nullptr;
-                overlapping.clear();
                 bod_o = bods.data() + outer;
+#endif
+                overlapping.clear();
                 bod_i = bod_o + 1; // to point to body just after bod_o
                 for (inner = outer + 1; inner < num_bods; ++inner, ++bod_i) {
                     // bod_i = bods.data() + inner;
+#ifdef GREGSYS_MERGERS
                     inner_loop:
                     if (inner == outer)
                         continue;
+#endif
                     rad_dist = bod_o->radius + bod_i->radius;
                     vector3D<T> &&r12 = bod_i->curr_pos - bod_o->curr_pos;
                     dist = r12.magnitude(); // DEAL WITH ZERO DISTANCE CASE
-                    if (std::isnan(dist) && !have_nan) {
+                    /* if (std::isnan(dist) && !have_nan) {
                         std::cout << "THERE IS A NAN HERE!!!!!" << std::endl;
                         std::cout << "bod_o: " << *bod_o << std::endl;
                         std::cout << "bod_i: " << *bod_i << std::endl;
@@ -694,10 +769,11 @@ namespace gtd {
                             std::cout << bodd << std::endl;
                         abort();
                         have_nan = true;
-                    }
+                    } */
                     r12.x /= dist; r12.y /= dist; r12.z /= dist; // more efficient than calling normalise()
                     if (rad_dist > dist) {
                         // vector3D<T> &&com_vel = vel_com(bod_o, bod_i);
+#ifdef GREGSYS_MERGERS
                         axis_mom_o = bod_o->momentum()*r12;
                         axis_mom_i = bod_i->momentum()*r12;
                         if((curr_mom = axis_mom_o - axis_mom_i - (bod_o->mass_ - bod_i->mass_)*
@@ -711,8 +787,13 @@ namespace gtd {
                             overlapping.emplace(std::piecewise_construct, std::forward_as_tuple(dist),
                                                 std::forward_as_tuple(bod_i, axis_mom_o, axis_mom_i, r12));
                         }
+#else
+                        overlapping.emplace(std::piecewise_construct, std::forward_as_tuple(dist),
+                                    std::forward_as_tuple(bod_i, bod_o->momentum()*r12, bod_i->momentum()*r12, r12));
+#endif
                     }
                 }
+#ifdef GREGSYS_MERGERS
                 if (merging_bod != nullptr) {
                     /* I have opted not to use my += overload for adding a body onto another and updating it (this
                      * would avoid performing 2 deletions from the std::vector) because the position, velocity and KE
@@ -756,7 +837,8 @@ namespace gtd {
                     merging_bod = nullptr;
                     goto inner_loop;
                 }
-                if (overlapping.size()) {
+#endif
+                if (!overlapping.empty()) {
                     T o_vel;
                     T i_vel;
                     T o_minus_i;
@@ -785,6 +867,7 @@ namespace gtd {
                         }
                     }
                 }
+#ifdef GREGSYS_MERGERS
                 if (first_merged) {
                     // bod_o->rec_counter = steps;
                     // move the merged bodies into the deleted bodies set:
@@ -796,26 +879,35 @@ namespace gtd {
                     // if constexpr (file)
                     //     bod_o = bods.data() + outer;
                 }
+#endif
                 // if constexpr (file) {
                 //     // WRITE TO FILE
                 // }
                 ++outer;
+#ifndef GREGSYS_MERGERS
+                ++bod_o;
+#endif
             }
             if constexpr (memFreq || file) { // repeated constexpr conditionals don't make it to runtime!!
                 // the repeated loop below is to avoid re-checking the conditions repeatedly inside the loop
-                if (!merged_ids.empty()) {
+#ifdef GREGSYS_MERGERS
+                if (!merged_ids.empty()) { // hmmmm... I think I must remove the negation, it was so long I don't recall
                     // printf("Merged IDs:\n");
                     // for (const auto &id : merged_ids)
                     //     std::cout << id << std::endl;
-                    for (bod_t &b : bods) {
-                        if constexpr (mem) {
-                            b.add_pos_vel_ke();
-                        }
-                        if constexpr (file) {
-                            // WRITE TO FILE
+#endif
+                    if constexpr (mem || file) {
+                        for (bod_t &b : bods) {
+                            if constexpr (mem) {
+                                b.add_pos_vel_ke();
+                            }
+                            if constexpr (file) {
+                                // WRITE TO FILE
+                            }
                         }
                     }
                     return;
+#ifdef GREGSYS_MERGERS
                 }
                 if (merged_ids.size() < pe.size()) {
                     for (bod_t &b : bods) {
@@ -823,7 +915,7 @@ namespace gtd {
                             b.add_pos_vel_ke();
                         }
                         // bod_o->rec_counter = steps;
-                        if constexpr (memFreq) {
+                        if constexpr (memFreq) { // can remove this if constexpr - will do it later
                             if (!merged_ids.contains(b.id)) {
                                 pe.emplace(b.id, std::vector<T>{}); // add a std::vector to store its potential energies
                                 energy.emplace(b.id, std::vector<T>{}); // same for its total energy (stores its own KE)
@@ -840,7 +932,7 @@ namespace gtd {
                         b.add_pos_vel_ke();
                     }
                     // bod_o->rec_counter = steps;
-                    if constexpr (memFreq) {
+                    if constexpr (memFreq) { // also must remove this one
                         pe.emplace(b.id, std::vector<T>{}); // add a std::vector to store its potential energies
                         energy.emplace(b.id, std::vector<T>{}); // same for its total energy (it stores its own KE)
                     }
@@ -848,8 +940,10 @@ namespace gtd {
                         // WRITE TO FILE
                     }
                 }
+#endif
             }
         }
+#ifdef GREGSYS_MERGERS
     public: // the 3 following methods are for debugging - mark for removal
         void analysis() requires (memFreq != 0) {
             printf("---------------ANALYSIS--------------\nBods:\n");
@@ -875,6 +969,7 @@ namespace gtd {
         std::set<std::pair<uint64_t, bod_t>, decltype(pair_bods_func)>& get_del_bods() requires (memFreq != 0) {
             return *this->del_bods_m;
         }
+#endif
     private:
         static inline uint64_t nsys_file_size(uint64_t n_bods) noexcept {
             char rem = (char) ((n_bods*sizeof(nsys_chunk)) % 4);
@@ -1409,24 +1504,30 @@ namespace gtd {
                 throw std::invalid_argument{"nullptr passed as .nsys file path.\n"};
             this->load_from_nsys(nsys_path, alloc_chunks, check_nan_inf);
             this->check_overlap();
+#ifdef GREGSYS_MERGERS
             if constexpr (collisions)
                 this->set_set();
+#endif
         }
         system(const std::initializer_list<bod_t> &list) : bods{list}, G{G_SI} {
             check_overlap();
             // check_coll();
             if constexpr (memFreq)
                 clear_bodies();
+#ifdef GREGSYS_MERGERS
             if constexpr (collisions)
                 this->set_set();
+#endif
         }
         system(std::initializer_list<bod_t> &&list) : bods{std::move(list)}, G{G_SI} {
             check_overlap();
             // check_coll();
             if constexpr (memFreq)
                 clear_bodies();
+#ifdef GREGSYS_MERGERS
             if constexpr (collisions)
                 this->set_set();
+#endif
         }
         explicit system(long double timestep, uint64_t num_iterations, const char *units_format) :
                 dt{timestep}, iterations{num_iterations} {
@@ -1435,8 +1536,10 @@ namespace gtd {
             // check_coll();
             this->check_dt();
             parse_units_format(units_format);
+#ifdef GREGSYS_MERGERS
             if constexpr (collisions)
                 this->set_set();
+#endif
         }
         template <uint64_t mF>
         system(const std::vector<body<M, R, T, mF>> &bodies, long double timestep = 1,
@@ -1450,8 +1553,10 @@ namespace gtd {
             parse_units_format(units_format);
             if constexpr (memFreq && mF) // no need to clear bodies if the ones passed do not record history
                 clear_bodies();
+#ifdef GREGSYS_MERGERS
             if constexpr (collisions)
                 this->set_set();
+#endif
         }
         system(std::vector<bod_t> &&bodies, long double timestep = 1,
                uint64_t num_iterations = 1'000, const char *units_format = "M1:1,D1:1,T1:1") :
@@ -1462,8 +1567,10 @@ namespace gtd {
             parse_units_format(units_format);
             if constexpr (memFreq)
                 clear_bodies();
+#ifdef GREGSYS_MERGERS
             if constexpr (collisions)
                 this->set_set();
+#endif
         }
         template <uint64_t mF>
         system(std::vector<body<M, R, T, mF>> &&bodies, long double timestep = 1,
@@ -1477,8 +1584,10 @@ namespace gtd {
             parse_units_format(units_format);
             if constexpr (memFreq && mF)
                 clear_bodies();
+#ifdef GREGSYS_MERGERS
             if constexpr (collisions)
                 this->set_set();
+#endif
         }
         /* copy constructors are made to only copy the variables seen below: it does not make sense for a new system
          * object (even when copy-constructed) to be "evolved" if it has not gone through the evolution itself */
@@ -1490,8 +1599,10 @@ namespace gtd {
             // check_coll();
             if constexpr (memFreq && mF)
                 clear_bodies();
+#ifdef GREGSYS_MERGERS
             if constexpr (collisions)
                 this->set_set();
+#endif
         }
         template <bool prg, bool mrg, int coll, uint64_t fF, bool bF>
         system(system<M, R, T, prg, mrg, coll, memFreq, fF, bF> &&other) :
@@ -1500,8 +1611,10 @@ namespace gtd {
             // check_coll();
             if constexpr (memFreq)
                 clear_bodies();
+#ifdef GREGSYS_MERGERS
             if constexpr (collisions)
                 this->set_set();
+#endif
         }
         template <bool prg, bool mrg, int coll, uint64_t mF, uint64_t fF, bool bF>
         system(system<M, R, T, prg, mrg, coll, mF, fF, bF> &&other) :
@@ -1512,8 +1625,10 @@ namespace gtd {
             // check_coll();
             if constexpr (memFreq && mF)
                 clear_bodies();
+#ifdef GREGSYS_MERGERS
             if constexpr (collisions)
                 this->set_set();
+#endif
         }
         vec_size_t num_bodies() {
             return bods.size();
@@ -1558,12 +1673,14 @@ namespace gtd {
             bh_theta = _theta;
             return true;
         }
+#ifdef GREGSYS_MERGERS
         bool set_min_tot_com_mom(const mom_t& total_momentum) requires (collisions != 0) {
             if (total_momentum < mom_t{})
                 return false;
             this->min_tot_com_mom = total_momentum;
             return true;
         }
+#endif
         sys_t &add_body(const bod_t &bod) {
             bods.emplace_back(bod);
             if constexpr (memFreq)
@@ -1638,6 +1755,9 @@ namespace gtd {
                     return true;
                 }
             return false;
+        }
+        static inline sys_t hcp_comet(const R &radius, long double bulk_density) {
+
         }
         static inline sys_t hcp_comet(const T &rad, const vector3D<T> &pos, const vector3D<T> &vel, const R &spacing,
                                       const M &b_mass, const R &b_rad, long double r_coeff,
@@ -1814,16 +1934,18 @@ namespace gtd {
             }
             /* As of C++17, copy elision GUARANTEES that a returned prvalue is constructed directly in the memory
              * location of the return value, thus avoiding unnecessary copies. */
-            return sys_t{std::move(bodies), timestep, num_iterations, units_format};
+            return {std::move(bodies), timestep, num_iterations, units_format};
         }
         void reset() requires (memFreq != 0) {
             // for (bod_t &bod : bods)
             //     bod.reset(true);
+#ifdef GREGSYS_MERGERS
             if constexpr (collisions) {
                 bods.insert(bods.end(), std::make_move_iterator(del_bods_m->begin()),
                             std::make_move_iterator(del_bods_m->end()));
                 del_bods_m->clear();
             }
+#endif
             std::for_each(bods.begin(), bods.end(), [this](bod_t &bod){bod.reset(true);});
             pe.clear();
             energy.clear();
@@ -1841,8 +1963,10 @@ namespace gtd {
             //     bod.clear();
             // bods.insert(bods.end(), std::make_move_iterator(del_bods_m->begin()),
             //             std::make_move_iterator(del_bods_m->end()));
+#ifdef GREGSYS_MERGERS
             if constexpr (collisions)
                 del_bods_m->clear();
+#endif
             std::for_each(bods.begin(), bods.end(), [](bod_t &bod){bod.clear();});
             pe.clear();
             energy.clear();
@@ -2021,6 +2145,56 @@ namespace gtd {
             else if ((integration_method & leapfrog_kdk) == leapfrog_kdk) {
                 if ((integration_method & barnes_hut) == barnes_hut) {
                     // lots of stuff here
+                    btree.delete_tree();
+                    btree.add_bodies(this->bods);
+                    typename cube_t::iterator it = btree.begin();
+                    // typename cube_t::cell_iterator cit{btree._root, this->bh_theta};
+                    // cit.set_root(btree._root);
+                    while (it) { // need an initial acc.
+                        // cit = it;
+                        typename cube_t::cell_iterator cit{btree._root, it, this->bh_theta};
+                        while (cit) {
+                            // std::cout << "COM: " << cit._cptr->_com << std::endl;
+                            this->bh_acc(const_cast<bod_t*>(it._cptr->_bod), cit++._cptr);
+                        }
+                        // std::cout << *it << std::endl;
+                        ++it;
+                    }
+                    for (bod_t &bod : bods) {
+                        /* KICK for half a step */
+                        bod.curr_vel += half_dt*bod.acc;
+                    }
+                    while (steps++ < iterations) {
+                        btree.delete_tree();
+                        for (bod_t &bod : bods) {
+                            /* DRIFT for a full step */
+                            bod.curr_pos += dt*bod.curr_vel;
+                        }
+                        btree.add_bodies(this->bods);
+                        it = btree.begin();
+                        // cit.set_root(btree._root);
+                        while (it) {
+                            // cit = it;
+                            typename cube_t::cell_iterator cit{btree._root, it, this->bh_theta};
+                            while (cit) {
+                                // std::cout << "COM: " << cit._cptr->_com << std::endl;
+                                this->bh_acc(const_cast<bod_t*>(it._cptr->_bod), cit++._cptr);
+                            }
+                            // std::cout << *it << std::endl;
+                            ++it;
+                        }
+                        for (bod_t &bod : bods) {
+                            /* KICK for full step */
+                            bod.curr_vel += dt*bod.acc;
+                        }
+                        if constexpr (collisions) {
+                            this->bh_s_coll();
+                        }
+                        if constexpr (prog)
+                            this->print_progress();
+                    }
+                    if constexpr (prog)
+                        this->method_str() = "Leapfrog KDK and Barnes-Hut";
                 }
                 else {
                     this->calc_acc_and_e(); // need an initial acceleration
@@ -2312,6 +2486,7 @@ namespace gtd {
             vec_size_t i;
             const ull_t num_max_els = (prev_iterations + (memFreq != 1))/memFreq; // CHECK THIS IS CORRECT
             // std::cout << "size of bods: " << bods.size() << ", size of del_bods: " << del_bods_m->size() << std::endl;
+#ifdef GREGSYS_MERGERS
             if constexpr (collisions) {
                 ull_t d_i;
                 vec_size_t max_index;
@@ -2355,6 +2530,7 @@ namespace gtd {
                 }
             }
             else {
+#endif
                 for (const bod_t &bod : bods) { // simple case of all bodies lasting from beginning to end
                     out << "body_id,mass,radius\r\n" << bod.id << ',' << bod.mass_ << ',' << bod.radius << "\r\n"
                            "time_elapsed,position_x,position_y,position_z,velocity_x,velocity_y,velocity_z,"
@@ -2366,7 +2542,9 @@ namespace gtd {
                             << energy[bod.id][i] << "\r\n";
                     out << ",,,,,,,,,\r\n";
                 }
+#ifdef GREGSYS_MERGERS
             }
+#endif
             out << "time_elapsed,system_PE,system_KE,system_E\r\n";
             for (i = 0; i <= num_max_els; ++i)
                 out << i*prev_dt*memFreq << ',' << tot_pe[i] << ',' << tot_ke[i] << ',' << tot_e[i] << "\r\n";
@@ -2395,12 +2573,14 @@ namespace gtd {
             return true;
         }
         ~system() {
+#ifdef GREGSYS_MERGERS
             if constexpr (collisions) {
                 if constexpr (memFreq)
                     delete del_bods_m;
                 else
                     delete del_bods_n;
             }
+#endif
             delete [] G_vals;
         }
         const bod_t &operator[](vec_size_t index) const {
@@ -2544,30 +2724,42 @@ namespace gtd {
                 if (_f(_b))
                     _bods.push_back(&_b);
         }
-        M mass() {
+        M mass() const {
             M _tmass{}; // total mass of bodies
             for (const bod_t* const &_ptr : _bods)
                 _tmass += _ptr->mass_;
             return _tmass;
         }
-        vec com() {
+        vec com() const {
+            if (_bods.empty())
+                return {};
             M _tmass{}; // total mass of bodies
             vec _mr_sum;
             for (const bod_t* const &_ptr : _bods)
                 _tmass += _ptr->mass_;
             for (const bod_t* const &_ptr : _bods)
                 _mr_sum += _ptr->mass_*_ptr->curr_pos;
-            return _mr_sum / _tmass; // guaranteed copy elision
+            return _tmass == M{} ? vec{} : _mr_sum / _tmass; // guaranteed copy elision
         }
-        vec com_vel() {
+        vec com_vel() const {
+            if (_bods.empty())
+                return {};
             M _tmass{};
             vec _mv_sum;
             for (const bod_t* const &_ptr : _bods)
                 _tmass += _ptr->mass_;
             for (const bod_t* const &_ptr : _bods)
                 _mv_sum += _ptr->mass_*_ptr->curr_vel;
-            return _mv_sum / _tmass;
+            return _tmass == M{} ? vec{} : _mv_sum / _tmass;
         }
+        T avg_dist_to(const vec &point) {
+            if (_bods.empty())
+                return {};
+            T sum{};
+            for (const bod_t* &_b : _bods)
+                sum += (_b->curr_pos - point).magnitude();
+            return sum/_bods.size();
+        };
     };
     // std::set<unsigned long long> body_counter::ids;
     // unsigned long long body_counter::count = 0;

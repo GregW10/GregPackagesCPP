@@ -475,6 +475,12 @@ namespace gtd {
 #endif
                 } while ((to_update = to_update->parent) != nullptr);
             }
+            const bod_t &operator*() const {
+                return *_cptr->_bod;
+            }
+            const bod_t *operator->() const {
+                return _cptr->_bod;
+            }
             bod_t &operator*() {
                 return const_cast<bod_t&>(*(_cptr->_bod));
             }
@@ -602,6 +608,9 @@ namespace gtd {
             }
             friend class nn_iterator;
             friend class cell_iterator;
+            template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prog, bool merge, int coll, uint64_t mF,
+                    uint64_t fF, bool bin>
+            friend class system;
         };
         class nn_iterator : public body_iterator {// nearest-neighbour iterator: iterates over the bodies nearest to one
             cube_t *_bc; // pointer to the bh_cube containing body around which bodies will be found
@@ -686,6 +695,9 @@ namespace gtd {
             //     return const_cast<bod_t*>(this->_cptr->_bod);
             // }
             friend class cell_iterator;
+            template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prog, bool merge, int coll, uint64_t mF,
+                    uint64_t fF, bool bin>
+            friend class system;
         };
         class cell_iterator { // does not inherit from body_iterator as does not necessarily iterate over bodies
             const cube_t *_bc = nullptr; // pointer to the leaf in which the body is contained
@@ -780,7 +792,7 @@ namespace gtd {
             cell_iterator(const body_iterator &body_it, long double opening_angle) :
             cell_iterator{body_it._cptr->root(), body_it, opening_angle} {}
             void set_root(cube_t *root) { // could have been an assignment operator overload but this is more explicit
-                if (root == nullptr || root->parent == nullptr)
+                if (root == nullptr || root->parent != nullptr)
                     throw std::invalid_argument{"Error: root cannot be nullptr and parent must be nullptr.\n"};
                 _root = root;
             }
@@ -809,11 +821,15 @@ namespace gtd {
                 if (body_it._cptr->_bod == nullptr)
                     throw std::invalid_argument{"Error: body iterator does not point to body.\n"};
                 if (!body_it._cptr->_bod->curr_pos.between(_root->_btm, _root->_top))
-                    throw invalid_body_placement{body_it->_cptr->_bod->id};
+                    throw invalid_body_placement{body_it->id};
                 this->_cptr = this->_bc = body_it._cptr;
+                this->_bpos = body_it._cptr->_bod->curr_pos;
                 this->find_first_cell();
                 return *this;
             }
+            template <isNumWrapper m, isNumWrapper r, isNumWrapper t, bool prog, bool merge, int coll, uint64_t mF,
+                    uint64_t fF, bool bin>
+            friend class system;
         };
         // bh_cube() = default;
         // bh_cube(cube_t *parent_cube, const vec &btm, const vec &top) : parent{parent_cube},
@@ -1015,15 +1031,19 @@ namespace gtd {
                     max_z = _ptr->curr_pos.z;
                 ++_ptr;
             }
-            T x_pad = (max_x - min_x)/20.0l; // to leave a little wiggle-room
-            T y_pad = (max_y - min_y)/20.0l;
-            T z_pad = (max_z - min_z)/20.0l;
-            _btm.x = min_x - x_pad;
-            _btm.y = min_y - y_pad;
-            _btm.z = min_z - z_pad;
-            _top.x = max_x + x_pad;
-            _top.y = max_y + y_pad;
-            _top.z = max_z + z_pad;
+            T x_range = max_x - min_x;
+            T y_range = max_y - min_y;
+            T z_range = max_z - min_z;
+            T longest_edge = x_range > y_range ? (x_range > z_range ? x_range : z_range) :
+                                                 (y_range > z_range ? y_range : z_range);
+            T pad = longest_edge/20.0l; // to leave a little wiggle room
+            _btm.x = min_x - pad;
+            _btm.y = min_y - pad;
+            _btm.z = min_z - pad;
+            longest_edge += 2*pad;
+            _top.x = _btm.x + longest_edge;
+            _top.y = _btm.y + longest_edge;
+            _top.z = _btm.z + longest_edge;
         }
     public:
         bh_tree() = default;
