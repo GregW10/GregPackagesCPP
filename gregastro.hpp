@@ -353,7 +353,7 @@ namespace gtd {
             vector3D<DirT>::z /= mag;
             return *this;
         }
-        ray_t &rotate(const long double &&angle_in_rad = __PI__, char about = 'z') override {
+        ray_t &rotate(const long double &&angle_in_rad = _PI_, char about = 'z') override {
             this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
             return *this;
         }

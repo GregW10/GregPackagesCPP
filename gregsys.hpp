@@ -2,10 +2,11 @@
 #define GREGSYS_H
 
 #ifndef __cplusplus
-#error "The gregsys.hpp header file is a C++ header file only."
+#error "The gregsys.hpp header file is a C++ header file only.\n"
 #endif
 
 #include "greg8tree.hpp"
+#include <random>
 
 #define EMPTY
 
@@ -978,7 +979,7 @@ namespace gtd {
         // path is guaranteed not to be nullptr here:
         void load_from_nsys(const char *path, bool alloc_chunks, bool check_nan_inf)
         requires (std::is_fundamental_v<M> && std::is_fundamental_v<R> && std::is_fundamental_v<T> && CHAR_BIT == 8) {
-            static auto final_handler = [this](uint64_t index, const char *str){
+            static auto final_handler = [this](uint64_t index, const char *str) {
                 this->istream->close();
                 delete this->istream;
                 char msg[128];
@@ -1499,11 +1500,13 @@ namespace gtd {
             T zvel{};
         } nsys_chunk;
         system() : G{G_SI} {if constexpr (collisions) this->set_set();}
-        explicit system(const char *nsys_path, bool alloc_chunks = false, bool check_nan_inf = true) {
+        explicit system(const char *nsys_path, bool alloc_chunks = true, bool check_nan_inf = true,
+                        bool allow_overlapping_bodies = true) {
             if (nsys_path == nullptr)
                 throw std::invalid_argument{"nullptr passed as .nsys file path.\n"};
             this->load_from_nsys(nsys_path, alloc_chunks, check_nan_inf);
-            this->check_overlap();
+            if (!allow_overlapping_bodies)
+                this->check_overlap();
 #ifdef GREGSYS_MERGERS
             if constexpr (collisions)
                 this->set_set();
@@ -1543,12 +1546,14 @@ namespace gtd {
         }
         template <uint64_t mF>
         system(const std::vector<body<M, R, T, mF>> &bodies, long double timestep = 1,
-               uint64_t num_iterations = 1'000, const char *units_format = "M1:1,D1:1,T1:1") :
+               uint64_t num_iterations = 1'000, const char *units_format = "M1:1,D1:1,T1:1",
+               bool allow_overlapping_bodies = false) :
                bods{bodies.begin(), bodies.end()}, dt{timestep}, iterations{num_iterations} {
             /* units_format is a string with 3 ratios: it specifies the ratio of the units used for mass, distance and
              * time to kg, metres and seconds (SI units), respectively. This means any units can be used. */
             this->check_dt();
-            check_overlap();
+            if (!allow_overlapping_bodies)
+                check_overlap();
             // check_coll();
             parse_units_format(units_format);
             if constexpr (memFreq && mF) // no need to clear bodies if the ones passed do not record history
@@ -1559,10 +1564,12 @@ namespace gtd {
 #endif
         }
         system(std::vector<bod_t> &&bodies, long double timestep = 1,
-               uint64_t num_iterations = 1'000, const char *units_format = "M1:1,D1:1,T1:1") :
+               uint64_t num_iterations = 1'000, const char *units_format = "M1:1,D1:1,T1:1",
+               bool allow_overlapping_bodies = false) :
                bods{std::move(bodies)}, dt{timestep}, iterations{num_iterations} {
             this->check_dt();
-            check_overlap();
+            if (!allow_overlapping_bodies)
+                check_overlap();
             // check_coll();
             parse_units_format(units_format);
             if constexpr (memFreq)
@@ -1574,12 +1581,14 @@ namespace gtd {
         }
         template <uint64_t mF>
         system(std::vector<body<M, R, T, mF>> &&bodies, long double timestep = 1,
-               uint64_t num_iterations = 1'000, const char *units_format = "M1:1,D1:1,T1:1") :
+               uint64_t num_iterations = 1'000, const char *units_format = "M1:1,D1:1,T1:1",
+               bool allow_overlapping_bodies = false) :
                dt{timestep}, iterations{num_iterations} {
             this->check_dt();
             std::for_each(bodies.begin(), bodies.end(),
                           [this](body<M, R, T, mF> &b){bods.emplace_back(std::move(b));});
-            check_overlap();
+            if (!allow_overlapping_bodies)
+                check_overlap();
             // check_coll();
             parse_units_format(units_format);
             if constexpr (memFreq && mF)
@@ -1593,9 +1602,11 @@ namespace gtd {
          * object (even when copy-constructed) to be "evolved" if it has not gone through the evolution itself */
         template <bool prg, bool mrg, int coll, uint64_t mF, uint64_t fF, bool bF>
         // so a system can be constructed from another without same checks
-        system(const system<M, R, T, prg, mrg, coll, mF, fF, bF> &other) :
+        system(const system<M, R, T, prg, mrg, coll, mF, fF, bF> &other,
+               bool allow_overlapping_bodies = true) :
                bods{other.bods.begin(), other.bods.end()}, dt{other.dt}, iterations{other.iterations}, G{other.G} {
-            check_overlap();
+            if (!allow_overlapping_bodies)
+                check_overlap();
             // check_coll();
             if constexpr (memFreq && mF)
                 clear_bodies();
@@ -1605,9 +1616,10 @@ namespace gtd {
 #endif
         }
         template <bool prg, bool mrg, int coll, uint64_t fF, bool bF>
-        system(system<M, R, T, prg, mrg, coll, memFreq, fF, bF> &&other) :
+        system(system<M, R, T, prg, mrg, coll, memFreq, fF, bF> &&other, bool allow_overlapping_bodies = true) :
                bods{std::move(other.bods)}, dt{other.dt}, iterations{other.iterations}, G{other.G} {
-            check_overlap();
+            if (!allow_overlapping_bodies)
+                check_overlap();
             // check_coll();
             if constexpr (memFreq)
                 clear_bodies();
@@ -1617,11 +1629,12 @@ namespace gtd {
 #endif
         }
         template <bool prg, bool mrg, int coll, uint64_t mF, uint64_t fF, bool bF>
-        system(system<M, R, T, prg, mrg, coll, mF, fF, bF> &&other) :
+        system(system<M, R, T, prg, mrg, coll, mF, fF, bF> &&other, bool allow_overlapping_bodies = true) :
                dt{other.dt}, iterations{other.iterations}, G{other.G} {
             std::for_each(other.bods.begin(), other.bods.end(),
                           [this](body<M, R, T, mF> &b){bods.emplace_back(std::move(b));});
-            check_overlap();
+            if (!allow_overlapping_bodies)
+                check_overlap();
             // check_coll();
             if constexpr (memFreq && mF)
                 clear_bodies();
@@ -1681,37 +1694,41 @@ namespace gtd {
             return true;
         }
 #endif
-        sys_t &add_body(const bod_t &bod) {
+        sys_t &add_body(const bod_t &bod, bool chk_overlap = true) {
             bods.emplace_back(bod);
             if constexpr (memFreq)
                 bods.back().clear(); // all bodies within a system object must start out without an evolution
-            check_overlap();
+            if (chk_overlap)
+                check_overlap();
             return *this;
         }
-        sys_t &add_body(bod_t &&bod) {
+        sys_t &add_body(bod_t &&bod, bool chk_overlap = true) {
             if constexpr (memFreq)
                 bod.clear();
             bods.emplace_back(std::move(bod));
-            check_overlap();
+            if (chk_overlap)
+                check_overlap();
             return *this;
         }
         template <typename ...Args>
-        sys_t &emplace_body(Args&& ...args) { // to allow a body to be constructed in-place, within the system object
+        sys_t &emplace_body(bool chk_overlap, Args&& ...args) { // to allow a body to be constructed in-place
             bods.emplace_back(std::forward<Args>(args)...);
-            this->check_overlap();
+            if (chk_overlap)
+                this->check_overlap();
             return *this;
         }
-        sys_t &add_bodies(const std::vector<bod_t> &bodies) {
+        sys_t &add_bodies(const std::vector<bod_t> &bodies, bool chk_overlap = true) {
             if (bodies.empty())
                 return *this;
             num_bods = bods.size();
             bods.insert(bods.end(), bodies.begin(), bodies.end());
             if constexpr (memFreq)
                 clear_bodies(num_bods);
-            check_overlap();
+            if (chk_overlap)
+                this->check_overlap();
             return *this;
         }
-        sys_t &add_bodies(std::vector<bod_t> &&bodies) {
+        sys_t &add_bodies(std::vector<bod_t> &&bodies, bool chk_overlap = true) {
             if (bodies.empty())
                 return *this;
             for (auto &b : bodies) {
@@ -1719,16 +1736,17 @@ namespace gtd {
                     b.clear();
                 bods.emplace_back(std::move(b));
             }
-            check_overlap();
+            if (chk_overlap)
+                this->check_overlap();
             return *this;
         }
         template <bool progress, bool merging, int coll, uint64_t mF, uint64_t fF, bool bin>
-        sys_t &add_system(const system<M, R, T, progress, merging, coll, mF, fF, bin> &other) {
-            return this->add_bodies(other.bods);
+        sys_t &add_system(const system<M, R, T, progress, merging, coll, mF, fF, bin> &other, bool chk_overlap = true) {
+            return this->add_bodies(other.bods, chk_overlap);
         }
         template <bool progress, bool merging, int coll, uint64_t mF, uint64_t fF, bool bin>
-        sys_t &add_system(system<M, R, T, progress, merging, coll, mF, fF, bin> &&other) {
-            return this->add_bodies(std::move(other.bods));
+        sys_t &add_system(system<M, R, T, progress, merging, coll, mF, fF, bin> &&other, bool chk_overlap = true) {
+            return this->add_bodies(std::move(other.bods), chk_overlap);
         }
         const bod_t &back() const {
             if (!this->bods.empty())
@@ -1756,6 +1774,96 @@ namespace gtd {
                 }
             return false;
         }
+        static inline sys_t random_comet(const vector3D<T> &pos, const vector3D<T> &vel, uint64_t _n,
+                                         const T &bounding_rad, const M &b_mass, const R &b_rad, long double r_coeff,
+                                         int integration_method = sys_t::leapfrog_kdk,
+                                         long double ev_r_coeff = 0.5l, uint64_t ev_iters = 10'000,
+                                         long double ev_dt = 0.25, uint64_t iters = 1'000, long double dt = 1,
+                                         const char *units_format = "M1:1,D1:1,T1:1")
+                                         requires (std::convertible_to<T, long double>) {
+#define RAND_COM_CHECKS \
+            using vec = vector3D<T>; \
+            if (!_n) \
+                throw std::invalid_argument{"Error: number of bodies cannot be zero.\n"}; \
+            if (bounding_rad <= 0) \
+                throw negative_radius_error{"Error: bounding radius must be larger than zero.\n"}; \
+            if (b_mass <= 0) \
+                throw negative_radius_error{"Error: the mass each body will have must be larger than zero.\n"}; \
+            if (b_rad <= 0) \
+                throw negative_radius_error{"Error: the radius each body will have must be larger than zero.\n"}; \
+            if (bounding_rad < b_rad) \
+                throw std::invalid_argument{"Error: the bounding radius must exceed the radius of a body.\n"}; \
+            if (dt <= 0 || ev_dt <= 0) \
+                throw std::invalid_argument{"Error: time-steps cannot be negative or zero.\n"}; \
+            if (r_coeff < 0 || r_coeff > 1 || ev_r_coeff < 0 || ev_r_coeff > 1) \
+                throw std::invalid_argument{"Error: coefficients of restitution must be between 0 and 1.\n"}; \
+            if (SPHERE_VOLUME(bounding_rad) < SPHERE_VOLUME(b_rad)*_n*5/HCP_PACKING_FRACTION) \
+                throw std::invalid_argument{"Error: insufficient bounding sphere volume for placement of bodies.\n"}; \
+            check_option(integration_method);
+            RAND_COM_CHECKS
+            std::uniform_real_distribution<long double> _r{0.0l, bounding_rad};
+#define RAND_COM_BODY \
+            std::uniform_real_distribution<long double> _phi{0, 2*PI}; \
+            std::uniform_real_distribution<long double> _theta{0, 1}; \
+            std::mt19937_64 _mtw{(uint64_t) time(nullptr)}; /* mersenne-twister engine */ \
+            std::vector<bod_t> _bods; \
+            _bods.reserve(_n); \
+            vec _bpos; \
+            long double r_val; \
+            long double phi_val; \
+            long double theta_val; \
+            long double sin_theta; \
+            bod_t *const cptr = _bods.data(); \
+            bod_t *ptr; \
+            uint64_t counter; \
+            uint64_t curr_size = 0; \
+            R b_diam = 2*b_rad; \
+            vec com{}; \
+            while (_n --> 0) { \
+                loop_start: \
+                r_val = _r(_mtw); \
+                phi_val = _phi(_mtw); \
+                theta_val = acosl(1 - 2*_theta(_mtw)); \
+                sin_theta = sinl(theta_val); \
+                _bpos.x = r_val*sin_theta*cosl(phi_val); \
+                _bpos.y = r_val*sin_theta*sinl(phi_val); \
+                _bpos.z = r_val*cosl(theta_val); \
+                ptr = cptr; /* called reserve() at the beginning, guarantees no new allocations (since size < cap.) */ \
+                counter = 0; \
+                while (counter++ < curr_size) { \
+                    if (vec_ops::distance(_bpos, ptr->curr_pos) < b_diam) \
+                        goto loop_start; \
+                    ++ptr; \
+                } \
+                _bods.emplace_back(b_mass, b_rad, _bpos, vel, ev_r_coeff); \
+                com += _bpos; \
+                ++curr_size; \
+            } \
+            com /= _bods.size(); /* all bodies are same mass, so mass can be taken out of COM equation */ \
+            sys_t retsys{std::move(_bods), ev_dt, ev_iters, units_format, true}; \
+            retsys.evolve(integration_method); \
+            retsys.set_timestep(dt); \
+            retsys.set_iterations(iters); \
+            for (bod_t &_b : retsys) { \
+                _b.rest_c = r_coeff; \
+                _b.curr_pos += pos - com; \
+            } \
+            return retsys;
+            RAND_COM_BODY
+        }
+        static inline sys_t random_comet(const vector3D<T> &pos, long double sd, const vector3D<T> &vel, uint64_t _n,
+                                         const T &bounding_rad, const M &b_mass, const R &b_rad, long double r_coeff,
+                                         int integration_method = sys_t::leapfrog_kdk,
+                                         long double ev_r_coeff = 0.5l, uint64_t ev_iters = 10'000,
+                                         long double ev_dt = 0.25, uint64_t iters = 1'000, long double dt = 1,
+                                         const char *units_format = "M1:1,D1:1,T1:1")
+        requires (std::convertible_to<T, long double>) {
+            if (sd <= 0)
+                throw std::invalid_argument{"Error: standard deviation must be positive.\n"};
+            RAND_COM_CHECKS
+            std::normal_distribution<long double> _r{0, sd};
+            RAND_COM_BODY
+        };
         static inline sys_t hcp_comet(const R &radius, long double bulk_density) {
 
         }
@@ -1766,12 +1874,16 @@ namespace gtd {
             using vec = vector3D<T>;
             if (rad <= 0)
                 throw negative_radius_error{"Error: comet radius must be larger than zero.\n"};
+            if (b_mass <= 0)
+                throw negative_radius_error{"Error: the mass each body will have must be larger than zero.\n"};
             if (b_rad <= 0)
                 throw negative_radius_error{"Error: the radius each body will have must be larger than zero.\n"};
             if (spacing < 0)
                 throw std::invalid_argument{"Error: spacing between bodies cannot be negative.\n"};
             if (rad < b_rad)
                 throw std::invalid_argument{"Error: the radius of the comet must exceed the radius of a body.\n"};
+            if (timestep <= 0)
+                throw std::invalid_argument{"Error: time-steps cannot be negative or zero.\n"};
             if (r_coeff < 0 || r_coeff > 1)
                 throw std::invalid_argument{"Error: coefficient of restitution must be between 0 and 1.\n"};
             const R b_sep = b_rad*2 + spacing; // separation between the centres of adjacent bodies
@@ -2724,6 +2836,9 @@ namespace gtd {
                 if (_f(_b))
                     _bods.push_back(&_b);
         }
+        uint64_t num_bods() const noexcept {
+            return this->_bods.size();
+        }
         M mass() const {
             M _tmass{}; // total mass of bodies
             for (const bod_t* const &_ptr : _bods)
@@ -2752,11 +2867,11 @@ namespace gtd {
                 _mv_sum += _ptr->mass_*_ptr->curr_vel;
             return _tmass == M{} ? vec{} : _mv_sum / _tmass;
         }
-        T avg_dist_to(const vec &point) {
+        T avg_dist_to(const vec &point) const {
             if (_bods.empty())
                 return {};
             T sum{};
-            for (const bod_t* &_b : _bods)
+            for (const bod_t *const &_b : _bods)
                 sum += (_b->curr_pos - point).magnitude();
             return sum/_bods.size();
         };

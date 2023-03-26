@@ -502,7 +502,7 @@ namespace gtd {
             return matrix<long double>(2, 2) << cosl(angle_rad) << -sinl(angle_rad)
                                              << sinl(angle_rad) <<  cosl(angle_rad);
         }
-        static inline matrix<long double> get_2D_rotation_matrix(const long double &&angle_rad = __PI__) {
+        static inline matrix<long double> get_2D_rotation_matrix(const long double &&angle_rad = _PI_) {
             return get_2D_rotation_matrix(angle_rad);
         }
         static inline matrix<long double> get_2D_scale_matrix(const long double &&scale) {
@@ -587,7 +587,7 @@ namespace gtd {
                                              << sinl(angle_rad) <<  cosl(angle_rad) << 0
                                              << 0               <<  0               << 1;
         }
-        static inline matrix<T> get_3D_rotation_matrix(const long double &&angle_rad = __PI__, char about = 'z') {
+        static inline matrix<T> get_3D_rotation_matrix(const long double &&angle_rad = _PI_, char about = 'z') {
             return get_3D_rotation_matrix(angle_rad, about);
         }
         std::vector<T> operator[](size_t index) const { // using [] returns copy of row, so cannot make changes to mat.

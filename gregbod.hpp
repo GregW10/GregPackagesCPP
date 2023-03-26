@@ -470,7 +470,7 @@ namespace gtd {
             return rest_c; \
         } \
         auto volume() const { \
-            return (4/3.0l)*__PI__*this->radius*this->radius*this->radius; \
+            return (4/3.0l)*_PI_*this->radius*this->radius*this->radius; \
         } \
         auto density() const { \
             return this->mass_/this->volume(); \

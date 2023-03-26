@@ -20,18 +20,30 @@
 #include <cinttypes>
 #include <climits>
 
-#ifdef __PI__
-#undef __PI__
+#ifdef _PI_
+#undef _PI_
 #endif
 
-#define __PI__ 3.14159265358979323846264338327950288419716939937510582097494459230l
+// value obtained from memory (yes that's the nerd I am):
+#define _PI_ 3.14159265358979323846264338327950288419716939937510582097494459230l
+
+// value obtained from https://apod.nasa.gov/htmltest/gifcity/sqrt2.1mil (NASA):
+#define _ROOT_2_ 1.4142135623730950488016887242096980785696718753769480731766797379907324784621\
+070388503875343276415727350l
+// I am aware the above two values are way past the max. precision of a long double, but having them to that many d.p.
+// makes me feel better
 
 #define BILLION 1'000'000'000.0l
 
 #define MEAN_AVG(a, b) (((a) + (b))/2)
 
+#define SPHERE_VOLUME(rad) ((4.0l/3.0l)*_PI_*(rad)*(rad)*(rad))
+
+#define HCP_PACKING_FRACTION (_PI_/(3.0l*_ROOT_2_)) // approx. 0.74
+
 typedef unsigned long long ull_t;
 
+namespace gtd {
 template <typename From, typename To>
 concept isConvertible = std::is_convertible<From, To>::value;
 template <typename T>
@@ -103,7 +115,6 @@ concept forwardIterator = requires (IT it, IT other) {
     {*it = *other};
     {it != other} -> std::same_as<bool>;
 };
-namespace gtd {
     constexpr long double PI = 3.14159265358979323846264338327950288419716939937510582097494459230l;
     template<typename T>
     inline void swap(T &A, T &B) {
@@ -362,7 +373,7 @@ namespace gtd {
         return guess;
     }
 }
-template <isPrintable T> // must be defined in the global namespace due to argument-dependent-lookup
+template <gtd::isPrintable T> // must be defined in the global namespace due to argument-dependent-lookup
 std::ostream &operator<<(std::ostream &os, const std::vector<T> &vec) {
     os << '[';
     for (const T &val : vec)

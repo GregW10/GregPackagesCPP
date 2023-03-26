@@ -12,22 +12,29 @@ uint64_t iterations = 800;
 size_t num_reps = 2521;
 
 long double comet_rad = 750.0l;
-long double b_rad = 75.0l;
-long double b_mass = 3646105641.631895542l;
+long double b_rad = 100.0l;
+long double b_mass = 2896960438.76108;
 long double b_sep = 0.1l;
 
 gtd::vector3D<long double> pos{-414139744.3484770l, 277323640.2236369l, -1231468367.968793l};
 gtd::vector3D<long double> vel{3491.263406628809l, -6314.208154956334l, 11582.30048080498l};
 
+uint64_t num = 305;
+long double bounding_rad = 5000.0l;
+long double restc_f = 1.0l;
+long double restc_i = 0.5l;
+uint64_t ev_iters = 40'000;
+long double ev_dt = 0.1;
+
 int main(int argc, char **argv) {
     std::chrono::time_point<std::chrono::high_resolution_clock> start = std::chrono::high_resolution_clock::now();
     time_t id = time(nullptr);
     gtd::String starting_time_str{gtd::get_date_and_time()};
-    /*                              comet rad  comet pos comet vel.    sep   b.m.  b.rad.  r_coeff */
     gtd::system<long double, long double, long double, true, false, 3, 0, 0, false> sys =
             gtd::system<long double, long double, long double, true, false, 3, 0, 0, false>::
-                    hcp_comet(comet_rad, pos, vel, b_sep, b_mass, b_rad, 1, true);
-    sys.add_body(jupiter);
+            random_comet(pos, vel, num, bounding_rad, b_mass, b_rad, restc_f, gtd::sys::leapfrog_kdk, restc_i,
+                         ev_iters, ev_dt);
+    sys.add_body(jupiter, false);
     sys.set_iterations(iterations);
     sys.set_timestep(dt);
 #ifdef GREGSYS_MERGERS
@@ -36,7 +43,7 @@ int main(int argc, char **argv) {
     gtd::String nsys_path;
     nsys_path.append_back(id).append_back(".nsys");
     sys.to_nsys(nsys_path.c_str());
-    gtd::image_dimensions dims = {500, 500};
+    gtd::image_dimensions dims = {2000, 2000};
     gtd::asc_0f asc{dims.x, dims.y};
     gtd::star_t star{1, 1, {0, 0, 2'000'000'000}, {}, 1, 1};
     //asc.add_star(star);
@@ -151,7 +158,7 @@ int main(int argc, char **argv) {
     std::system(nsys_path.append_front("gsutil cp ").append_back(" gs://nbod_bucket/").c_str());
     gtd::update_log("nbod_bucket", "logs.txt", 60, id, "nbodn", starting_time_str.c_str(), ending_time_str.c_str(),
                     sys.num_bodies(), dt, iterations, num_reps + 1,
-                    sys.num_bodies() - 1, comet_rad, b_rad, b_mass, b_sep, pos, vel);
+                    sys.num_bodies() - 1, comet_rad, b_rad, b_mass, b_sep, pos, vel, true);
 #endif
     return 0;
 }

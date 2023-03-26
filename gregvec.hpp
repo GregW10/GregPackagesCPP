@@ -6,7 +6,7 @@
 #define GREGVEC_H
 
 #ifndef __cplusplus
-#error "The gregvec.hpp header file is a C++ header file only."
+#error "The gregvec.hpp header file is a C++ header file only.\n"
 #endif
 
 #include "gregstr.hpp"
@@ -16,43 +16,41 @@
 #include <type_traits>
 #include <utility>
 
-template <typename U, typename V>
-concept bitwiseOperands = requires (U val1, V val2) {
-    {val1 << 1}; // must have all of these operators overloaded
-    {val1 >> 1};
-    {val1 <<= val2};
-    {val1 >>= val2};
-    {val1 | val2};
-    {val1 & val2};
-    {val1 ^ val2};
-    {~val1};
-    {val1 |= val2};
-    {val1 &= val2};
-    {val1 ^= val2};
-    {val2 <<= val1};
-    {val2 >>= val1};
-    {val2 | val1};
-    {val2 & val1};
-    {val2 ^ val1};
-    {~val2};
-    {val2 |= val1};
-    {val2 &= val1};
-    {val2 ^= val1};
-};
-
-template <typename T>
-concept isIntegralNumWrapper = isNumWrapper<T> && requires (T val, T val2, size_t l, long double f) {
-    {val%val2} -> isConvertible<T>; // modulo operator
-    {val%l} -> isConvertible<T>;
-    {l%val} -> isConvertible<T>;
-    {val %= val2} -> isConvertible<T>;
-    {val %= l} -> isConvertible<T>;
-    {val%f} -> isConvertible<T>;
-    {f%val} -> isConvertible<T>;
-    {val %= f} -> isConvertible<T>;
-};
-
 namespace gtd { // forward declarations, to be able to use the functions inside the classes
+    template <typename U, typename V>
+    concept bitwiseOperands = requires (U val1, V val2) {
+        {val1 << 1}; // must have all of these operators overloaded
+        {val1 >> 1};
+        {val1 <<= val2};
+        {val1 >>= val2};
+        {val1 | val2};
+        {val1 & val2};
+        {val1 ^ val2};
+        {~val1};
+        {val1 |= val2};
+        {val1 &= val2};
+        {val1 ^= val2};
+        {val2 <<= val1};
+        {val2 >>= val1};
+        {val2 | val1};
+        {val2 & val1};
+        {val2 ^ val1};
+        {~val2};
+        {val2 |= val1};
+        {val2 &= val1};
+        {val2 ^= val1};
+    };
+    template <typename T>
+    concept isIntegralNumWrapper = isNumWrapper<T> && requires (T val, T val2, size_t l, long double f) {
+        {val % val2} -> isConvertible<T>; // modulo operator
+        {val % l} -> isConvertible<T>;
+        {l % val} -> isConvertible<T>;
+        {val %= val2} -> isConvertible<T>;
+        {val %= l} -> isConvertible<T>;
+        {val % f} -> isConvertible<T>;
+        {f % val} -> isConvertible<T>;
+        {val %= f} -> isConvertible<T>;
+    };
     namespace vec_ops {
         template <isNumWrapper U, isNumWrapper V>
         auto distance(const vector2D<U>& vec1, const vector2D<V>& vec2);
@@ -258,7 +256,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             return v1.x <= this->x && this->x < v2.x &&
                    v1.y <= this->y && this->y < v2.y;
         }
-        virtual vector2D<T> &rotate(const long double &&angle_in_rad = __PI__) {
+        virtual vector2D<T> &rotate(const long double &&angle_in_rad = _PI_) {
             return this->apply(matrix<long double>::get_2D_rotation_matrix(angle_in_rad));
         }
         virtual vector2D<T> &rotate(const long double &angle_in_rad = PI) {
@@ -507,6 +505,18 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
         vector2D<T> &operator^=(const vector2D<U> &&other) noexcept {
             this->x ^= other.x;
             this->y ^= other.y;
+            return *this;
+        }
+        template <isConvertible<T> U>
+        vector3D<T> &operator*=(const U &scalar) {
+            this->x *= scalar;
+            this->y *= scalar;
+            return *this;
+        }
+        template <isConvertible<T> U>
+        vector3D<T> &operator/=(const U &scalar) {
+            this->x /= scalar;
+            this->y /= scalar;
             return *this;
         }
         vector2D<T> operator++(int) noexcept { // cannot make virtual due to differing return types
@@ -2098,7 +2108,7 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
                    v1.y <= this->y && this->y < v2.y &&
                    v1.z <= this->z && this->z < v2.z;
         }
-        virtual vector3D<T> &rotate(const long double &&angle_in_rad = __PI__, char about = 'z') {
+        virtual vector3D<T> &rotate(const long double &&angle_in_rad = _PI_, char about = 'z') {
             return this->apply(matrix<long double>::get_3D_rotation_matrix(angle_in_rad, about));
         }
         virtual vector3D<T> &rotate(const long double &angle_in_rad = PI, char about = 'z') {
@@ -2613,6 +2623,20 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
             this->x ^= other.x;
             this->y ^= other.y;
             this->z ^= other.z;
+            return *this;
+        }
+        template <isConvertible<T> U>
+        vector3D<T> &operator*=(const U &scalar) {
+            this->x *= scalar;
+            this->y *= scalar;
+            this->z *= scalar;
+            return *this;
+        }
+        template <isConvertible<T> U>
+        vector3D<T> &operator/=(const U &scalar) {
+            this->x /= scalar;
+            this->y /= scalar;
+            this->z /= scalar;
             return *this;
         }
         vector3D<T> operator++(int) noexcept {
