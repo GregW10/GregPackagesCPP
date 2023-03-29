@@ -151,7 +151,7 @@ int main(int argc, char **argv) {
     std::system(nsys_path.append_front("gsutil cp ").append_back(" gs://nbod_bucket/").c_str());
     gtd::update_log("nbod_bucket", "logs.txt", 60, id, "nbodn", starting_time_str.c_str(), ending_time_str.c_str(),
                     sys.num_bodies(), dt, iterations, num_reps + 1,
-                    sys.num_bodies() - 1, comet_rad, b_rad, b_mass, b_sep, pos, vel);
+                    btrk.num_bods(), comet_rad, b_rad, b_mass, b_sep, pos, vel);
 #endif
     return 0;
 }

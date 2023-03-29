@@ -1795,7 +1795,7 @@ namespace gtd {
                 throw std::invalid_argument{"Error: the bounding radius must exceed the radius of a body.\n"};
             if (SPHERE_VOLUME(bounding_rad) < SPHERE_VOLUME(b_rad)*_n*5/HCP_PACKING_FRACTION)
                 throw std::invalid_argument{"Error: insufficient bounding sphere volume for placement of bodies.\n"};
-#define RAND_COM_CHECKS \
+#define RAND_COM_CHECKS(coefficient) \
             using vec = vector3D<T>; \
             if (!_n) \
                 throw std::invalid_argument{"Error: number of bodies cannot be zero.\n"}; \
@@ -1805,12 +1805,12 @@ namespace gtd {
                 throw negative_radius_error{"Error: the radius each body will have must be larger than zero.\n"}; \
             if (dt <= 0 || ev_dt <= 0) \
                 throw std::invalid_argument{"Error: time-steps cannot be negative or zero.\n"}; \
-            if (r_coeff < 0 || r_coeff > 1 || ev_r_coeff < 0 || ev_r_coeff > 1) \
+            if (r_coeff < 0 || r_coeff > 1 || coefficient < 0 || coefficient > 1) \
                 throw std::invalid_argument{"Error: coefficients of restitution must be between 0 and 1.\n"}; \
             check_option(integration_method);
-            RAND_COM_CHECKS
+            RAND_COM_CHECKS(ev_r_coeff)
             std::uniform_real_distribution<long double> _r{0.0l, bounding_rad};
-#define RAND_COM_BODY \
+#define RAND_COM_BODY(com1, com2, com3, ...) \
             std::uniform_real_distribution<long double> _phi{0, 2*PI}; \
             std::uniform_real_distribution<long double> _theta{0, 1}; \
             std::mt19937_64 _mtw{(uint64_t) time(nullptr)}; /* mersenne-twister engine */ \
@@ -1826,7 +1826,7 @@ namespace gtd {
             uint64_t counter; \
             uint64_t curr_size = 0; \
             R b_diam = 2*b_rad; \
-            vec com{}; \
+            com1 \
             while (_n --> 0) { \
                 loop_start: \
                 r_val = _r(_mtw); \
@@ -1843,22 +1843,24 @@ namespace gtd {
                         goto loop_start; \
                     ++ptr; \
                 } \
-                _bods.emplace_back(b_mass, b_rad, _bpos, vec{}, ev_r_coeff); \
-                com += _bpos; \
+                _bods.emplace_back(__VA_ARGS__); \
+                com2 \
                 ++curr_size; \
             } \
-            com /= _bods.size(); /* all bodies are same mass, so mass can be taken out of COM equation */ \
-            sys_t retsys{std::move(_bods), ev_dt, ev_iters, units_format, true}; \
-            retsys.evolve(integration_method); \
+            com3 /* all bodies are same mass, so mass can be taken out of COM equation */
+#define RAND_COM_END \
             retsys.set_timestep(dt); \
             retsys.set_iterations(iters); \
             for (bod_t &_b : retsys) { \
                 _b.rest_c = r_coeff; \
-                _b.curr_pos += pos - com;                              \
+                _b.curr_pos += pos - com; \
                 _b.curr_vel = vel; \
             } \
             return retsys;
-            RAND_COM_BODY
+            RAND_COM_BODY(vec com{};, com += _bpos;, com /= _bods.size();, b_mass, b_rad, _bpos, vec{}, ev_r_coeff)
+            sys_t retsys{std::move(_bods), ev_dt, ev_iters, units_format, true};
+            retsys.evolve(integration_method);
+            RAND_COM_END
         }
         static inline sys_t random_comet(const vector3D<T> &pos, long double sd, const vector3D<T> &vel, uint64_t _n,
                                          const M &b_mass, const R &b_rad, long double r_coeff,
@@ -1869,12 +1871,24 @@ namespace gtd {
         requires (std::convertible_to<T, long double>) {
             if (sd <= 0)
                 throw std::invalid_argument{"Error: standard deviation must be positive.\n"};
-            RAND_COM_CHECKS
+            RAND_COM_CHECKS(ev_r_coeff)
             std::normal_distribution<long double> _r{0, sd};
-            RAND_COM_BODY
-        };
-        static inline sys_t random_comet(const vec_t &pos, const vec_t &vel, uint64_t _n) {
-
+            RAND_COM_BODY(vec com{};, com += _bpos;, com /= _bods.size();, b_mass, b_rad, _bpos, vec{}, ev_r_coeff)
+            sys_t retsys{std::move(_bods), ev_dt, ev_iters, units_format, true};
+            retsys.evolve(integration_method);
+            RAND_COM_END
+        }
+        static inline sys_t random_comet(const vec_t &pos, long double sd, const vec_t &vel, uint64_t _n,
+                                         const M &b_mass, const R &b_rad, long double r_coeff,
+                                         int integration_method = sys_t::leapfrog_kdk,
+                                         long double min_r_coeff = 0.5l, long double ev_dt = 0.25,
+                                         uint64_t iters = 1'000, long double dt = 1,
+                                         const char *units_format = "M1:1,D1:1,T1:1") {
+            if (sd <= 0)
+                throw std::invalid_argument{"Error: standard deviation must be positive.\n"};
+            RAND_COM_CHECKS(min_r_coeff)
+            std::normal_distribution<long double> _r{0, sd};
+            RAND_COM_BODY(EMPTY, EMPTY, EMPTY, b_mass, b_rad, _bpos, vec{})
         }
 #undef RAND_COM_BODY
 #undef RAND_COM_CHECKS
@@ -2108,22 +2122,28 @@ namespace gtd {
             return ptr;
         }
     public:
-        template <typename evFuncT, typename bodFuncT> requires (std::same_as<evFuncT, std::nullptr_t> ||
+        template <typename evFuncT = std::nullptr_t,
+                  typename bodFuncT = std::nullptr_t,
+                  typename bodsFuncT = std::nullptr_t>
+        requires (std::same_as<evFuncT, std::nullptr_t> ||
         requires (evFuncT f1) {
             {f1()} -> std::same_as<bool>;
         }) && (std::same_as<bodFuncT, std::nullptr_t> || requires (bodFuncT f2, bod_t &bod) {
             {f2(bod)} -> std::same_as<void>;
+        }) && (std::same_as<bodsFuncT, std::nullptr_t> || requires (bodsFuncT f2, std::vector<bod_t> &_bodies) {
+            {f2(_bodies)} -> std::same_as<void>;
         })
         const std::chrono::nanoseconds &evolve(int integration_method = leapfrog_kdk,
                                                const evFuncT &continue_ev_if = nullptr,
-                                               const bodFuncT &for_each_bod = nullptr) {
+                                               const bodFuncT &for_each_bod = nullptr,
+                                               const bodsFuncT &for_all_bods = nullptr) {
             static std::chrono::time_point<std::chrono::high_resolution_clock> start;
             static std::chrono::nanoseconds total;
             num_bods = bods.size();
             if (!num_bods || !check_option(integration_method))
                 return total = std::chrono::nanoseconds::zero();
             // time_t start = time(nullptr);
-            if constexpr (std::same_as<evFuncT, std::nullptr_t> && (memFreq || fileFreq))
+            if constexpr (std::same_as<evFuncT, std::nullptr_t> || memFreq || fileFreq)
                 steps = 0;
             if constexpr (memFreq) {
                 if (evolved)
@@ -2185,6 +2205,11 @@ namespace gtd {
                             ++steps;
                             // this->take_euler_step();
                             FUNC_TEMPL_SELECT(this->take_euler_step, EMPTY)
+                            if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
+                                for (bod_t &_b : this->bods)
+                                    for_each_bod(_b);
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
+                                for_all_bods(this->bods);
                             /* by having "prog" as a template parameter, it avoids having to re-evaluate whether it is true
                              * or not within the loop, since the "if constexpr ()" branches get rejected at compile-time */
                             // if constexpr (collisions == overlap_coll_check)
@@ -2201,6 +2226,11 @@ namespace gtd {
                             if constexpr (memFreq || fileFreq)
                                 ++steps;
                             FUNC_TEMPL_SELECT(this->take_euler_step, EMPTY)
+                            if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
+                                for (bod_t &_b : this->bods)
+                                    for_each_bod(_b);
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
+                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2222,8 +2252,8 @@ namespace gtd {
                             this->calc_acc_and_e();
                             for (outer = 0; outer < num_bods; ++outer) {
                                 bod_t &ref = bods[outer];
-                                std::get<0>(predicted[outer]) = ref.curr_pos + dt * ref.curr_vel;
-                                std::get<1>(predicted[outer]) = ref.curr_vel + dt * ref.acc;
+                                std::get<0>(predicted[outer]) = ref.curr_pos + dt*ref.curr_vel;
+                                std::get<1>(predicted[outer]) = ref.curr_vel + dt*ref.acc;
                             }
                             for (outer = 0; outer < num_bods; ++outer) {
                                 bod_t &ref = bods[outer];
@@ -2231,9 +2261,9 @@ namespace gtd {
                                 for (inner = outer + 1; inner < num_bods; ++inner) {
                                     bod_t &ref_i = bods[inner];
                                     vector3D<T> &&r12 = std::get<0>(predicted[inner]) - std::get<0>(pred_outer);
-                                    long double &&r12_cubed_mag = (r12 * r12 * r12).magnitude();
-                                    std::get<2>(pred_outer) += ((G * ref_i.mass_) / (r12_cubed_mag)) * r12;
-                                    std::get<2>(predicted[inner]) -= ((G * ref.mass_) / (r12_cubed_mag)) * r12;
+                                    long double &&r12_cubed_mag = (r12*r12*r12).magnitude();
+                                    std::get<2>(pred_outer) += ((G*ref_i.mass_)/(r12_cubed_mag))*r12;
+                                    std::get<2>(predicted[inner]) -= ((G*ref.mass_)/(r12_cubed_mag))*r12;
                                 }
                             }
                             // this->take_modified_euler_step(predicted);
@@ -2245,6 +2275,11 @@ namespace gtd {
                                 // this->s_coll();
                                 num_bods = bods.size(); // number of bodies can change through mergers
                             }
+                            if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
+                                for (bod_t &_b : this->bods)
+                                    for_each_bod(_b);
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
+                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2253,8 +2288,8 @@ namespace gtd {
                             this->calc_acc_and_e();
                             for (outer = 0; outer < num_bods; ++outer) {
                                 bod_t &ref = bods[outer];
-                                std::get<0>(predicted[outer]) = ref.curr_pos + dt * ref.curr_vel;
-                                std::get<1>(predicted[outer]) = ref.curr_vel + dt * ref.acc;
+                                std::get<0>(predicted[outer]) = ref.curr_pos + dt*ref.curr_vel;
+                                std::get<1>(predicted[outer]) = ref.curr_vel + dt*ref.acc;
                             }
                             for (outer = 0; outer < num_bods; ++outer) {
                                 bod_t &ref = bods[outer];
@@ -2262,9 +2297,9 @@ namespace gtd {
                                 for (inner = outer + 1; inner < num_bods; ++inner) {
                                     bod_t &ref_i = bods[inner];
                                     vector3D<T> &&r12 = std::get<0>(predicted[inner]) - std::get<0>(pred_outer);
-                                    long double &&r12_cubed_mag = (r12 * r12 * r12).magnitude();
-                                    std::get<2>(pred_outer) += ((G * ref_i.mass_) / (r12_cubed_mag)) * r12;
-                                    std::get<2>(predicted[inner]) -= ((G * ref.mass_) / (r12_cubed_mag)) * r12;
+                                    long double &&r12_cubed_mag = (r12*r12*r12).magnitude();
+                                    std::get<2>(pred_outer) += ((G*ref_i.mass_)/(r12_cubed_mag))*r12;
+                                    std::get<2>(predicted[inner]) -= ((G*ref.mass_)/(r12_cubed_mag))*r12;
                                 }
                             }
                             if constexpr (memFreq || fileFreq)
@@ -2275,6 +2310,11 @@ namespace gtd {
                             if constexpr (collisions == overlap_coll_check) {
                                 num_bods = bods.size();
                             }
+                            if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
+                                for (bod_t &_b : this->bods)
+                                    for_each_bod(_b);
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
+                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2294,8 +2334,8 @@ namespace gtd {
                             this->calc_acc_and_e();
                             for (outer = 0; outer < num_bods; ++outer) {
                                 bod_t &ref = bods[outer];
-                                std::get<0>(predicted[outer]) = ref.curr_pos + half_dt * ref.curr_vel;
-                                std::get<1>(predicted[outer]) = ref.curr_vel + half_dt * ref.acc;
+                                std::get<0>(predicted[outer]) = ref.curr_pos + half_dt*ref.curr_vel;
+                                std::get<1>(predicted[outer]) = ref.curr_vel + half_dt*ref.acc;
                             }
                             for (outer = 0; outer < num_bods; ++outer) {
                                 bod_t &ref = bods[outer];
@@ -2303,9 +2343,9 @@ namespace gtd {
                                 for (inner = outer + 1; inner < num_bods; ++inner) {
                                     bod_t &ref_i = bods[inner];
                                     vector3D<T> &&r12 = std::get<0>(predicted[inner]) - std::get<0>(pred_outer);
-                                    long double &&r12_cubed_mag = (r12 * r12 * r12).magnitude();
-                                    std::get<2>(pred_outer) += ((G * ref_i.mass_) / (r12_cubed_mag)) * r12;
-                                    std::get<2>(predicted[inner]) -= ((G * ref.mass_) / (r12_cubed_mag)) * r12;
+                                    long double &&r12_cubed_mag = (r12*r12*r12).magnitude();
+                                    std::get<2>(pred_outer) += ((G*ref_i.mass_)/(r12_cubed_mag))*r12;
+                                    std::get<2>(predicted[inner]) -= ((G*ref.mass_)/(r12_cubed_mag))*r12;
                                 }
                             }
                             // this->take_midpoint_step(predicted);
@@ -2320,6 +2360,8 @@ namespace gtd {
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
+                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2328,8 +2370,8 @@ namespace gtd {
                             this->calc_acc_and_e();
                             for (outer = 0; outer < num_bods; ++outer) {
                                 bod_t &ref = bods[outer];
-                                std::get<0>(predicted[outer]) = ref.curr_pos + half_dt * ref.curr_vel;
-                                std::get<1>(predicted[outer]) = ref.curr_vel + half_dt * ref.acc;
+                                std::get<0>(predicted[outer]) = ref.curr_pos + half_dt*ref.curr_vel;
+                                std::get<1>(predicted[outer]) = ref.curr_vel + half_dt*ref.acc;
                             }
                             for (outer = 0; outer < num_bods; ++outer) {
                                 bod_t &ref = bods[outer];
@@ -2337,9 +2379,9 @@ namespace gtd {
                                 for (inner = outer + 1; inner < num_bods; ++inner) {
                                     bod_t &ref_i = bods[inner];
                                     vector3D<T> &&r12 = std::get<0>(predicted[inner]) - std::get<0>(pred_outer);
-                                    long double &&r12_cubed_mag = (r12 * r12 * r12).magnitude();
-                                    std::get<2>(pred_outer) += ((G * ref_i.mass_) / (r12_cubed_mag)) * r12;
-                                    std::get<2>(predicted[inner]) -= ((G * ref.mass_) / (r12_cubed_mag)) * r12;
+                                    long double &&r12_cubed_mag = (r12*r12*r12).magnitude();
+                                    std::get<2>(pred_outer) += ((G*ref_i.mass_)/(r12_cubed_mag))*r12;
+                                    std::get<2>(predicted[inner]) -= ((G*ref.mass_)/(r12_cubed_mag))*r12;
                                 }
                             }
                             // this->take_midpoint_step(predicted);
@@ -2355,6 +2397,8 @@ namespace gtd {
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
+                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2423,9 +2467,9 @@ namespace gtd {
                         while (steps++ < iterations) {
                             for (bod_t &bod: bods) {
                                 /* KICK for half a step */
-                                bod.curr_vel += half_dt * bod.acc;
+                                bod.curr_vel += half_dt*bod.acc;
                                 /* DRIFT for a full step */
-                                bod.curr_pos += dt * bod.curr_vel;
+                                bod.curr_pos += dt*bod.curr_vel;
                             }
                             /* update accelerations and energies based on new positions and KICK for half a step */
                             this->leapfrog_kdk_acc_e_and_step();
@@ -2434,6 +2478,8 @@ namespace gtd {
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
+                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2442,13 +2488,15 @@ namespace gtd {
                             if constexpr (memFreq || fileFreq)
                                 ++steps;
                             for (bod_t &bod: bods) {
-                                bod.curr_vel += half_dt * bod.acc;
-                                bod.curr_pos += dt * bod.curr_vel;
+                                bod.curr_vel += half_dt*bod.acc;
+                                bod.curr_pos += dt*bod.curr_vel;
                             }
                             this->leapfrog_kdk_acc_e_and_step();
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
+                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2469,7 +2517,7 @@ namespace gtd {
                         while (steps++ < iterations) {
                             for (bod_t &bod: bods)
                                 /* DRIFT for half a step */
-                                bod.curr_pos += half_dt * bod.curr_vel;
+                                bod.curr_pos += half_dt*bod.curr_vel;
                             /* update acc., then KICK for a full step and DRIFT for half a step, then update E */
                             this->leapfrog_dkd_acc_e_and_step();
                             // if constexpr (collisions == overlap_coll_check)
@@ -2477,6 +2525,8 @@ namespace gtd {
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
+                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2485,11 +2535,13 @@ namespace gtd {
                             if constexpr (memFreq || fileFreq)
                                 ++steps;
                             for (bod_t &bod: bods)
-                                bod.curr_pos += half_dt * bod.curr_vel;
+                                bod.curr_pos += half_dt*bod.curr_vel;
                             this->leapfrog_dkd_acc_e_and_step();
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
+                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
