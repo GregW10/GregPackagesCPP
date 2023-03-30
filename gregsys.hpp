@@ -10,9 +10,10 @@
 
 #define EMPTY
 
-#define FUNC_TEMPL_SELECT(func, cf, ...) \
+#define FUNC_TEMPL_SELECT(func, bfunc, cf, ...) \
 if constexpr (collisions == overlap_coll_check || !(memFreq && fileFreq)) { \
     func<false, false>(__VA_ARGS__);            \
+    bfunc \
     if constexpr (collisions == overlap_coll_check) {                       \
         if constexpr (memFreq && fileFreq) {                           \
             if (!(steps % memFreq) && !(steps % fileFreq)) { \
@@ -59,35 +60,43 @@ if constexpr (collisions == overlap_coll_check || !(memFreq && fileFreq)) { \
 else { \
     if constexpr (memFreq && fileFreq) { \
         if (!(steps % memFreq) && !(steps % fileFreq)) { \
-            func<true, true>(__VA_ARGS__); \
+            func<true, true>(__VA_ARGS__);      \
+            bfunc \
         } \
         else if (!(steps % memFreq)) { \
-            func<true, false>(__VA_ARGS__); \
+            func<true, false>(__VA_ARGS__);     \
+            bfunc \
         } \
         else if (!(steps % fileFreq)) { \
-            func<false, true>(__VA_ARGS__); \
+            func<false, true>(__VA_ARGS__);     \
+            bfunc \
             cf \
         } \
         else { \
-            func<false, false>(__VA_ARGS__); \
+            func<false, false>(__VA_ARGS__);    \
+            bfunc \
             cf \
         } \
     } \
     else if constexpr (memFreq) { \
         if (steps % memFreq) { \
-            func<false, false>(__VA_ARGS__); \
+            func<false, false>(__VA_ARGS__);    \
+            bfunc \
             cf \
         } \
         else { \
-            func<true, false>(__VA_ARGS__); \
+            func<true, false>(__VA_ARGS__);     \
+            bfunc \
         } \
     } \
     else if constexpr (fileFreq) { \
         if (steps % fileFreq) { \
-            func<false, false>(__VA_ARGS__); \
+            func<false, false>(__VA_ARGS__);    \
+            bfunc \
             cf \
         } \
-        func<false, true>(__VA_ARGS__); \
+        func<false, true>(__VA_ARGS__);         \
+        bfunc \
         cf \
     } \
 }
@@ -501,65 +510,25 @@ namespace gtd {
         }
         void leapfrog_kdk_acc_e_and_step() {
             MEM_LOOP
-            // static auto loop = [this]<bool mem, bool file, bool only_e = false>{
-            //     num_bods = bods.size();
-            //     for (outer = 0; outer < num_bods; ++outer) {
-            //         bod_t &ref = bods[outer];
-            //         for (inner = outer + 1; inner < num_bods; ++inner) {
-            //             if constexpr (mem && memFreq)
-            //                 this->cumulative_acc_and_pe(ref, bods[inner]);
-            //             else if constexpr (only_e && memFreq)
-            //                 this->cumulative_pe(ref, bods[inner]);
-            //             else
-            //                 this->cumulative_acc(ref, bods[inner]);
-            //         }
-            //         if constexpr (only_e && memFreq) {
-            //             ref.pe /= T{2};
-            //             pe[ref.id].push_back(ref.pe);
-            //             energy[ref.id].push_back(ref.curr_ke + ref.pe);
-            //             total_pe += ref.pe;
-            //             total_ke += ref.curr_ke;
-            //         }
-            //         else {
-            //             /* KICK for half a step */
-            //             ref.curr_vel += half_dt*ref.acc;
-            //             if constexpr (mem && memFreq) {
-            //                 ref.pe /= T{2};
-            //                 ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
-            //                 pe[ref.id].push_back(ref.pe);
-            //                 energy[ref.id].push_back(ref.curr_ke + ref.pe);
-            //                 total_pe += ref.pe;
-            //                 total_ke += ref.curr_ke;
-            //             }
-            //             if constexpr (file && fileFreq) {
-            //                 // WRITE TO FILE
-            //             }
-            //         }
-            //     }
-            // };
-            // FUNC_TEMPL_SELECT(loop.template operator(), return;)
-            FUNC_TEMPL_SELECT(loop_kdk, return;)
+            FUNC_TEMPL_SELECT(loop_kdk, EMPTY, return;)
             /* repeatedly evaluating the same if constexpr conditions DOES NOT MATTER (apart from slightly increasing
              * compilation time) given that they are evaluated at compile time, so there is never any runtime overhead*/
             if constexpr (collisions == overlap_coll_check) {
-                // std::cout << "never get here!" << std::endl;
-                // loop.template operator()<false, false, true>();
-                loop_kdk<false, false, true>();
+                loop_kdk<false, false, true>(); // only energy calculations
             }
-            // for (outer = 0; outer < num_bods; ++outer) {
-            //     bod_t &ref = bods[outer];
-            //     for (inner = outer + 1; inner < num_bods; ++inner)
-            //         cumulative_acc_and_pe(ref, bods[inner]);
-            //     ref.pe /= T{2};
-            //     /* KICK for half a step */
-            //     ref.curr_vel += half_dt*ref.acc;
-            //     ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
-            //     pe[ref.id].push_back(ref.pe);
-            //     energy[ref.id].push_back(ref.curr_ke + ref.pe);
-            //     total_pe += ref.pe;
-            //     total_ke += ref.curr_ke;
-            // }
             if constexpr (memFreq) { // in the FUNC_TEMPL_SELECT macro it is checked whether not steps % memFreq
+                tot_pe.push_back(total_pe);
+                tot_ke.push_back(total_ke);
+                tot_e.push_back(total_pe + total_ke);
+            }
+        }
+        template <typename bodsFuncT> // no need to re-check requirements here, already checked in evolve()
+        void leapfrog_kdk_acc_e_and_step(const bodsFuncT &func) {
+            MEM_LOOP
+            FUNC_TEMPL_SELECT(loop_kdk, func(this->bods);, return;)
+            if constexpr (collisions == overlap_coll_check)
+                loop_kdk<false, false, true>();
+            if constexpr (memFreq) {
                 tot_pe.push_back(total_pe);
                 tot_ke.push_back(total_ke);
                 tot_e.push_back(total_pe + total_ke);
@@ -592,33 +561,31 @@ namespace gtd {
         void leapfrog_dkd_acc_e_and_step() {
             MEM_LOOP
             num_bods = bods.size();
-            // static auto loop = [this]<bool mem, bool file>{
-            //     for (outer = 0; outer < num_bods; ++outer) {
-            //         bod_t &ref = bods[outer];
-            //         for (inner = outer + 1; inner < num_bods; ++inner)
-            //             cumulative_acc(ref, bods[inner]);
-            //         /* KICK for a full step */
-            //         ref.curr_vel += dt*ref.acc;
-            //         /* DRIFT for half a step */
-            //         ref.curr_pos += half_dt*ref.curr_vel;
-            //         /* the reason it is possible to update the outer body's position within the outer loop (without
-            //          * affecting the synchronisation of the particles) is because, by here, its effect (at its
-            //          * now-previous position) on all the other particles in the system has been calculated (all
-            //          * subsequent updates of the accelerations of the other particles no longer depend on the position
-            //          * of the outer body) */
-            //         if constexpr (mem && memFreq) {
-            //             ref.add_pos_vel_ke(); // store new particle position, velocity and kinetic energy
-            //             total_ke += ref.curr_ke;
-            //         }
-            //         if (file && fileFreq) {
-            //             // WRITE TO FILE
-            //         }
-            //     }
-            // };
-            // FUNC_TEMPL_SELECT(loop.template operator(), return;)
-            FUNC_TEMPL_SELECT(loop_dkd, return;)
+            FUNC_TEMPL_SELECT(loop_dkd, EMPTY, return;)
             /* a second loop is required to compute the potential energies based on the updated positions */
             if constexpr (memFreq) { // again, only reached if not steps % memFreq (checked within FUNC_TEMPL_SELECT)
+                for (outer = 0; outer < num_bods; ++outer) {
+                    bod_t &ref = bods[outer];
+                    for (inner = outer + 1; inner < num_bods; ++inner)
+                        cumulative_pe(ref, bods[inner]);
+                    ref.pe /= T{2};
+                    pe[ref.id].push_back(ref.pe);
+                    energy[ref.id].push_back(ref.curr_ke + ref.pe);
+                    total_pe += ref.pe;
+                    if constexpr (collisions == overlap_coll_check)
+                        total_ke += ref.curr_ke;
+                }
+                tot_pe.push_back(total_pe);
+                tot_ke.push_back(total_ke);
+                tot_e.push_back(total_pe + total_ke);
+            }
+        }
+        template <typename bodsFuncT>
+        void leapfrog_dkd_acc_e_and_step(const bodsFuncT &func) {
+            MEM_LOOP
+            num_bods = bods.size();
+            FUNC_TEMPL_SELECT(loop_dkd, func(this->bods);, return;)
+            if constexpr (memFreq) {
                 for (outer = 0; outer < num_bods; ++outer) {
                     bod_t &ref = bods[outer];
                     for (inner = outer + 1; inner < num_bods; ++inner)
@@ -1853,11 +1820,11 @@ namespace gtd {
             retsys.set_iterations(iters); \
             for (bod_t &_b : retsys) { \
                 _b.rest_c = r_coeff; \
-                _b.curr_pos += pos - com; \
+                _b.curr_pos += pos - _com; \
                 _b.curr_vel = vel; \
             } \
             return retsys;
-            RAND_COM_BODY(vec com{};, com += _bpos;, com /= _bods.size();, b_mass, b_rad, _bpos, vec{}, ev_r_coeff)
+            RAND_COM_BODY(vec _com{};, _com += _bpos;, _com /= _bods.size();, b_mass, b_rad, _bpos, vec{}, ev_r_coeff)
             sys_t retsys{std::move(_bods), ev_dt, ev_iters, units_format, true};
             retsys.evolve(integration_method);
             RAND_COM_END
@@ -1873,22 +1840,82 @@ namespace gtd {
                 throw std::invalid_argument{"Error: standard deviation must be positive.\n"};
             RAND_COM_CHECKS(ev_r_coeff)
             std::normal_distribution<long double> _r{0, sd};
-            RAND_COM_BODY(vec com{};, com += _bpos;, com /= _bods.size();, b_mass, b_rad, _bpos, vec{}, ev_r_coeff)
+            RAND_COM_BODY(vec _com{};, _com += _bpos;, _com /= _bods.size();, b_mass, b_rad, _bpos, vec{}, ev_r_coeff)
             sys_t retsys{std::move(_bods), ev_dt, ev_iters, units_format, true};
             retsys.evolve(integration_method);
             RAND_COM_END
         }
+#define COR_DIST(r, n, d, min_cor) (1.0l - (1.0l - min_cor)*(powl(r, n)/(powl(r, n) + powl(d, n))))
+        template <auto n_exp, auto d_scale>
         static inline sys_t random_comet(const vec_t &pos, long double sd, const vec_t &vel, uint64_t _n,
                                          const M &b_mass, const R &b_rad, long double r_coeff,
                                          int integration_method = sys_t::leapfrog_kdk,
-                                         long double min_r_coeff = 0.5l, long double ev_dt = 0.25,
+                                         long double min_r_coeff = 0.5l, long double ev_dt = 0.25l,
+                                         uint64_t probing_iters = 1'000,
                                          uint64_t iters = 1'000, long double dt = 1,
                                          const char *units_format = "M1:1,D1:1,T1:1") {
             if (sd <= 0)
                 throw std::invalid_argument{"Error: standard deviation must be positive.\n"};
+            const uint64_t n_ = _n;
             RAND_COM_CHECKS(min_r_coeff)
             std::normal_distribution<long double> _r{0, sd};
-            RAND_COM_BODY(EMPTY, EMPTY, EMPTY, b_mass, b_rad, _bpos, vec{})
+            RAND_COM_BODY(vec _com{};, _com += _bpos;, _com /= _bods.size();, b_mass, b_rad, _bpos, vec{})
+            long double dist_exp;
+            long double scale_factor = powl(d_scale, n_exp);
+            long double max_dist_exp = powl(cbrtl(((SPHERE_VOLUME(b_rad)*n_)/SCP_PACKING_FRACTION)*(3/(4*_PI_))),n_exp);
+            std::cout << "Max dist: " << cbrtl(((SPHERE_VOLUME(b_rad)*n_)/SCP_PACKING_FRACTION)*(3/(4*_PI_))) << "\n";
+            std::cout << "small sphere volume: " << SPHERE_VOLUME(b_rad) << '\n';
+            std::cout << "scp packing fraction: " << SCP_PACKING_FRACTION << '\n';
+            std::cout << "next: " << ((SPHERE_VOLUME(b_rad)*n_)/SCP_PACKING_FRACTION) << '\n';
+            std::cout << "next2: " << ((SPHERE_VOLUME(b_rad)*n_)/SCP_PACKING_FRACTION)*(3/(4*_PI_)) << '\n';
+            long double min_max_cor = 1.0l - (1.0l - min_r_coeff)*(max_dist_exp/(max_dist_exp + scale_factor));
+#ifdef GREGSYS_MERGERS
+            M tot_mass;
+#endif
+            for (bod_t &_b : _bods) {
+                dist_exp = powl((_b.curr_pos - _com).magnitude(), n_exp);
+                _b.rest_c = 1.0l - (1.0l - min_r_coeff)*(dist_exp/(dist_exp + scale_factor));
+#ifdef GREGSYS_MERGERS
+                tot_mass += _b.mass_;
+#endif
+            }
+            sys_t retsys{std::move(_bods), ev_dt, iters, units_format, true};
+            uint64_t _count = 0; // haven't made it static inside lambda to avoid overhead of setting to zero after ev.
+            retsys.evolve(integration_method,
+            [&retsys, &probing_iters, &min_max_cor, &_count](){
+                for (const bod_t &_b : retsys.bods) {
+                    if (_b.rest_c < min_max_cor) { // means at least 1 body is still too far out from COM
+                        _count = 0;
+                        // std::cout << "Never!!!" << std::endl;
+                        return true; // so continue with iterations
+                    }
+                    // std::cout << _b.rest_c << ", " << min_max_cor << std::endl;
+                }
+                return _count++ < probing_iters;
+            }, nullptr,
+#ifndef GREGSYS_MERGERS
+            [&min_r_coeff, &scale_factor, &_com](auto &bodies){
+#else
+            [&min_r_coeff, &scale_factor, &tot_mass, *_com](auto &bodies){
+#endif
+                // vec_t com; // com is recalculated at each iteration to account for any drift caused by f.p. errors
+                for (const bod_t &_b : bodies)
+#ifndef GREGSYS_MERGERS
+                    _com += _b.curr_pos;
+                _com /= bodies.size();
+#else
+                    _com += _b.mass_*_b.curr_pos;
+                _com /= tot_mass;
+#endif
+                long double dist_exp;
+                for (bod_t &_b : bodies) {
+                    dist_exp = powl((_b.curr_pos - _com).magnitude(), n_exp);
+                    _b.rest_c = 1.0l - (1.0l - min_r_coeff)*(dist_exp/(dist_exp + scale_factor));
+                }
+            });
+            // _count = 0;
+            // return {std::move(retsys), true};
+            RAND_COM_END
         }
 #undef RAND_COM_BODY
 #undef RAND_COM_CHECKS
@@ -2204,12 +2231,14 @@ namespace gtd {
                             this->calc_acc_and_e();
                             ++steps;
                             // this->take_euler_step();
-                            FUNC_TEMPL_SELECT(this->take_euler_step, EMPTY)
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>) {
+                                FUNC_TEMPL_SELECT(this->take_euler_step, for_all_bods(this->bods);, EMPTY)
+                            } else {
+                                FUNC_TEMPL_SELECT(this->take_euler_step, EMPTY, EMPTY)
+                            }
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
-                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
-                                for_all_bods(this->bods);
                             /* by having "prog" as a template parameter, it avoids having to re-evaluate whether it is true
                              * or not within the loop, since the "if constexpr ()" branches get rejected at compile-time */
                             // if constexpr (collisions == overlap_coll_check)
@@ -2225,12 +2254,14 @@ namespace gtd {
                             this->calc_acc_and_e();
                             if constexpr (memFreq || fileFreq)
                                 ++steps;
-                            FUNC_TEMPL_SELECT(this->take_euler_step, EMPTY)
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>) {
+                                FUNC_TEMPL_SELECT(this->take_euler_step, for_all_bods(this->bods);, EMPTY)
+                            } else {
+                                FUNC_TEMPL_SELECT(this->take_euler_step, EMPTY, EMPTY)
+                            }
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
-                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
-                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2268,7 +2299,12 @@ namespace gtd {
                             }
                             // this->take_modified_euler_step(predicted);
                             ++steps;
-                            FUNC_TEMPL_SELECT(this->take_modified_euler_step, EMPTY, predicted)
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>) {
+                                FUNC_TEMPL_SELECT(this->take_modified_euler_step, for_all_bods(this->bods);, EMPTY,
+                                                  predicted)
+                            } else {
+                                FUNC_TEMPL_SELECT(this->take_modified_euler_step, EMPTY, EMPTY, predicted)
+                            }
                             for (std::tuple<vector3D<T>, vector3D<T>, vector3D<T>> &tup: predicted)
                                 std::get<2>(tup).make_zero();
                             if constexpr (collisions == overlap_coll_check) {
@@ -2278,8 +2314,6 @@ namespace gtd {
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
-                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
-                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2304,7 +2338,12 @@ namespace gtd {
                             }
                             if constexpr (memFreq || fileFreq)
                                 ++steps;
-                            FUNC_TEMPL_SELECT(this->take_modified_euler_step, EMPTY, predicted)
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>) {
+                                FUNC_TEMPL_SELECT(this->take_modified_euler_step, for_all_bods(this->bods);, EMPTY,
+                                                  predicted)
+                            } else {
+                                FUNC_TEMPL_SELECT(this->take_modified_euler_step, EMPTY, EMPTY, predicted)
+                            }
                             for (std::tuple<vector3D<T>, vector3D<T>, vector3D<T>> &tup: predicted)
                                 std::get<2>(tup).make_zero();
                             if constexpr (collisions == overlap_coll_check) {
@@ -2313,8 +2352,6 @@ namespace gtd {
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
-                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
-                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2350,7 +2387,11 @@ namespace gtd {
                             }
                             // this->take_midpoint_step(predicted);
                             ++steps;
-                            FUNC_TEMPL_SELECT(this->take_midpoint_step, EMPTY, predicted)
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>) {
+                                FUNC_TEMPL_SELECT(this->take_midpoint_step, for_all_bods(this->bods);, EMPTY, predicted)
+                            } else {
+                                FUNC_TEMPL_SELECT(this->take_midpoint_step, EMPTY, EMPTY, predicted)
+                            }
                             for (std::tuple<vector3D<T>, vector3D<T>, vector3D<T>> &tup: predicted)
                                 std::get<2>(tup).make_zero();
                             if constexpr (collisions == overlap_coll_check) {
@@ -2360,8 +2401,6 @@ namespace gtd {
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
-                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
-                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2387,7 +2426,11 @@ namespace gtd {
                             // this->take_midpoint_step(predicted);
                             if constexpr (memFreq || fileFreq)
                                 ++steps;
-                            FUNC_TEMPL_SELECT(this->take_midpoint_step, EMPTY, predicted)
+                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>) {
+                                FUNC_TEMPL_SELECT(this->take_midpoint_step, for_all_bods(this->bods);, EMPTY, predicted)
+                            } else {
+                                FUNC_TEMPL_SELECT(this->take_midpoint_step, EMPTY, EMPTY, predicted)
+                            }
                             for (std::tuple<vector3D<T>, vector3D<T>, vector3D<T>> &tup: predicted)
                                 std::get<2>(tup).make_zero();
                             if constexpr (collisions == overlap_coll_check) {
@@ -2397,8 +2440,6 @@ namespace gtd {
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
-                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
-                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2478,8 +2519,6 @@ namespace gtd {
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
-                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
-                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2495,8 +2534,6 @@ namespace gtd {
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
-                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
-                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2525,8 +2562,6 @@ namespace gtd {
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
-                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
-                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }
@@ -2540,8 +2575,6 @@ namespace gtd {
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
-                            if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>)
-                                for_all_bods(this->bods);
                             if constexpr (prog)
                                 this->print_progress();
                         }

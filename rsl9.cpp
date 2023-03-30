@@ -7,24 +7,26 @@ gtd::bod_0f jupiter{189813*BILLION*BILLION*10*10*10*10, 69'911'000, {}, {}};
 // gtd::bod_0f b3{500'000'000.0l, 10, {3000, 2222, 1141}, {}};
 // gtd::bod_0f b4{500'000'000.0l, 10, {3000, 2222, 1101}, {}};
 
-long double dt = 0.125;
+long double dt = 0.0625l;
 uint64_t iterations = 800;
 size_t num_reps = 2521;
 
 long double comet_rad = 750.0l;
 long double b_rad = 100.0l;
-long double b_mass = 2896960438.76108;
+long double b_mass = 246399442381.096416473;
 long double b_sep = 0.1l;
 
 gtd::vector3D<long double> pos{-414139744.3484770l, 277323640.2236369l, -1231468367.968793l};
 gtd::vector3D<long double> vel{3491.263406628809l, -6314.208154956334l, 11582.30048080498l};
 
-uint64_t num = 305;
+uint64_t num = 25;
 long double bounding_rad = 5000.0l;
 long double restc_f = 1.0l;
 long double restc_i = 0.5l;
 uint64_t ev_iters = 40'000;
 long double ev_dt = 0.1;
+
+long double sd = 50;
 
 int main(int argc, char **argv) {
     std::chrono::time_point<std::chrono::high_resolution_clock> start = std::chrono::high_resolution_clock::now();
@@ -32,8 +34,8 @@ int main(int argc, char **argv) {
     gtd::String starting_time_str{gtd::get_date_and_time()};
     gtd::system<long double, long double, long double, true, false, 3, 0, 0, false> sys =
             gtd::system<long double, long double, long double, true, false, 3, 0, 0, false>::
-            random_comet(pos, vel, num, bounding_rad, b_mass, b_rad, restc_f, gtd::sys::leapfrog_kdk, restc_i,
-                         ev_iters, ev_dt);
+            random_comet<2, 200>(pos, sd, vel, num, b_mass, b_rad, restc_f, gtd::sys::leapfrog_kdk, restc_i,
+                         ev_dt, 10'000);
     sys.add_body(jupiter, false);
     sys.set_iterations(iterations);
     sys.set_timestep(dt);

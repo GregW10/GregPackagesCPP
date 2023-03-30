@@ -39,7 +39,9 @@
 
 #define SPHERE_VOLUME(rad) ((4.0l/3.0l)*_PI_*(rad)*(rad)*(rad))
 
-#define HCP_PACKING_FRACTION (_PI_/(3.0l*_ROOT_2_)) // approx. 0.74
+#define HCP_PACKING_FRACTION (_PI_/(3.0l*_ROOT_2_)) // hexagonal-close-packing packing fraction - approx. 0.74
+
+#define SCP_PACKING_FRACTION (_PI_/6.0l) // simple-cubic-packing packing fraction - approx. 0.52
 
 typedef unsigned long long ull_t;
 
