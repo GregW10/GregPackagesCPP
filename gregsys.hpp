@@ -1,3 +1,6 @@
+/* Copyright (c) 2023 Gregor Anton Randall Hartl Watters
+ * This software is protected under the MIT license. Please see the LICENSE file for more information. */
+
 #ifndef GREGSYS_H
 #define GREGSYS_H
 
@@ -1412,12 +1415,20 @@ namespace gtd {
         //     static_assert(collisions <= pred_coll_check && !(collisions & (collisions + 1)),
         //                   "Invalid collision-checking option.");
         // }
+        template <bool iters = true>
         void print_progress() const noexcept requires (prog) {
+            if constexpr (iters)
 #ifndef _WIN32
-            printf(CYAN_TXT_START "Iteration " BLUE_TXT_START "%" PRIu64 RED_TXT_START "/" MAGENTA_TXT_START
+                printf(CYAN_TXT_START "Iteration " BLUE_TXT_START "%" PRIu64 RED_TXT_START "/" MAGENTA_TXT_START
                    "%" PRIu64"\r", this->steps, this->iterations);
 #else
-            printf("Iteration %" PRIu64"/%" PRIu64"\r", step, iterations);
+                printf("Iteration %" PRIu64"/%" PRIu64"\r", steps, iterations);
+#endif
+            else
+#ifndef _WIN32
+                printf(CYAN_TXT_START "Iteration " BLUE_TXT_START "%" PRIu64"\r", this->steps);
+#else
+                printf("Iteration %" PRIu64"\r", steps);
 #endif
         }
         void print_conclusion(const std::chrono::time_point<std::chrono::high_resolution_clock> &start,
@@ -1778,6 +1789,7 @@ namespace gtd {
             RAND_COM_CHECKS(ev_r_coeff)
             std::uniform_real_distribution<long double> _r{0.0l, bounding_rad};
 #define RAND_COM_BODY(com1, com2, com3, ...) \
+            const uint64_t n_ = _n; \
             std::uniform_real_distribution<long double> _phi{0, 2*PI}; \
             std::uniform_real_distribution<long double> _theta{0, 1}; \
             std::mt19937_64 _mtw{(uint64_t) time(nullptr)}; /* mersenne-twister engine */ \
@@ -1815,21 +1827,22 @@ namespace gtd {
                 ++curr_size; \
             } \
             com3 /* all bodies are same mass, so mass can be taken out of COM equation */
-#define RAND_COM_END \
+#define RAND_COM_END(loop_bit, ...) \
             retsys.set_timestep(dt); \
             retsys.set_iterations(iters); \
-            for (bod_t &_b : retsys) { \
+            for (bod_t &_b : retsys) {    \
+                loop_bit \
                 _b.rest_c = r_coeff; \
                 _b.curr_pos += pos - _com; \
                 _b.curr_vel = vel; \
             } \
-            return retsys;
-            RAND_COM_BODY(vec _com{};, _com += _bpos;, _com /= _bods.size();, b_mass, b_rad, _bpos, vec{}, ev_r_coeff)
+            __VA_ARGS__
+            RAND_COM_BODY(vec _com{};, _com += _bpos;, _com /= n_;, b_mass, b_rad, _bpos, vec{}, ev_r_coeff)
             sys_t retsys{std::move(_bods), ev_dt, ev_iters, units_format, true};
             retsys.evolve(integration_method);
-            RAND_COM_END
+            RAND_COM_END(EMPTY, return retsys;)
         }
-        static inline sys_t random_comet(const vector3D<T> &pos, long double sd, const vector3D<T> &vel, uint64_t _n,
+        static inline sys_t random_comet(const vector3D<T> &pos, const vector3D<T> &vel, long double sd, uint64_t _n,
                                          const M &b_mass, const R &b_rad, long double r_coeff,
                                          int integration_method = sys_t::leapfrog_kdk,
                                          long double ev_r_coeff = 0.5l, uint64_t ev_iters = 10'000,
@@ -1840,69 +1853,93 @@ namespace gtd {
                 throw std::invalid_argument{"Error: standard deviation must be positive.\n"};
             RAND_COM_CHECKS(ev_r_coeff)
             std::normal_distribution<long double> _r{0, sd};
-            RAND_COM_BODY(vec _com{};, _com += _bpos;, _com /= _bods.size();, b_mass, b_rad, _bpos, vec{}, ev_r_coeff)
+            RAND_COM_BODY(vec _com{};, _com += _bpos;, _com /= n_;, b_mass, b_rad, _bpos, vec{}, ev_r_coeff)
             sys_t retsys{std::move(_bods), ev_dt, ev_iters, units_format, true};
             retsys.evolve(integration_method);
-            RAND_COM_END
+            RAND_COM_END(EMPTY, return retsys;)
         }
-#define COR_DIST(r, n, d, min_cor) (1.0l - (1.0l - min_cor)*(powl(r, n)/(powl(r, n) + powl(d, n))))
-        template <auto n_exp, auto d_scale>
-        static inline sys_t random_comet(const vec_t &pos, long double sd, const vec_t &vel, uint64_t _n,
-                                         const M &b_mass, const R &b_rad, long double r_coeff,
-                                         int integration_method = sys_t::leapfrog_kdk,
-                                         long double min_r_coeff = 0.5l, long double ev_dt = 0.25l,
-                                         uint64_t probing_iters = 1'000,
+        static inline std::pair<sys_t, T>
+                            random_comet(const vec_t &pos, const vec_t &vel, uint64_t _n, const T &bounding_rad,
+                                         const M &b_mass, const R &b_rad, long double r_coeff, long double n_exp,
+                                         long double d_scale = 0, int integration_method = sys_t::leapfrog_kdk,
+                                         long double min_cor = 0.5l, long double max_cor = 1.0l,
+                                         long double ev_dt = 0.25l,
+                                         uint64_t probing_iters = 1'000, long double dist_tol = 0,
                                          uint64_t iters = 1'000, long double dt = 1,
                                          const char *units_format = "M1:1,D1:1,T1:1") {
-            if (sd <= 0)
-                throw std::invalid_argument{"Error: standard deviation must be positive.\n"};
-            const uint64_t n_ = _n;
-            RAND_COM_CHECKS(min_r_coeff)
-            std::normal_distribution<long double> _r{0, sd};
-            RAND_COM_BODY(vec _com{};, _com += _bpos;, _com /= _bods.size();, b_mass, b_rad, _bpos, vec{})
-            long double dist_exp;
+            if (bounding_rad <= 0)
+                throw negative_radius_error{"Error: bounding radius must be larger than zero.\n"};
+            if (bounding_rad < b_rad)
+                throw std::invalid_argument{"Error: the bounding radius must exceed the radius of a body.\n"};
+            R small_vol;
+            if (SPHERE_VOLUME(bounding_rad) < (small_vol = SPHERE_VOLUME(b_rad))*_n*5/HCP_PACKING_FRACTION)
+                throw std::invalid_argument{"Error: insufficient bounding sphere volume for placement of bodies.\n"};
+            if (max_cor > 1 || max_cor <= min_cor)
+                throw std::invalid_argument{"Error: maximum COR must be greater than minimum COR.\n"};
+            RAND_COM_CHECKS(min_cor)
+            std::uniform_real_distribution<long double> _r{0, bounding_rad};
+            RAND_COM_BODY(vec _com{};, _com += _bpos;, _com /= n_;, b_mass, b_rad, _bpos, vec{})
+            long double max_dist = cbrtl(((small_vol*n_)/SCP_PACKING_FRACTION)*(3/(4*_PI_)));
+            if (d_scale <= 0) d_scale = max_dist;
             long double scale_factor = powl(d_scale, n_exp);
-            long double max_dist_exp = powl(cbrtl(((SPHERE_VOLUME(b_rad)*n_)/SCP_PACKING_FRACTION)*(3/(4*_PI_))),n_exp);
-            std::cout << "Max dist: " << cbrtl(((SPHERE_VOLUME(b_rad)*n_)/SCP_PACKING_FRACTION)*(3/(4*_PI_))) << "\n";
-            std::cout << "small sphere volume: " << SPHERE_VOLUME(b_rad) << '\n';
-            std::cout << "scp packing fraction: " << SCP_PACKING_FRACTION << '\n';
-            std::cout << "next: " << ((SPHERE_VOLUME(b_rad)*n_)/SCP_PACKING_FRACTION) << '\n';
-            std::cout << "next2: " << ((SPHERE_VOLUME(b_rad)*n_)/SCP_PACKING_FRACTION)*(3/(4*_PI_)) << '\n';
-            long double min_max_cor = 1.0l - (1.0l - min_r_coeff)*(max_dist_exp/(max_dist_exp + scale_factor));
+            max_dist += dist_tol*max_dist;
+            long double max_dist_exp = powl(max_dist, n_exp);
+            long double min_max_cor = max_cor - (max_cor - min_cor)*(max_dist_exp/(max_dist_exp + scale_factor));
 #ifdef GREGSYS_MERGERS
             M tot_mass;
 #endif
+            long double dist_exp;
             for (bod_t &_b : _bods) {
                 dist_exp = powl((_b.curr_pos - _com).magnitude(), n_exp);
-                _b.rest_c = 1.0l - (1.0l - min_r_coeff)*(dist_exp/(dist_exp + scale_factor));
+                _b.rest_c = max_cor - (max_cor - min_cor)*(dist_exp/(dist_exp + scale_factor));
 #ifdef GREGSYS_MERGERS
                 tot_mass += _b.mass_;
 #endif
             }
             sys_t retsys{std::move(_bods), ev_dt, iters, units_format, true};
             uint64_t _count = 0; // haven't made it static inside lambda to avoid overhead of setting to zero after ev.
+            if constexpr (prog)
+                std::cout << '\n';
             retsys.evolve(integration_method,
             [&retsys, &probing_iters, &min_max_cor, &_count](){
-                for (const bod_t &_b : retsys.bods) {
-                    if (_b.rest_c < min_max_cor) { // means at least 1 body is still too far out from COM
-                        _count = 0;
-                        // std::cout << "Never!!!" << std::endl;
-                        return true; // so continue with iterations
+                if constexpr (prog) {
+                    long double min_cor = 1.0l;
+                    for (const bod_t &_b: retsys.bods) {
+                        if (_b.rest_c < min_cor) {
+                            min_cor = _b.rest_c;
+                        }
                     }
-                    // std::cout << _b.rest_c << ", " << min_max_cor << std::endl;
+                    std::cout <<
+                              #ifndef _WIN32
+                              "\033[F" // move cursor up by one line
+                              #endif
+                    BOLD_TXT_START BLUE_TXT_START "COR: " RESET_TXT_FLAGS
+                    BOLD_TXT_START GREEN_TXT_START << min_cor << RESET_TXT_FLAGS BLACK_TXT_START "\t->\t"
+                    RESET_TXT_FLAGS BOLD_TXT_START MAGENTA_TXT_START << min_max_cor << RESET_TXT_FLAGS "\n";
+                    if (min_cor < min_max_cor) {
+                        _count = 0;
+                        return true;
+                    }
                 }
+                else
+                    for (const bod_t &_b : retsys.bods) {
+                        if (_b.rest_c < min_max_cor) { // means at least 1 body is still too far out from COM
+                            _count = 0;
+                            return true; // so continue with iterations
+                        }
+                    }
                 return _count++ < probing_iters;
             }, nullptr,
 #ifndef GREGSYS_MERGERS
-            [&min_r_coeff, &scale_factor, &_com](auto &bodies){
+            [&min_cor, &max_cor, &scale_factor, &_com, &n_, &n_exp](auto &bodies){
 #else
-            [&min_r_coeff, &scale_factor, &tot_mass, *_com](auto &bodies){
+            [&min_cor, &max_cor, &scale_factor, &tot_mass, &_com, &n_, &n_exp](auto &bodies){
 #endif
-                // vec_t com; // com is recalculated at each iteration to account for any drift caused by f.p. errors
+                // com is recalculated at each iteration to account for any drift caused by f.p. errors
                 for (const bod_t &_b : bodies)
 #ifndef GREGSYS_MERGERS
                     _com += _b.curr_pos;
-                _com /= bodies.size();
+                _com /= n_;
 #else
                     _com += _b.mass_*_b.curr_pos;
                 _com /= tot_mass;
@@ -1910,12 +1947,103 @@ namespace gtd {
                 long double dist_exp;
                 for (bod_t &_b : bodies) {
                     dist_exp = powl((_b.curr_pos - _com).magnitude(), n_exp);
-                    _b.rest_c = 1.0l - (1.0l - min_r_coeff)*(dist_exp/(dist_exp + scale_factor));
+                    _b.rest_c = max_cor - (max_cor - min_cor)*(dist_exp/(dist_exp + scale_factor));
                 }
             });
-            // _count = 0;
-            // return {std::move(retsys), true};
-            RAND_COM_END
+            min_max_cor = 1;
+            vec furthest;
+            RAND_COM_END(if (_b.rest_c < min_max_cor) {min_max_cor = _b.rest_c; furthest = _b.curr_pos;},
+                         return {std::move(retsys), (furthest - _com).magnitude()};)
+        }
+        static inline sys_t random_comet(const vec_t &pos, const vec_t &vel, long double sd, uint64_t _n,
+                                         const M &b_mass, const R &b_rad, long double r_coeff, long double n_exp,
+                                         long double d_scale, int integration_method = sys_t::leapfrog_kdk,
+                                         long double min_cor = 0.5l, long double max_cor = 1.0l,
+                                         long double ev_dt = 0.25l,
+                                         uint64_t probing_iters = 1'000, long double dist_tol = 0,
+                                         uint64_t iters = 1'000, long double dt = 1,
+                                         const char *units_format = "M1:1,D1:1,T1:1") {
+            if (sd <= 0)
+                throw std::invalid_argument{"Error: standard deviation must be positive.\n"};
+            RAND_COM_CHECKS(min_cor)
+            std::normal_distribution<long double> _r{0, sd};
+            RAND_COM_BODY(vec _com{};, _com += _bpos;, _com /= n_;, b_mass, b_rad, _bpos, vec{})
+            long double max_dist = cbrtl(((SPHERE_VOLUME(b_rad)*n_)/SCP_PACKING_FRACTION)*(3/(4*_PI_)));
+            /* MUST EVENTUALLY MOVE THE DUPLICATED CODE INTO A FUNCTION!!! */
+            if (d_scale <= 0) d_scale = max_dist;
+            long double scale_factor = powl(d_scale, n_exp);
+            max_dist += dist_tol*max_dist;
+            long double max_dist_exp = powl(max_dist, n_exp);
+            long double min_max_cor = max_cor - (max_cor - min_cor)*(max_dist_exp/(max_dist_exp + scale_factor));
+#ifdef GREGSYS_MERGERS
+            M tot_mass;
+#endif
+            long double dist_exp;
+            for (bod_t &_b : _bods) {
+                dist_exp = powl((_b.curr_pos - _com).magnitude(), n_exp);
+                _b.rest_c = max_cor - (max_cor - min_cor)*(dist_exp/(dist_exp + scale_factor));
+#ifdef GREGSYS_MERGERS
+                tot_mass += _b.mass_;
+#endif
+            }
+            sys_t retsys{std::move(_bods), ev_dt, iters, units_format, true};
+            uint64_t _count = 0;
+            if constexpr (prog)
+                std::cout << '\n';
+            retsys.evolve(integration_method,
+                          [&retsys, &probing_iters, &min_max_cor, &_count](){
+                              if constexpr (prog) {
+                                  long double min_cor = 1.0l;
+                                  for (const bod_t &_b: retsys.bods) {
+                                      if (_b.rest_c < min_cor) {
+                                          min_cor = _b.rest_c;
+                                      }
+                                  }
+                                  std::cout <<
+                                            #ifndef _WIN32
+                                            "\033[F"
+                                            #endif
+                                            BOLD_TXT_START BLUE_TXT_START "COR: " RESET_TXT_FLAGS
+                                            BOLD_TXT_START GREEN_TXT_START << min_cor << RESET_TXT_FLAGS BLACK_TXT_START
+                                            "\t->\t" RESET_TXT_FLAGS BOLD_TXT_START MAGENTA_TXT_START << min_max_cor <<
+                                            RESET_TXT_FLAGS "\n";
+                                  if (min_cor < min_max_cor) {
+                                      _count = 0;
+                                      return true;
+                                  }
+                              }
+                              else
+                                  for (const bod_t &_b : retsys.bods) {
+                                      if (_b.rest_c < min_max_cor) {
+                                          _count = 0;
+                                          return true;
+                                      }
+                                  }
+                              return _count++ < probing_iters;
+                          }, nullptr,
+#ifndef GREGSYS_MERGERS
+                          [&min_cor, &max_cor, &scale_factor, &_com, &n_, &n_exp](auto &bodies){
+#else
+                              [&min_cor, &max_cor, &scale_factor, &tot_mass, &_com, &n_, &n_exp](auto &bodies){
+#endif
+                              for (const bod_t &_b : bodies)
+#ifndef GREGSYS_MERGERS
+                                  _com += _b.curr_pos;
+                              _com /= n_;
+#else
+                                _com += _b.mass_*_b.curr_pos;
+                              _com /= tot_mass;
+#endif
+                              long double dist_exp;
+                              for (bod_t &_b : bodies) {
+                                  dist_exp = powl((_b.curr_pos - _com).magnitude(), n_exp);
+                                  _b.rest_c = max_cor - (max_cor - min_cor)*(dist_exp/(dist_exp + scale_factor));
+                              }
+                          });
+            min_max_cor = 1;
+            vec furthest;
+            RAND_COM_END(if (_b.rest_c < min_max_cor) {min_max_cor = _b.rest_c; furthest = _b.curr_pos;},
+                         return {std::move(retsys), (furthest - _com).magnitude()};)
         }
 #undef RAND_COM_BODY
 #undef RAND_COM_CHECKS
@@ -2149,6 +2277,10 @@ namespace gtd {
             return ptr;
         }
     public:
+        const char *&prog_str_app() requires (prog) {
+            static const char *ptr = nullptr;
+            return ptr;
+        }
         template <typename evFuncT = std::nullptr_t,
                   typename bodFuncT = std::nullptr_t,
                   typename bodsFuncT = std::nullptr_t>
@@ -2170,7 +2302,7 @@ namespace gtd {
             if (!num_bods || !check_option(integration_method))
                 return total = std::chrono::nanoseconds::zero();
             // time_t start = time(nullptr);
-            if constexpr (std::same_as<evFuncT, std::nullptr_t> || memFreq || fileFreq)
+            if constexpr (std::same_as<evFuncT, std::nullptr_t> || memFreq || fileFreq || prog)
                 steps = 0;
             if constexpr (memFreq) {
                 if (evolved)
@@ -2247,12 +2379,12 @@ namespace gtd {
                                 this->print_progress();
                         }
                     } else {
-                        while (steps < iterations) {
+                        while (continue_ev_if()) {
                             if constexpr (collisions == pred_coll_check) {
 
                             }
                             this->calc_acc_and_e();
-                            if constexpr (memFreq || fileFreq)
+                            if constexpr (memFreq || fileFreq || prog)
                                 ++steps;
                             if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>) {
                                 FUNC_TEMPL_SELECT(this->take_euler_step, for_all_bods(this->bods);, EMPTY)
@@ -2263,7 +2395,7 @@ namespace gtd {
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
                             if constexpr (prog)
-                                this->print_progress();
+                                this->print_progress<false>();
                         }
                     }
                     if constexpr (prog)
@@ -2336,7 +2468,7 @@ namespace gtd {
                                     std::get<2>(predicted[inner]) -= ((G*ref.mass_)/(r12_cubed_mag))*r12;
                                 }
                             }
-                            if constexpr (memFreq || fileFreq)
+                            if constexpr (memFreq || fileFreq || prog)
                                 ++steps;
                             if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>) {
                                 FUNC_TEMPL_SELECT(this->take_modified_euler_step, for_all_bods(this->bods);, EMPTY,
@@ -2353,7 +2485,7 @@ namespace gtd {
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
                             if constexpr (prog)
-                                this->print_progress();
+                                this->print_progress<false>();
                         }
                     }
                     if constexpr (prog)
@@ -2424,7 +2556,7 @@ namespace gtd {
                                 }
                             }
                             // this->take_midpoint_step(predicted);
-                            if constexpr (memFreq || fileFreq)
+                            if constexpr (memFreq || fileFreq || prog)
                                 ++steps;
                             if constexpr (!std::same_as<bodsFuncT, std::nullptr_t>) {
                                 FUNC_TEMPL_SELECT(this->take_midpoint_step, for_all_bods(this->bods);, EMPTY, predicted)
@@ -2441,7 +2573,7 @@ namespace gtd {
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
                             if constexpr (prog)
-                                this->print_progress();
+                                this->print_progress<false>();
                         }
                     }
                     if constexpr (prog)
@@ -2513,7 +2645,10 @@ namespace gtd {
                                 bod.curr_pos += dt*bod.curr_vel;
                             }
                             /* update accelerations and energies based on new positions and KICK for half a step */
-                            this->leapfrog_kdk_acc_e_and_step();
+                            if constexpr (std::same_as<bodsFuncT, std::nullptr_t>)
+                                this->leapfrog_kdk_acc_e_and_step();
+                            else
+                                this->leapfrog_kdk_acc_e_and_step(for_all_bods);
                             // if constexpr (collisions == overlap_coll_check)
                             //     this->s_coll();
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
@@ -2524,18 +2659,21 @@ namespace gtd {
                         }
                     } else {
                         while (continue_ev_if()) {
-                            if constexpr (memFreq || fileFreq)
+                            if constexpr (memFreq || fileFreq || prog)
                                 ++steps;
                             for (bod_t &bod: bods) {
                                 bod.curr_vel += half_dt*bod.acc;
                                 bod.curr_pos += dt*bod.curr_vel;
                             }
-                            this->leapfrog_kdk_acc_e_and_step();
+                            if constexpr (std::same_as<bodsFuncT, std::nullptr_t>)
+                                this->leapfrog_kdk_acc_e_and_step();
+                            else
+                                this->leapfrog_kdk_acc_e_and_step(for_all_bods);
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
                             if constexpr (prog)
-                                this->print_progress();
+                                this->print_progress<false>();
                         }
                     }
                     if constexpr (prog)
@@ -2556,7 +2694,10 @@ namespace gtd {
                                 /* DRIFT for half a step */
                                 bod.curr_pos += half_dt*bod.curr_vel;
                             /* update acc., then KICK for a full step and DRIFT for half a step, then update E */
-                            this->leapfrog_dkd_acc_e_and_step();
+                            if constexpr (std::same_as<bodsFuncT, std::nullptr_t>)
+                                this->leapfrog_dkd_acc_e_and_step();
+                            else
+                                this->leapfrog_dkd_acc_e_and_step(for_all_bods);
                             // if constexpr (collisions == overlap_coll_check)
                             //     this->s_coll();
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
@@ -2567,16 +2708,19 @@ namespace gtd {
                         }
                     } else {
                         while (continue_ev_if()) {
-                            if constexpr (memFreq || fileFreq)
+                            if constexpr (memFreq || fileFreq || prog)
                                 ++steps;
                             for (bod_t &bod: bods)
                                 bod.curr_pos += half_dt*bod.curr_vel;
-                            this->leapfrog_dkd_acc_e_and_step();
+                            if constexpr (std::same_as<bodsFuncT, std::nullptr_t>)
+                                this->leapfrog_dkd_acc_e_and_step();
+                            else
+                                this->leapfrog_dkd_acc_e_and_step(for_all_bods);
                             if constexpr (!std::same_as<bodFuncT, std::nullptr_t>)
                                 for (bod_t &_b : this->bods)
                                     for_each_bod(_b);
                             if constexpr (prog)
-                                this->print_progress();
+                                this->print_progress<false>();
                         }
                     }
                     if constexpr (prog)

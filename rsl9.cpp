@@ -7,35 +7,44 @@ gtd::bod_0f jupiter{189813*BILLION*BILLION*10*10*10*10, 69'911'000, {}, {}};
 // gtd::bod_0f b3{500'000'000.0l, 10, {3000, 2222, 1141}, {}};
 // gtd::bod_0f b4{500'000'000.0l, 10, {3000, 2222, 1101}, {}};
 
-long double dt = 0.0625l;
-uint64_t iterations = 800;
+long double dt = 0.5l;
+uint64_t iterations = 200;
 size_t num_reps = 2521;
 
 long double comet_rad = 750.0l;
-long double b_rad = 100.0l;
-long double b_mass = 246399442381.096416473;
+long double b_rad = 75.0l;
+long double b_mass = 1215368547.210631847;
 long double b_sep = 0.1l;
 
 gtd::vector3D<long double> pos{-414139744.3484770l, 277323640.2236369l, -1231468367.968793l};
 gtd::vector3D<long double> vel{3491.263406628809l, -6314.208154956334l, 11582.30048080498l};
 
-uint64_t num = 25;
-long double bounding_rad = 5000.0l;
+uint64_t num = 727;
+long double bounding_rad = 2000.0l;
 long double restc_f = 1.0l;
-long double restc_i = 0.5l;
+long double min_cor = 0.5l;
+long double max_cor = 1.0l;
 uint64_t ev_iters = 40'000;
-long double ev_dt = 0.1;
+long double ev_dt = 0.0625l;
 
-long double sd = 50;
+long double sd = 500;
+long double dist_tol = -0.02l;
+
+long double n_exp = 4;
+long double d_scale = 1200;
+
+uint64_t probing_iters = 50'000;
 
 int main(int argc, char **argv) {
     std::chrono::time_point<std::chrono::high_resolution_clock> start = std::chrono::high_resolution_clock::now();
     time_t id = time(nullptr);
     gtd::String starting_time_str{gtd::get_date_and_time()};
-    gtd::system<long double, long double, long double, true, false, 3, 0, 0, false> sys =
+    auto [sys, crad] =
             gtd::system<long double, long double, long double, true, false, 3, 0, 0, false>::
-            random_comet<2, 200>(pos, sd, vel, num, b_mass, b_rad, restc_f, gtd::sys::leapfrog_kdk, restc_i,
-                         ev_dt, 10'000);
+            random_comet(pos, vel, num, bounding_rad, b_mass, b_rad, restc_f, n_exp, d_scale, gtd::sys::leapfrog_kdk,
+                         min_cor, max_cor, ev_dt, probing_iters, dist_tol);
+    std::cout << "Comet radius: " << crad << " m" <<
+    "\nBulk density: " << (b_mass*num)/SPHERE_VOLUME(crad) << " kg/m^3" << std::endl;
     sys.add_body(jupiter, false);
     sys.set_iterations(iterations);
     sys.set_timestep(dt);
@@ -138,7 +147,6 @@ int main(int argc, char **argv) {
     asc.write("ImageZ.bmp"); // guaranteed to always be last
     sys.to_nsys("Data_FileZ.nsys");
     gtd::String ending_time_str{gtd::get_date_and_time()};
-    // std::cout << sys << std::endl;
     std::chrono::time_point<std::chrono::high_resolution_clock> finish = std::chrono::high_resolution_clock::now();
 #ifdef __linux__
     std::cout << "Completed rendering and simulation at: " << gtd::get_date_and_time() << std::endl;
@@ -158,9 +166,9 @@ int main(int argc, char **argv) {
     std::system(path_mp4.append_front("gsutil mv ").append_back(" gs://nbod_bucket/").c_str());
     std::cout << "\nCopying .nsys to bucket with gsutil...\n" << std::endl;
     std::system(nsys_path.append_front("gsutil cp ").append_back(" gs://nbod_bucket/").c_str());
-    gtd::update_log("nbod_bucket", "logs.txt", 60, id, "nbodn", starting_time_str.c_str(), ending_time_str.c_str(),
+    gtd::update_log("nbod_bucket", "logs.txt", 60, id, "nbodl", starting_time_str.c_str(), ending_time_str.c_str(),
                     sys.num_bodies(), dt, iterations, num_reps + 1,
-                    sys.num_bodies() - 1, comet_rad, b_rad, b_mass, b_sep, pos, vel, true);
+                    btrk.num_bods(), crad, b_rad, b_mass, std::numeric_limits<long double>::quiet_NaN(), pos, vel,true);
 #endif
     return 0;
 }

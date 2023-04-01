@@ -96,25 +96,26 @@ namespace gtd {
         std::ostringstream oss; // to store entire text to be written to file
         oss << "Simulation ID: " << id << "\nServer: " << server << "\nDirectory: " << dir;
         delete [] dir;
-        if (!random_comet) {
+        // if (!random_comet) {
             oss << "\nStart time: " << starting_time << "\nEnd time: " << ending_time << "\nNumber of bodies: " <<
                 num_bods << "\nTime-step: " << dt << ' ' << time_units <<
-                "\nSteps per frame: " << steps_per_frame << "\nFrames: " << frames << "\nComet number of bodies: " <<
+                "\nSteps per frame: " << steps_per_frame << "\nFrames: " << frames << "\nRandom comet: " <<
+                std::boolalpha << random_comet << "\nComet number of bodies: " <<
                 c_num_bods << "\nComet radius: " << c_rad << ' ' << dist_units << "\nComet particle radius: " << c_prad <<
                 ' ' << dist_units << "\nComet particle mass: " << c_pmass << ' ' << mass_units <<
                 "\nComet particle separation: " << c_psep << ' ' << dist_units << "\nComet position: " << c_pos << ' ' <<
                 dist_units << "\nComet velocity: " << c_vel << ' ' << dist_units << '/' << time_units <<
                 "\n----------------------------------------\n";
-        } else {
-            oss << "\nStart time: " << starting_time << "\nEnd time: " << ending_time << "\nNumber of bodies: " <<
-                num_bods << "\nTime-step: " << dt << ' ' << time_units <<
-                "\nSteps per frame: " << steps_per_frame << "\nFrames: " << frames << "\nComet number of bodies: " <<
-                c_num_bods << "\nComet radius: N/A\nComet particle radius: " << c_prad <<
-                ' ' << dist_units << "\nComet particle mass: " << c_pmass << ' ' << mass_units <<
-                "\nComet particle separation: N/A\nComet position: " << c_pos << ' ' <<
-                dist_units << "\nComet velocity: " << c_vel << ' ' << dist_units << '/' << time_units <<
-                "\n----------------------------------------\n";
-        }
+        // } else {
+        //     oss << "\nStart time: " << starting_time << "\nEnd time: " << ending_time << "\nNumber of bodies: " <<
+        //         num_bods << "\nTime-step: " << dt << ' ' << time_units <<
+        //         "\nSteps per frame: " << steps_per_frame << "\nFrames: " << frames << "\nComet number of bodies: " <<
+        //         c_num_bods << "\nComet radius: N/A\nComet particle radius: " << c_prad <<
+        //         ' ' << dist_units << "\nComet particle mass: " << c_pmass << ' ' << mass_units <<
+        //         "\nComet particle separation: N/A\nComet position: " << c_pos << ' ' <<
+        //         dist_units << "\nComet velocity: " << c_vel << ' ' << dist_units << '/' << time_units <<
+        //         "\n----------------------------------------\n";
+        // }
         update_text(bucket, log_fname, oss.str().c_str(), wait_time);
     }
 }
