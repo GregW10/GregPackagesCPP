@@ -12,8 +12,8 @@ uint64_t iterations = 800;
 size_t num_reps = 2521;
 
 long double comet_rad = 750.0l;
-long double b_rad = 75.0l;
-long double b_mass = 3646105641.631895542l;
+long double b_rad = 150.0l;
+long double b_mass = 10908307824.964559555l;
 long double b_sep = 0.1l;
 
 gtd::vector3D<long double> pos{-414139744.3484770l, 277323640.2236369l, -1231468367.968793l};
@@ -24,9 +24,9 @@ int main(int argc, char **argv) {
     time_t id = time(nullptr);
     gtd::String starting_time_str{gtd::get_date_and_time()};
     /*                              comet rad  comet pos comet vel.    sep   b.m.  b.rad.  r_coeff */
-    gtd::system<long double, long double, long double, true, false, 3, 0, 0, false> sys =
-            gtd::system<long double, long double, long double, true, false, 3, 0, 0, false>::
-                    hcp_comet(comet_rad, pos, vel, b_sep, b_mass, b_rad, 1, true);
+    auto [sys, crad] = gtd::system<long double, long double, long double, true, false, 3, 0, 0, false>::
+                                    hcp_comet<false>(comet_rad, pos, vel, b_sep, b_mass, b_rad, 1, true);
+    printf("Comet effective radius: %.30Lf\n", crad);
     sys.add_body(jupiter);
     sys.set_iterations(iterations);
     sys.set_timestep(dt);
@@ -149,9 +149,9 @@ int main(int argc, char **argv) {
     std::system(path_mp4.append_front("gsutil mv ").append_back(" gs://nbod_bucket/").c_str());
     std::cout << "\nCopying .nsys to bucket with gsutil...\n" << std::endl;
     std::system(nsys_path.append_front("gsutil cp ").append_back(" gs://nbod_bucket/").c_str());
-    gtd::update_log("nbod_bucket", "logs.txt", 60, id, "nbodn", starting_time_str.c_str(), ending_time_str.c_str(),
+    gtd::update_log("nbod_bucket", "logs.txt", 60, id, "nbodl", starting_time_str.c_str(), ending_time_str.c_str(),
                     sys.num_bodies(), dt, iterations, num_reps + 1,
-                    btrk.num_bods(), comet_rad, b_rad, b_mass, b_sep, pos, vel);
+                    btrk.num_bods(), crad, b_rad, b_mass, b_sep, pos, vel);
 #endif
     return 0;
 }

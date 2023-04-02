@@ -1771,7 +1771,7 @@ namespace gtd {
                 throw negative_radius_error{"Error: bounding radius must be larger than zero.\n"};
             if (bounding_rad < b_rad)
                 throw std::invalid_argument{"Error: the bounding radius must exceed the radius of a body.\n"};
-            if (SPHERE_VOLUME(bounding_rad) < SPHERE_VOLUME(b_rad)*_n*5/HCP_PACKING_FRACTION)
+            if (SPHERE_VOLUME(bounding_rad) < SPHERE_VOLUME(b_rad)*_n*4/HCP_PACKING_FRACTION)
                 throw std::invalid_argument{"Error: insufficient bounding sphere volume for placement of bodies.\n"};
 #define RAND_COM_CHECKS(coefficient) \
             using vec = vector3D<T>; \
@@ -1858,6 +1858,7 @@ namespace gtd {
             retsys.evolve(integration_method);
             RAND_COM_END(EMPTY, return retsys;)
         }
+        template <bool simple_rad = false>
         static inline std::pair<sys_t, T>
                             random_comet(const vec_t &pos, const vec_t &vel, uint64_t _n, const T &bounding_rad,
                                          const M &b_mass, const R &b_rad, long double r_coeff, long double n_exp,
@@ -1872,7 +1873,7 @@ namespace gtd {
             if (bounding_rad < b_rad)
                 throw std::invalid_argument{"Error: the bounding radius must exceed the radius of a body.\n"};
             R small_vol;
-            if (SPHERE_VOLUME(bounding_rad) < (small_vol = SPHERE_VOLUME(b_rad))*_n*5/HCP_PACKING_FRACTION)
+            if (SPHERE_VOLUME(bounding_rad) < (small_vol = SPHERE_VOLUME(b_rad))*_n*4/HCP_PACKING_FRACTION)
                 throw std::invalid_argument{"Error: insufficient bounding sphere volume for placement of bodies.\n"};
             if (max_cor > 1 || max_cor <= min_cor)
                 throw std::invalid_argument{"Error: maximum COR must be greater than minimum COR.\n"};
@@ -1950,12 +1951,77 @@ namespace gtd {
                     _b.rest_c = max_cor - (max_cor - min_cor)*(dist_exp/(dist_exp + scale_factor));
                 }
             });
-            min_max_cor = 1;
             vec furthest;
-            RAND_COM_END(if (_b.rest_c < min_max_cor) {min_max_cor = _b.rest_c; furthest = _b.curr_pos;},
-                         return {std::move(retsys), (furthest - _com).magnitude()};)
+            min_max_cor = 1;
+            if constexpr (simple_rad) {
+                RAND_COM_END(if (_b.rest_c < min_max_cor) {min_max_cor = _b.rest_c; furthest = _b.curr_pos;},
+                             return {std::move(retsys), (furthest - _com).magnitude() + b_rad};)
+            } else {
+                for (const bod_t &_b : retsys.bods)
+                    if (_b.rest_c < min_max_cor) {min_max_cor = _b.rest_c; furthest = _b.curr_pos;}
+                long double pf = comet_pf(retsys, small_vol, furthest, _com);
+                RAND_COM_END(EMPTY, EMPTY)
+                return {std::move(retsys), cbrtl((3*n_*small_vol)/(4*_PI_*pf))};
+            }
         }
-        static inline sys_t random_comet(const vec_t &pos, const vec_t &vel, long double sd, uint64_t _n,
+    private:
+        static inline long double comet_pf(const sys_t &sys, const T &b_vol, const vec_t &furthest, const vec_t &_com) {
+            uint64_t _inner_count = 0;
+            uint64_t tot_count = 0;
+            std::multiset<T> _outer;
+            T lower = 0;
+            T upper = vec_ops::distance(_com, furthest);
+            T middle = upper/2.0l;
+            T dist;
+            for (const bod_t &_b : sys.bods) {
+                dist = vec_ops::distance(_com, _b.curr_pos);
+                if (dist <= middle) {
+                    ++_inner_count;
+                    continue;
+                }
+                _outer.insert(dist);
+            }
+            std::pair<typename std::multiset<T>::iterator, typename std::multiset<T>::iterator> it_pair;
+            while (_inner_count < _outer.size()) {
+                tot_count += _inner_count;
+                _inner_count = 0;
+                lower = middle;
+                middle = (lower + upper)/2.0l;
+                it_pair = _outer.equal_range(middle);
+                if (!_outer.contains(middle))
+                    ++it_pair.second;
+                _inner_count = std::distance(_outer.begin(), it_pair.first);
+                _outer.erase(_outer.begin(), it_pair.second);
+            }
+            tot_count += _inner_count;
+            return (b_vol*tot_count)/SPHERE_VOLUME(middle);
+        } /*
+        static inline long double comet_pf(const sys_t &sys, const T &dr, const vec_t &_com) { // comet packing fraction
+            std::vector<std::pair<T, uint64_t>> shells;
+            T _prad = 0;
+            T _rad = dr;
+            uint64_t count;
+            T dist;
+            goto start_loop;
+            while (count) {
+                shells.emplace_back(_rad, count);
+                start_loop: // to avoid placing zero into std::vector for final iteration
+                count = 0;
+                for (const bod_t &_b : sys.bods) {
+                    dist = vec_ops::distance(_com, _b.curr_pos);
+                    if (_prad <= dist && dist < _rad) {
+                        ++count;
+                    }
+                }
+                _prad = _rad;
+                _rad += dr;
+            }
+            uint64_t count2;
+        } */
+    public:
+        template <bool simple_rad = false>
+        static inline std::pair<sys_t, T>
+                            random_comet(const vec_t &pos, const vec_t &vel, long double sd, uint64_t _n,
                                          const M &b_mass, const R &b_rad, long double r_coeff, long double n_exp,
                                          long double d_scale, int integration_method = sys_t::leapfrog_kdk,
                                          long double min_cor = 0.5l, long double max_cor = 1.0l,
@@ -2040,17 +2106,28 @@ namespace gtd {
                                   _b.rest_c = max_cor - (max_cor - min_cor)*(dist_exp/(dist_exp + scale_factor));
                               }
                           });
-            min_max_cor = 1;
             vec furthest;
-            RAND_COM_END(if (_b.rest_c < min_max_cor) {min_max_cor = _b.rest_c; furthest = _b.curr_pos;},
-                         return {std::move(retsys), (furthest - _com).magnitude()};)
+            min_max_cor = 1;
+            if constexpr (simple_rad) {
+                RAND_COM_END(if (_b.rest_c < min_max_cor) {min_max_cor = _b.rest_c; furthest = _b.curr_pos;},
+                             return {std::move(retsys), (furthest - _com).magnitude() + b_rad};)
+            } else {
+                for (const bod_t &_b : retsys.bods)
+                    if (_b.rest_c < min_max_cor) {min_max_cor = _b.rest_c; furthest = _b.curr_pos;}
+                const T small_vol = SPHERE_VOLUME(b_rad);
+                long double pf = comet_pf(retsys, small_vol, furthest, _com);
+                RAND_COM_END(EMPTY, EMPTY)
+                return {std::move(retsys), cbrtl((3*n_*small_vol)/(4*_PI_*pf))};
+            }
         }
 #undef RAND_COM_BODY
 #undef RAND_COM_CHECKS
         static inline sys_t hcp_comet(const R &radius, long double bulk_density) {
 
         }
-        static inline sys_t hcp_comet(const T &rad, const vector3D<T> &pos, const vector3D<T> &vel, const R &spacing,
+        template <bool strict_rad = false>
+        static inline std::pair<sys_t, T>
+                            hcp_comet(const T &rad, const vector3D<T> &pos, const vector3D<T> &vel, const R &spacing,
                                       const M &b_mass, const R &b_rad, long double r_coeff,
                                       bool force_central_body = false, long double timestep = 1,
                                       uint64_t num_iterations = 1'000, const char *units_format = "M1:1,D1:1,T1:1") {
@@ -2217,19 +2294,31 @@ namespace gtd {
                     _end = _beg + lbods; // past the last vector3D in row
                     _h1 = _beg + half_lbods;
                     _h2 = _h1--;
-                    while (_h1 >= _beg && vec_ops::distance(*_h1, centre) <= rad) {
-                        // std::cout << "pos: " << *_h1-- - centre + pos << std::endl;
-                        bodies.emplace_back(b_mass, b_rad, *_h1-- - centre + pos, vel, r_coeff);
+                    if constexpr (strict_rad) {
+                        while (_h1 >= _beg && (vec_ops::distance(*_h1, centre) + b_rad) <= rad)
+                            bodies.emplace_back(b_mass, b_rad, *_h1-- - centre + pos, vel, r_coeff);
+                        while (_h2 < _end && (vec_ops::distance(*_h2, centre) + b_rad) <= rad)
+                            bodies.emplace_back(b_mass, b_rad, *_h2++ - centre + pos, vel, r_coeff);
                     }
-                    while (_h2 < _end && vec_ops::distance(*_h2, centre) <= rad) {
-                        // std::cout << "pos: " << *_h2++ - centre + pos << std::endl;
-                        bodies.emplace_back(b_mass, b_rad, *_h2++ - centre + pos, vel, r_coeff);
+                    else {
+                        while (_h1 >= _beg && vec_ops::distance(*_h1, centre) <= rad) {
+                            // std::cout << "pos: " << *_h1-- - centre + pos << std::endl;
+                            bodies.emplace_back(b_mass, b_rad, *_h1-- - centre + pos, vel, r_coeff);
+                        }
+                        while (_h2 < _end && vec_ops::distance(*_h2, centre) <= rad) {
+                            // std::cout << "pos: " << *_h2++ - centre + pos << std::endl;
+                            bodies.emplace_back(b_mass, b_rad, *_h2++ - centre + pos, vel, r_coeff);
+                        }
                     }
                 }
             }
+            typename std::vector<bod_t>::size_type n_bods = bodies.size(); // since will be moved from below
             /* As of C++17, copy elision GUARANTEES that a returned prvalue is constructed directly in the memory
              * location of the return value, thus avoiding unnecessary copies. */
-            return {std::move(bodies), timestep, num_iterations, units_format};
+            return {std::piecewise_construct,
+                    std::forward_as_tuple(std::move(bodies), timestep, num_iterations, units_format),
+                    std::forward_as_tuple(cbrtl((SPHERE_VOLUME(b_rad)*n_bods*9*_ROOT_2_)/(4*_PI_*_PI_))*
+                    (1 + spacing/(2*b_rad)))};
         }
         void reset() requires (memFreq != 0) {
             // for (bod_t &bod : bods)
