@@ -7,12 +7,13 @@ gtd::bod_0f jupiter{189813*BILLION*BILLION*10*10*10*10, 69'911'000, {}, {}};
 // gtd::bod_0f b3{500'000'000.0l, 10, {3000, 2222, 1141}, {}};
 // gtd::bod_0f b4{500'000'000.0l, 10, {3000, 2222, 1101}, {}};
 
-long double dt = 0.125;
-uint64_t iterations = 800;
+unsigned int factor = 8;
+long double dt = 1.0l/factor;
+uint64_t iterations = 100*factor;
 size_t num_reps = 2521;
 
 long double comet_rad = 750.0l;
-long double b_rad = 150.0l;
+long double b_rad = 75.0l;
 long double b_mass = 10908307824.964559555l;
 long double b_sep = 0.1l;
 
@@ -36,7 +37,7 @@ int main(int argc, char **argv) {
     gtd::String nsys_path;
     nsys_path.append_back(id).append_back(".nsys");
     sys.to_nsys(nsys_path.c_str());
-    gtd::image_dimensions dims = {500, 500};
+    gtd::image_dimensions dims = {2000, 2000};
     gtd::asc_0f asc{dims.x, dims.y};
     gtd::star_t star{1, 1, {0, 0, 2'000'000'000}, {}, 1, 1};
     //asc.add_star(star);
@@ -62,6 +63,7 @@ int main(int argc, char **argv) {
     asc.add_system(sys);
     asc.set_body_clr(sys.back().get_id(), gtd::colors::aqua); // back() is Jupiter
     std::cout << "Number of bodies: " << sys.num_bodies() << std::endl;
+    std::cout << "Comet number of bodies: " << btrk.num_bods() << std::endl;
     gtd::String path;
     std::cout << "Com vel: " << btrk.com_vel() << std::endl;
     gtd::vec3 dir = gtd::vec_ops::cross(btrk.com(), btrk.com_vel());
@@ -70,11 +72,8 @@ int main(int argc, char **argv) {
     gtd::vec3 comv;
     long double time_per_step = iterations*dt;
     std::cout << "Time: 0 seconds" << std::endl;
-    // long double dist = 15'000;
     long double distf = 6;
-    // gtd::vec3 offset = ;
     gtd::vec3 dir_hat = dir.unit_vector();
-    gtd::vec3 changing_dir;
     cam.set_direction(dir);
     gtd::star_t the_one{1, 1, gtd::vec3{1.69424*powl(10,7), -6.44198*powl(10,7), 6.63999*powl(10,7)}.unit_vector()*3'000'000'000, {}, 1, 1};
     if (argc == 2) {
@@ -149,7 +148,7 @@ int main(int argc, char **argv) {
     std::system(path_mp4.append_front("gsutil mv ").append_back(" gs://nbod_bucket/").c_str());
     std::cout << "\nCopying .nsys to bucket with gsutil...\n" << std::endl;
     std::system(nsys_path.append_front("gsutil cp ").append_back(" gs://nbod_bucket/").c_str());
-    gtd::update_log("nbod_bucket", "logs.txt", 60, id, "nbodl", starting_time_str.c_str(), ending_time_str.c_str(),
+    gtd::update_log("nbod_bucket", "logs.txt", 60, id, "nbodu", starting_time_str.c_str(), ending_time_str.c_str(),
                     sys.num_bodies(), dt, iterations, num_reps + 1,
                     btrk.num_bods(), crad, b_rad, b_mass, b_sep, pos, vel);
 #endif

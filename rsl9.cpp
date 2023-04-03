@@ -7,8 +7,9 @@ gtd::bod_0f jupiter{189813*BILLION*BILLION*10*10*10*10, 69'911'000, {}, {}};
 // gtd::bod_0f b3{500'000'000.0l, 10, {3000, 2222, 1141}, {}};
 // gtd::bod_0f b4{500'000'000.0l, 10, {3000, 2222, 1101}, {}};
 
-long double dt = 0.125l;
-uint64_t iterations = 800;
+unsigned int factor = 8;
+long double dt = 1.0l/factor;
+uint64_t iterations = 100*factor;
 size_t num_reps = 2521;
 
 long double comet_rad = 1000.0l;
@@ -79,6 +80,7 @@ int main(int argc, char **argv) {
     asc.add_system(sys);
     asc.set_body_clr(sys.back().get_id(), gtd::colors::aqua); // back() is Jupiter
     std::cout << "Number of bodies: " << sys.num_bodies() << std::endl;
+    std::cout << "Comet number of bodies: " << btrk.num_bods() << std::endl;
     gtd::String path;
     std::cout << "Com vel: " << btrk.com_vel() << std::endl;
     gtd::vec3 dir = gtd::vec_ops::cross(btrk.com(), btrk.com_vel());
