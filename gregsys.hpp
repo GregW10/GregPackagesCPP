@@ -1859,7 +1859,7 @@ namespace gtd {
             RAND_COM_END(EMPTY, return retsys;)
         }
         template <bool simple_rad = false>
-        static inline std::pair<sys_t, T>
+        static inline std::tuple<sys_t, long double, T> // returns comet as system, packing fraction, effective radius
                             random_comet(const vec_t &pos, const vec_t &vel, uint64_t _n, const T &bounding_rad,
                                          const M &b_mass, const R &b_rad, long double r_coeff, long double n_exp,
                                          long double d_scale = 0, int integration_method = sys_t::leapfrog_kdk,
@@ -1953,15 +1953,17 @@ namespace gtd {
             });
             vec furthest;
             min_max_cor = 1;
+            long double pf;
             if constexpr (simple_rad) {
+                T s_rad = (furthest - _com).magnitude() + b_rad;
                 RAND_COM_END(if (_b.rest_c < min_max_cor) {min_max_cor = _b.rest_c; furthest = _b.curr_pos;},
-                             return {std::move(retsys), (furthest - _com).magnitude() + b_rad};)
+                             return {std::move(retsys), (small_vol*n_)/SPHERE_VOLUME(s_rad), s_rad};)
             } else {
                 for (const bod_t &_b : retsys.bods)
                     if (_b.rest_c < min_max_cor) {min_max_cor = _b.rest_c; furthest = _b.curr_pos;}
-                long double pf = comet_pf(retsys, small_vol, furthest, _com);
+                pf = comet_pf(retsys, small_vol, furthest, _com);
                 RAND_COM_END(EMPTY, EMPTY)
-                return {std::move(retsys), cbrtl((3*n_*small_vol)/(4*_PI_*pf))};
+                return {std::move(retsys), pf, cbrtl((3*n_*small_vol)/(4*_PI_*pf))};
             }
         }
     private:
@@ -2020,7 +2022,7 @@ namespace gtd {
         } */
     public:
         template <bool simple_rad = false>
-        static inline std::pair<sys_t, T>
+        static inline std::tuple<sys_t, long double, T>
                             random_comet(const vec_t &pos, const vec_t &vel, long double sd, uint64_t _n,
                                          const M &b_mass, const R &b_rad, long double r_coeff, long double n_exp,
                                          long double d_scale, int integration_method = sys_t::leapfrog_kdk,
@@ -2034,7 +2036,8 @@ namespace gtd {
             RAND_COM_CHECKS(min_cor)
             std::normal_distribution<long double> _r{0, sd};
             RAND_COM_BODY(vec _com{};, _com += _bpos;, _com /= n_;, b_mass, b_rad, _bpos, vec{})
-            long double max_dist = cbrtl(((SPHERE_VOLUME(b_rad)*n_)/SCP_PACKING_FRACTION)*(3/(4*_PI_)));
+            R small_vol = SPHERE_VOLUME(b_rad); // is only a redundant variable if simple_rad == true
+            long double max_dist = cbrtl(((small_vol*n_)/SCP_PACKING_FRACTION)*(3/(4*_PI_)));
             /* MUST EVENTUALLY MOVE THE DUPLICATED CODE INTO A FUNCTION!!! */
             if (d_scale <= 0) d_scale = max_dist;
             long double scale_factor = powl(d_scale, n_exp);
@@ -2108,16 +2111,17 @@ namespace gtd {
                           });
             vec furthest;
             min_max_cor = 1;
+            long double pf;
             if constexpr (simple_rad) {
+                T s_rad = (furthest - _com).magnitude() + b_rad;
                 RAND_COM_END(if (_b.rest_c < min_max_cor) {min_max_cor = _b.rest_c; furthest = _b.curr_pos;},
-                             return {std::move(retsys), (furthest - _com).magnitude() + b_rad};)
+                             return {std::move(retsys), (small_vol*n_)/SPHERE_VOLUME(s_rad), s_rad};)
             } else {
                 for (const bod_t &_b : retsys.bods)
                     if (_b.rest_c < min_max_cor) {min_max_cor = _b.rest_c; furthest = _b.curr_pos;}
-                const T small_vol = SPHERE_VOLUME(b_rad);
-                long double pf = comet_pf(retsys, small_vol, furthest, _com);
+                pf = comet_pf(retsys, small_vol, furthest, _com);
                 RAND_COM_END(EMPTY, EMPTY)
-                return {std::move(retsys), cbrtl((3*n_*small_vol)/(4*_PI_*pf))};
+                return {std::move(retsys), pf, cbrtl((3*n_*small_vol)/(4*_PI_*pf))};
             }
         }
 #undef RAND_COM_BODY
@@ -2366,10 +2370,6 @@ namespace gtd {
             return ptr;
         }
     public:
-        const char *&prog_str_app() requires (prog) {
-            static const char *ptr = nullptr;
-            return ptr;
-        }
         template <typename evFuncT = std::nullptr_t,
                   typename bodFuncT = std::nullptr_t,
                   typename bodsFuncT = std::nullptr_t>
@@ -3339,7 +3339,17 @@ namespace gtd {
             for (const bod_t *const &_b : _bods)
                 sum += (_b->curr_pos - point).magnitude();
             return sum/_bods.size();
-        };
+        }
+        const bod_t *const *front() const noexcept {
+            if (_bods.empty())
+                return nullptr;
+            return _bods.data();
+        }
+        const bod_t *const *back() const noexcept {
+            if (_bods.empty())
+                return nullptr;
+            return _bods.data() + _bods.size() - 1;
+        }
     };
     // std::set<unsigned long long> body_counter::ids;
     // unsigned long long body_counter::count = 0;

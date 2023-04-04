@@ -78,12 +78,11 @@ namespace gtd {
     void update_log(const char *bucket, const char *log_fname, unsigned int wait_time, time_t id, const char *server,
                     const char *starting_time, const char *ending_time,
                     uint64_t num_bods, long double dt, uint64_t steps_per_frame, uint64_t frames, uint64_t c_num_bods,
-                    long double c_rad, long double c_prad, long double c_pmass, long double c_psep,
+                    long double pf, long double c_rad, long double c_prad, long double c_pmass, long double c_psep,
                     const vec3& c_pos, const vec3& c_vel, bool random_comet = false, const char *mass_units = "kg",
                     const char *dist_units = "m", const char *time_units = "s") {
-        if (!bucket || !log_fname || !*bucket || !*log_fname || !wait_time) {
+        if (!bucket || !log_fname || !*bucket || !*log_fname || !wait_time)
             return;
-        }
         long int size;
         if ((size = pathconf(".", _PC_PATH_MAX)) == -1)
             size = 4095;
@@ -101,7 +100,7 @@ namespace gtd {
         oss << "\nStart time: " << starting_time << "\nEnd time: " << ending_time << "\nNumber of bodies: " <<
         num_bods << "\nTime-step: " << dt << ' ' << time_units <<
         "\nSteps per frame: " << steps_per_frame << "\nFrames: " << frames << "\nRandom comet: " <<
-        std::boolalpha << random_comet << "\nComet number of bodies: " <<
+        std::boolalpha << random_comet << "\nPacking fraction: " << pf << "\nComet number of bodies: " <<
         c_num_bods << "\nComet radius: " << c_rad << ' ' << dist_units << "\nComet particle radius: " << c_prad <<
         ' ' << dist_units << "\nComet particle mass: " << c_pmass << ' ' << mass_units <<
         "\nComet particle separation: " << c_psep << ' ' << dist_units << "\nComet position: " << c_pos << ' ' <<
@@ -118,6 +117,15 @@ namespace gtd {
         //         "\n----------------------------------------\n";
         // }
         update_text(bucket, log_fname, oss.str().c_str(), wait_time);
+    }
+    template <typename sys_t>
+    long double adjust_bd(sys_t &sys, long double b_rad, long double pf, long double new_bd) { // adjust bulk density of comet
+        if (!sys.num_bodies())
+            return std::numeric_limits<long double>::quiet_NaN();
+        long double b_mass = (SPHERE_VOLUME(b_rad)*new_bd)/pf;
+        for (auto &_b : sys)
+            _b.set_mass(b_mass);
+        return b_mass;
     }
 }
 #endif

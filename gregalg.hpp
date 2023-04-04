@@ -204,6 +204,18 @@ concept forwardIterator = requires (IT it, IT other) {
         }
         out /= count;
     }
+    template <typename T>
+    T mean_avg(const T *array, size_t _n) {
+        if (!array)
+            throw std::invalid_argument{"Error: \"array\" argument is NULL.\n"};
+        if (!_n)
+            throw std::invalid_argument{"Error: \"_n\" argument is zero.\n"};
+        T _mu{};
+        size_t _counter = _n;
+        while (_counter --> 0)
+            _mu += *array++;
+        return _mu/_n;
+    }
     /* lots of compile-time magic below */
     template <isNumWrapper ...Args>
     constexpr inline auto mean_avg(const Args& ...args) {

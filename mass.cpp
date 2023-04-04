@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
         std::cout << "Error! Conversion could not be performed.\nwhat(): " << e.what() << std::endl;
         return 1;
     }
-    std::cout << "Mass of each body: " << std::setprecision(precision) <<
+    std::cout << "\033[36mMass of each body: " << std::setprecision(precision) << "\033[1m\033[32m" <<
     (((4.0l/3)*M_PI*radius*radius*radius)*bulk_density)/num_bods << " kg" << std::endl;
     return 0;
 }

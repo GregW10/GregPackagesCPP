@@ -1,5 +1,3 @@
-// #define GREGSYS_MERGERS
-
 #include "simsup.hpp"
 
 gtd::bod_0f jupiter{189813*BILLION*BILLION*10*10*10*10, 69'911'000, {}, {}};
@@ -12,27 +10,29 @@ long double dt = 1.0l/factor;
 uint64_t iterations = 100*factor;
 size_t num_reps = 2521;
 
-long double comet_rad = 1000.0l;
+long double comet_rad = 750.0l;
 long double b_rad = 75.0l;
-long double b_mass = 1197481476.49696707306l;
+long double b_starting_mass = 4197481476.49696707306l;
 long double b_sep = 0.1l;
+
+long double bulk_density = 500; // kg / m^3
 
 gtd::vector3D<long double> pos{-414139744.3484770l, 277323640.2236369l, -1231468367.968793l};
 gtd::vector3D<long double> vel{3491.263406628809l, -6314.208154956334l, 11582.30048080498l};
 
-uint64_t num = 1749;
-long double bounding_rad = 1800.0l;
+uint64_t num = 727;
+long double bounding_rad = 1600.0l;
 long double restc_f = 1.0l;
 long double min_cor = 0.5l;
 long double max_cor = 0.95l;
-uint64_t ev_iters = 40'000;
-long double ev_dt = 0.0625l/16;
+// uint64_t ev_iters = 40'000;
+long double ev_dt = 0.0625l/8;
 
-long double sd = 500;
-long double dist_tol = -0.0l;
+// long double sd = 500;
+long double dist_tol = 0.0l;
 
 long double n_exp = 3;
-long double d_scale = 2000;
+long double d_scale = 1200;
 
 uint64_t probing_iters = 50'000;
 
@@ -40,37 +40,30 @@ int main(int argc, char **argv) {
     std::chrono::time_point<std::chrono::high_resolution_clock> start = std::chrono::high_resolution_clock::now();
     time_t id = time(nullptr);
     gtd::String starting_time_str{gtd::get_date_and_time()};
-    auto [sys, crad] =
+    auto [sys, pf, crad] =
             gtd::system<long double, long double, long double, true, false, 3, 0, 0, false>::
-            random_comet<true>(pos, vel, num, bounding_rad, b_mass, b_rad, restc_f, n_exp, d_scale,
+            random_comet<true>(pos, vel, num, bounding_rad, b_starting_mass, b_rad, restc_f, n_exp, d_scale,
                                gtd::sys::leapfrog_kdk, min_cor, max_cor, ev_dt, probing_iters, dist_tol);
-    printf("Comet effective radius: %.30Lf m\nBulk density: %.30Lf kg/m^3\n", crad, (b_mass*num)/SPHERE_VOLUME(crad));
+    long double b_mass = gtd::adjust_bd(sys, b_rad, pf, bulk_density);
+    printf("Comet effective radius: %.30Lf m\nBulk density: %.30Lf kg/m^3\nPacking fraction: %.30Lf\n",
+           crad, (b_mass*num)/SPHERE_VOLUME(crad), pf);
+    printf("Starting mass of each body: %.30Lf, final: %.30Lf\n", b_starting_mass, b_mass);
     sys.add_body(jupiter, false);
     sys.set_iterations(iterations);
     sys.set_timestep(dt);
-#ifdef GREGSYS_MERGERS
-    sys.set_min_tot_com_mom(BILLION*BILLION*BILLION*BILLION*BILLION*BILLION);
-#endif
     gtd::String nsys_path;
     nsys_path.append_back(id).append_back(".nsys");
     sys.to_nsys(nsys_path.c_str());
     gtd::image_dimensions dims = {2000, 2000};
     gtd::asc_0f asc{dims.x, dims.y};
     gtd::star_t star{1, 1, {0, 0, 2'000'000'000}, {}, 1, 1};
-    //asc.add_star(star);
     gtd::star_t star2{1, 1, {-2'000'000'000, 0, 0}, {}, 1, 1};
-    //asc.add_star(star2);
     gtd::star_t star3{1, 1, {0, -2'000'000'000, 0}, {}, 1, 1};
-    //asc.add_star(star3);
     gtd::star_t star4{1, 1, {2'000'000'000, 0}, {}, 1, 1};
-    //asc.add_star(star4);
     gtd::star_t star5{1, 1, {0, 2'000'000'000, 0}, {}, 1, 1};
-    //asc.add_star(star5);
     gtd::star_t star6{1, 1, {0, 0, -2'000'000'000}, {}, 1, 1};
-    //asc.add_star(star6);
     gtd::cam cam;
     cam.set_image_dimensions(dims);
-    // cam.set_position({3000, 1900, 1111});
     cam.set_direction({0, 1, 0});
     asc.follow_camera(&cam);
     asc.set_num_decor_stars(0);
@@ -89,11 +82,8 @@ int main(int argc, char **argv) {
     gtd::vec3 comv;
     long double time_per_step = iterations*dt;
     std::cout << "Time: 0 seconds" << std::endl;
-    // long double dist = 15'000;
     long double distf = 6;
-    // gtd::vec3 offset = ;
     gtd::vec3 dir_hat = dir.unit_vector();
-    gtd::vec3 changing_dir;
     cam.set_direction(dir);
     gtd::star_t the_one{1, 1, gtd::vec3{1.69424*powl(10,7), -6.44198*powl(10,7), 6.63999*powl(10,7)}.unit_vector()*3'000'000'000, {}, 1, 1};
     if (argc == 2) {
@@ -168,8 +158,8 @@ int main(int argc, char **argv) {
     std::cout << "\nCopying .nsys to bucket with gsutil...\n" << std::endl;
     std::system(nsys_path.append_front("gsutil cp ").append_back(" gs://nbod_bucket/").c_str());
     gtd::update_log("nbod_bucket", "logs.txt", 60, id, "nbodn", starting_time_str.c_str(), ending_time_str.c_str(),
-                    sys.num_bodies(), dt, iterations, num_reps + 1,
-                    btrk.num_bods(), crad, b_rad, b_mass, std::numeric_limits<long double>::quiet_NaN(), pos, vel,true);
+                    sys.num_bodies(), dt, iterations, num_reps + 1, btrk.num_bods(), pf, crad, b_rad, b_mass,
+                    std::numeric_limits<long double>::quiet_NaN(), pos, vel, true);
 #endif
     return 0;
 }

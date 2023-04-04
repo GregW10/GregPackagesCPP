@@ -5,7 +5,7 @@
 #include "gregsys.hpp"
 #include <iomanip>
 
-template <isNumWrapper T>
+template <gtd::isNumWrapper T>
 void print_reduced_sys(const gtd::system<T, T, T, true, false, 3, 0, 0, false>& sys) {
     uint64_t counter = 1;
     for (const auto& _b : sys) {
@@ -15,14 +15,31 @@ void print_reduced_sys(const gtd::system<T, T, T, true, false, 3, 0, 0, false>& 
     std::cout.flush();
 }
 
-template <isNumWrapper T, uint64_t rF>
+template <gtd::isNumWrapper T, uint64_t rF>
 void print_info(const gtd::body_tracker<T, T, T, rF>& btrk) {
     gtd::vector3D<T> com = btrk.com();
     gtd::vector3D<T> comv = btrk.com_vel();
+    uint64_t num_bods = btrk.num_bods();
+    long double mean_sep = 0;
+    const gtd::body<T, T, T, rF> *const *outer = btrk.front();
+    const gtd::body<T, T, T, rF> *const *inner;
+    uint64_t oc = 0;
+    uint64_t ic;
+    while (oc < num_bods) {
+        inner = outer + 1;
+        ic = oc++ + 1;
+        while (ic++ < num_bods) {
+            mean_sep += gtd::vec_ops::distance((*inner)->pos(), (*outer)->pos());
+            ++inner;
+        }
+        ++outer;
+    }
+    mean_sep /= (num_bods*(num_bods - 1))/2;
     std::cout << "--------------------\nFiltered bodies info:\n--------------------\n";
-    std::cout << "Number of bodies: " << btrk.num_bods() << "\nTotal mass: " << btrk.mass() << '\n' <<
+    std::cout << "Number of bodies: " << num_bods << "\nTotal mass: " << btrk.mass() << '\n' <<
     "COM pos.: " << com << "\nCOM vel.: " << comv << '\n' <<
-    "COM pos. mag.: " << com.magnitude() << "\nCOM vel. mag.: " << comv.magnitude() << std::endl;
+    "COM pos. mag.: " << com.magnitude() << "\nCOM vel. mag.: " << comv.magnitude() << "\nAverage distance to COM: " <<
+    btrk.avg_dist_to(com) << "\nMean sep. between bodies: " << mean_sep << std::endl;
 }
 
 int main(int argc, char **argv) {
@@ -31,9 +48,8 @@ int main(int argc, char **argv) {
                      "[opt:mass_threshold] [opt:precision]\n";
         return 1;
     }
-    if (argc == 4) {
+    if (argc == 4)
         std::cout << std::setprecision(std::stoi(*(argv + 3)));
-    }
     std::cout << "System bodies:\n-------------\n\n";
     try {
         gtd::system<long double, long double, long double, true, false, 3, 0, 0, false> sys{*(argv + 1)};

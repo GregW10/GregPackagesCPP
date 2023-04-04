@@ -149,8 +149,8 @@ int main(int argc, char **argv) {
     std::cout << "\nCopying .nsys to bucket with gsutil...\n" << std::endl;
     std::system(nsys_path.append_front("gsutil cp ").append_back(" gs://nbod_bucket/").c_str());
     gtd::update_log("nbod_bucket", "logs.txt", 60, id, "nbodu", starting_time_str.c_str(), ending_time_str.c_str(),
-                    sys.num_bodies(), dt, iterations, num_reps + 1,
-                    btrk.num_bods(), crad, b_rad, b_mass, b_sep, pos, vel);
+                    sys.num_bodies(), dt, iterations, num_reps + 1, btrk.num_bods(), HCP_PACKING_FRACTION, crad, b_rad,
+                    b_mass, b_sep, pos, vel);
 #endif
     return 0;
 }
