@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cinttypes>
 #include <climits>
+#include <random>
 
 #ifdef _PI_
 #undef _PI_
@@ -385,6 +386,17 @@ concept forwardIterator = requires (IT it, IT other) {
             diff = val_guess < val ? val - val_guess : val_guess - val;
         } while (diff > epsilon);
         return guess;
+    }
+    uint64_t seed() {
+        // static uint64_t never_val = ((uint64_t) -1) - time(nullptr);
+        try {
+            static std::random_device _r;
+            return _r();
+        } catch (const std::exception &e) {
+            static uint64_t _val = time(nullptr);
+            return _val++;
+        }
+        return -1; // would never be reached
     }
 }
 template <gtd::isPrintable T> // must be defined in the global namespace due to argument-dependent-lookup

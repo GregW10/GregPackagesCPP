@@ -27,7 +27,7 @@ void print_info(const gtd::body_tracker<T, T, T, rF>& btrk) {
     uint64_t ic;
     while (oc < num_bods) {
         inner = outer + 1;
-        ic = oc++ + 1;
+        ic = ++oc;
         while (ic++ < num_bods) {
             mean_sep += gtd::vec_ops::distance((*inner)->pos(), (*outer)->pos());
             ++inner;

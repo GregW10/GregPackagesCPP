@@ -1792,7 +1792,7 @@ namespace gtd {
             const uint64_t n_ = _n; \
             std::uniform_real_distribution<long double> _phi{0, 2*PI}; \
             std::uniform_real_distribution<long double> _theta{0, 1}; \
-            std::mt19937_64 _mtw{(uint64_t) time(nullptr)}; /* mersenne-twister engine */ \
+            std::mt19937_64 _mtw{seed()}; /* mersenne-twister engine */ \
             std::vector<bod_t> _bods; \
             _bods.reserve(_n); \
             vec _bpos; \
@@ -2133,7 +2133,9 @@ namespace gtd {
         static inline std::pair<sys_t, T>
                             hcp_comet(const T &rad, const vector3D<T> &pos, const vector3D<T> &vel, const R &spacing,
                                       const M &b_mass, const R &b_rad, long double r_coeff,
-                                      bool force_central_body = false, long double timestep = 1,
+                                      const vec_t &orientation = vec_t::zero, const vec_t &_omega = vec_t::zero,
+                                      bool force_central_body = true, bool adjust_to_com = true,
+                                      long double timestep = 1,
                                       uint64_t num_iterations = 1'000, const char *units_format = "M1:1,D1:1,T1:1") {
             using vec = vector3D<T>;
             if (rad <= 0)
@@ -2259,19 +2261,6 @@ namespace gtd {
                 centre.y = cube[0][whbods - 1][0].y/2.0l;// - cube[0][0][0].y;
                 centre.z = cube[whbods - 1][0][0].z/2.0l;// - cube[0][0][0].z;
             }
-            // for (typename std::vector<std::vector<std::vector<vec>>>::reverse_iterator rit = cube.rbegin(),
-            //         r_end = cube.rend(); rit != r_end; ++rit) {
-            // }
-            // std::cout << "cube size: " << cube.size() << std::endl;
-            size_t c = 0;
-            size_t r;
-            for (const auto &_plane : cube) {
-                // std::cout << "plane " << c++ << ": " << _plane.size() << std::endl;
-                r = 0;
-                for (const auto &_row : _plane) {
-                    // std::cout << "row " << r++ << ": " << _row.size() << std::endl;
-                }
-            }
             std::vector<bod_t> bodies;
             uint64_t half_lbods = lbods/2;
             vec *_beg;
@@ -2287,31 +2276,122 @@ namespace gtd {
             /* If lbods is even, lbods/2 iterations will be performed for _h1 and _h2. If lbods is odd, lbods/2.0 - 0.5
              * iterations will be performed for _h1 and lbods/2.0 + 0.5 iterations for _h2 (1 more for _h2). */
             counter = 0;
-            for (std::vector<std::vector<vec>> &_plane : cube) {
-                for (std::vector<vec> &_row : _plane) {
-                    for (const auto & v : _row) {
-                        // bodies.emplace_back(b_mass, b_rad, v, vec{});
-                        // std::cout << "pos " << counter++ << ": " << v << std::endl;
-                    }
-                    // continue;
-                    _beg = _row.data(); // first vector3D in row
-                    _end = _beg + lbods; // past the last vector3D in row
-                    _h1 = _beg + half_lbods;
-                    _h2 = _h1--;
-                    if constexpr (strict_rad) {
-                        while (_h1 >= _beg && (vec_ops::distance(*_h1, centre) + b_rad) <= rad)
-                            bodies.emplace_back(b_mass, b_rad, *_h1-- - centre + pos, vel, r_coeff);
-                        while (_h2 < _end && (vec_ops::distance(*_h2, centre) + b_rad) <= rad)
-                            bodies.emplace_back(b_mass, b_rad, *_h2++ - centre + pos, vel, r_coeff);
-                    }
-                    else {
-                        while (_h1 >= _beg && vec_ops::distance(*_h1, centre) <= rad) {
-                            // std::cout << "pos: " << *_h1-- - centre + pos << std::endl;
-                            bodies.emplace_back(b_mass, b_rad, *_h1-- - centre + pos, vel, r_coeff);
+            if (_omega) {
+                const vec omega_hat = _omega.unit_vector();
+                const auto omega_mag = _omega.magnitude();
+                vec r_r;
+                vec tan_vel; // tangential velocity of body w.r.t centre of comet
+                if (orientation && orientation != vec::up) {
+                    const vec rot_vec = vec_ops::cross(vec::up, orientation);
+                    const long double _theta = vec_ops::angle_between(vec::up, orientation);
+                    for (std::vector<std::vector<vec>> &_plane: cube) {
+                        for (std::vector<vec> &_row: _plane) {
+                            _beg = _row.data(); // first vector3D in row
+                            _end = _beg + lbods; // past the last vector3D in row
+                            _h1 = _beg + half_lbods;
+                            _h2 = _h1--;
+                            if constexpr (strict_rad) {
+                                while (_h1 >= _beg && ((r_r = *_h1-- - centre).magnitude() + b_rad) <= rad) {
+                                    tan_vel = (r_r - (r_r*omega_hat)*omega_hat).magnitude();
+                                    bodies.emplace_back(b_mass, b_rad, r_r.rodrigues_rotate(rot_vec, _theta) + pos, vel,
+                                                        r_coeff);
+                                }
+                                while (_h2 < _end && ((r_r = *_h2++ - centre).magnitude() + b_rad) <= rad) {
+                                    bodies.emplace_back(b_mass, b_rad, r_r.rodrigues_rotate(rot_vec, _theta) + pos, vel,
+                                                        r_coeff);
+                                }
+                            } else {
+                                while (_h1 >= _beg && vec_ops::distance(*_h1, centre) <= rad) {
+                                    bodies.emplace_back(b_mass, b_rad,
+                                                        (*_h1-- - centre).rodrigues_rotate(rot_vec, _theta) + pos, vel,
+                                                        r_coeff);
+                                }
+                                while (_h2 < _end && vec_ops::distance(*_h2, centre) <= rad) {
+                                    bodies.emplace_back(b_mass, b_rad,
+                                                        (*_h2++ - centre).rodrigues_rotate(rot_vec, _theta) + pos, vel,
+                                                        r_coeff);
+                                }
+                            }
                         }
-                        while (_h2 < _end && vec_ops::distance(*_h2, centre) <= rad) {
-                            // std::cout << "pos: " << *_h2++ - centre + pos << std::endl;
-                            bodies.emplace_back(b_mass, b_rad, *_h2++ - centre + pos, vel, r_coeff);
+                    }
+                } else {
+                    for (std::vector<std::vector<vec>> &_plane: cube) {
+                        for (std::vector<vec> &_row: _plane) {
+                            _beg = _row.data(); // first vector3D in row
+                            _end = _beg + lbods; // past the last vector3D in row
+                            _h1 = _beg + half_lbods;
+                            _h2 = _h1--;
+                            if constexpr (strict_rad) {
+                                while (_h1 >= _beg && (vec_ops::distance(*_h1, centre) + b_rad) <= rad)
+                                    bodies.emplace_back(b_mass, b_rad, *_h1-- - centre + pos, vel, r_coeff);
+                                while (_h2 < _end && (vec_ops::distance(*_h2, centre) + b_rad) <= rad)
+                                    bodies.emplace_back(b_mass, b_rad, *_h2++ - centre + pos, vel, r_coeff);
+                            } else {
+                                while (_h1 >= _beg && vec_ops::distance(*_h1, centre) <= rad) {
+                                    bodies.emplace_back(b_mass, b_rad, *_h1-- - centre + pos, vel, r_coeff);
+                                }
+                                while (_h2 < _end && vec_ops::distance(*_h2, centre) <= rad) {
+                                    bodies.emplace_back(b_mass, b_rad, *_h2++ - centre + pos, vel, r_coeff);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                if (orientation && orientation != vec::up) {
+                    const vec rot_vec = vec_ops::cross(vec::up, orientation);
+                    const long double _theta = vec_ops::angle_between(vec::up, orientation);
+                    for (std::vector<std::vector<vec>> &_plane: cube) {
+                        for (std::vector<vec> &_row: _plane) {
+                            _beg = _row.data(); // first vector3D in row
+                            _end = _beg + lbods; // past the last vector3D in row
+                            _h1 = _beg + half_lbods;
+                            _h2 = _h1--;
+                            if constexpr (strict_rad) {
+                                while (_h1 >= _beg && (vec_ops::distance(*_h1, centre) + b_rad) <= rad) {
+                                    bodies.emplace_back(b_mass, b_rad,
+                                                        (*_h1-- - centre).rodrigues_rotate(rot_vec, _theta) + pos, vel,
+                                                        r_coeff);
+                                }
+                                while (_h2 < _end && (vec_ops::distance(*_h2, centre) + b_rad) <= rad) {
+                                    bodies.emplace_back(b_mass, b_rad,
+                                                        (*_h2++ - centre).rodrigues_rotate(rot_vec, _theta) + pos, vel,
+                                                        r_coeff);
+                                }
+                            } else {
+                                while (_h1 >= _beg && vec_ops::distance(*_h1, centre) <= rad) {
+                                    bodies.emplace_back(b_mass, b_rad,
+                                                        (*_h1-- - centre).rodrigues_rotate(rot_vec, _theta) + pos, vel,
+                                                        r_coeff);
+                                }
+                                while (_h2 < _end && vec_ops::distance(*_h2, centre) <= rad) {
+                                    bodies.emplace_back(b_mass, b_rad,
+                                                        (*_h2++ - centre).rodrigues_rotate(rot_vec, _theta) + pos, vel,
+                                                        r_coeff);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    for (std::vector<std::vector<vec>> &_plane: cube) {
+                        for (std::vector<vec> &_row: _plane) {
+                            _beg = _row.data(); // first vector3D in row
+                            _end = _beg + lbods; // past the last vector3D in row
+                            _h1 = _beg + half_lbods;
+                            _h2 = _h1--;
+                            if constexpr (strict_rad) {
+                                while (_h1 >= _beg && (vec_ops::distance(*_h1, centre) + b_rad) <= rad)
+                                    bodies.emplace_back(b_mass, b_rad, *_h1-- - centre + pos, vel, r_coeff);
+                                while (_h2 < _end && (vec_ops::distance(*_h2, centre) + b_rad) <= rad)
+                                    bodies.emplace_back(b_mass, b_rad, *_h2++ - centre + pos, vel, r_coeff);
+                            } else {
+                                while (_h1 >= _beg && vec_ops::distance(*_h1, centre) <= rad) {
+                                    bodies.emplace_back(b_mass, b_rad, *_h1-- - centre + pos, vel, r_coeff);
+                                }
+                                while (_h2 < _end && vec_ops::distance(*_h2, centre) <= rad) {
+                                    bodies.emplace_back(b_mass, b_rad, *_h2++ - centre + pos, vel, r_coeff);
+                                }
+                            }
                         }
                     }
                 }

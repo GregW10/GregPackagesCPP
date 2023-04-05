@@ -5,8 +5,8 @@
 #define NUM_PROCS 128
 
 #ifdef __linux__
-#define FILE1 "/home/mario_garwh/iden"
-#define FILE2 "/home/mario_garwh/mass"
+#define FILE1 "/home/mario_garwh/coms/iden"
+#define FILE2 "/home/mario_garwh/coms/mass"
 #else
 #define FILE1 "/Users/gregorhartlwatters/MyCommands/iden"
 #define FILE2 "/Users/gregorhartlwatters/MyCommands/mass"
@@ -57,7 +57,7 @@ void func(FILE *fp, long double *pf_ptr, long double *rad_ptr, pid_t pid) {
 
 int main(int argc, char **argv) {
     static_assert((NUM_PROCS & (NUM_PROCS - 1)) == 0 && NUM_PROCS > 0);
-    int shmid_pf = shmget(ftok(FILE1, 407), NUM_PROCS*sizeof(long double), IPC_CREAT | 0666); // 110110110 - rw for ugo
+    int shmid_pf = shmget(ftok(FILE1, 405), NUM_PROCS*sizeof(long double), IPC_CREAT | 0666); // 110110110 - rw for ugo
     if (shmid_pf == -1) {
         std::cerr << "shmget() for packing fraction failed.\n";
         perror("Error");
@@ -69,14 +69,14 @@ int main(int argc, char **argv) {
         perror("Error");
         return 1;
     }
-    int shmid_rad = shmget(ftok(FILE2, 406), NUM_PROCS*sizeof(long double), IPC_CREAT | 0666); // 110110110 - rw for ugo
+    int shmid_rad = shmget(ftok(FILE2, 404), NUM_PROCS*sizeof(long double), IPC_CREAT | 0666);
     if (shmid_rad == -1) {
         std::cerr << "shmget() for radius failed.\n";
         perror("Error");
         return 1;
     }
     long double *rad_ptr = (long double *) shmat(shmid_rad, nullptr, 0);
-    if (pf_ptr == (void *) -1) {
+    if (rad_ptr == (void *) -1) {
         std::cerr << "shmat() for radius failed.\n";
         perror("Error");
         return 1;
@@ -97,6 +97,8 @@ int main(int argc, char **argv) {
         }
     }
     delete [] pids;
+    unsigned int diff = (unsigned int) (pf - pf_ptr);
+    sleep(diff ? 2*diff + 10 : 0);
     pid_t pid = getpid();
     FILE *fp = fopen(gtd::String{}.append_back(pid).append_back(".txt").c_str(), "w");
     func(fp, pf, rad_ptr, pid);

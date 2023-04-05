@@ -127,5 +127,18 @@ namespace gtd {
             _b.set_mass(b_mass);
         return b_mass;
     }
+    auto vibrant_col_gen(long double _min_avg, long double _min_sd) {
+        return [_min_avg, _min_sd](){
+            static std::mt19937_64 engine{(uint64_t) time(nullptr)};
+            std::uniform_int_distribution<unsigned char> dist{0, 255};
+            gtd::color retc;
+            do {
+                retc.b = dist(engine);
+                retc.g = dist(engine);
+                retc.r = dist(engine);
+            } while (sd(retc.b, retc.g, retc.r) < _min_sd || mean_avg(retc.b, retc.g, retc.r) < _min_avg);
+            return retc;
+        };
+    }
 }
 #endif

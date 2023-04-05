@@ -157,7 +157,11 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
     template <isNumWrapper T>
     class vector2D : public vector<T> {
     public:
-        static inline const vector2D<T> zero{T{0}, T{0}};
+        static inline const vector2D<T> zero{T{}, T{}};
+        static inline const vector2D<T> left{T{-1}, T{}};
+        static inline const vector2D<T> right{T{1}, T{}};
+        static inline const vector2D<T> forwards{T{}, T{1}};
+        static inline const vector2D<T> backwards{T{}, T{-1}};
     protected:
         T x{0};
         T y{0};
@@ -1951,9 +1955,15 @@ namespace gtd { // forward declarations, to be able to use the functions inside 
     template <isNumWrapper T>
     class vector3D : public vector2D<T> {
     public:
-        static inline const vector3D<T> zero{T{0}, T{0}, T{0}};
+        static inline const vector3D<T> zero{T{}, T{}, T{}};
+        static inline const vector3D<T> left{T{-1}, T{}};
+        static inline const vector3D<T> right{T{1}, T{}};
+        static inline const vector3D<T> forwards{T{}, T{1}};
+        static inline const vector3D<T> backwards{T{}, T{-1}};
+        static inline const vector3D<T> up{T{}, T{}, T{1}};
+        static inline const vector3D<T> down{T{}, T{}, T{-1}};
     protected:
-        T z{0};
+        T z{};
     public:
         constexpr vector3D() noexcept = default;
         constexpr vector3D(const vector2D<T> &other) noexcept : vector2D<T>(other) {}

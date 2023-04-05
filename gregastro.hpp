@@ -54,6 +54,10 @@ namespace gtd {
         {val.max_size()} -> std::same_as<typename T::size_type>;
         {val.empty()} -> std::convertible_to<bool>;
     };
+    template <typename T>
+    concept colorGenerator = requires (T func) {
+        {func()} -> std::same_as<color>;
+    };
     class astro_error : public std::logic_error {
     public:
         astro_error() : std::logic_error{"An error occurred due to invalid evaluation of conditions.\n"} {}
@@ -1171,10 +1175,12 @@ namespace gtd {
         bool set_star_default_min_clr_brightness(long double &&val) noexcept {
             return set_star_default_min_clr_brightness(val);
         }
-        void set_body_col_gen(color (*const &func)()) noexcept {
+        template <colorGenerator colGenT>
+        void set_body_col_gen(const colGenT &func) noexcept {
             col_gen_b = func;
         }
-        void set_star_col_gen(color (*const &func)()) noexcept {
+        template <colorGenerator colGenT>
+        void set_star_col_gen(const colGenT &func) noexcept {
             col_gen_s = func;
         }
         const std::function<color()> &get_body_col_gen() const noexcept {
@@ -1338,16 +1344,17 @@ namespace gtd {
             this->populate_tot_map();
             have_max = false;
             thread_max_fluxes.clear();
-            std::thread max_calculator{&astro_scene::set_max_flux, this};
             /* in case of any error below, single-threaded execution will be reverted to */
             if ((tot_threads = std::thread::hardware_concurrency()) == 0 || tot_threads == 1) {
                 tot_threads = 1;
                 std::latch once{1};
                 thread_latch = &once;
+                std::thread max_calculator{&astro_scene::set_max_flux, this};
                 this->render_subp(0, bmp::width, 0, bmp::height);
                 max_calculator.join();
                 return false; // method returns false in case no multithreading was able to be performed
             }
+            std::thread max_calculator{&astro_scene::set_max_flux, this};
             /* my approach to the multithreading is that it should be favoured to split the image up into rows, rather
              * than columns, to minimise the jumps around in memory (since rows are stored contiguously, whereas
              * columns are not) - if the number of threads to execute is less than the number of rows (always the case
