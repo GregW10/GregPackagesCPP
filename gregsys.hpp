@@ -1760,11 +1760,20 @@ namespace gtd {
                 }
             return false;
         }
-        static inline sys_t random_comet(const vector3D<T> &pos, const vector3D<T> &vel, uint64_t _n,
-                                         const T &bounding_rad, const M &b_mass, const R &b_rad, long double r_coeff,
+        static inline sys_t random_comet(const vec_t &pos, // I will likely remove all these newlines eventually, but,
+                                         const vec_t &vel, // for now, I like the clarity
+                                         const vec_t &_omega,
+                                         uint64_t _n,
+                                         const T &bounding_rad,
+                                         const M &b_mass,
+                                         const R &b_rad,
+                                         long double r_coeff = 1.0l,
                                          int integration_method = sys_t::leapfrog_kdk,
-                                         long double ev_r_coeff = 0.5l, uint64_t ev_iters = 10'000,
-                                         long double ev_dt = 0.25, uint64_t iters = 1'000, long double dt = 1,
+                                         long double ev_r_coeff = 0.5l,
+                                         uint64_t ev_iters = 10'000,
+                                         long double ev_dt = 0.25,
+                                         uint64_t iters = 1'000,
+                                         long double dt = 1,
                                          const char *units_format = "M1:1,D1:1,T1:1")
                                          requires (std::convertible_to<T, long double>) {
             if (bounding_rad <= 0)
@@ -1830,11 +1839,13 @@ namespace gtd {
 #define RAND_COM_END(loop_bit, ...) \
             retsys.set_timestep(dt); \
             retsys.set_iterations(iters); \
+            spin_bodies(retsys.bods, _com, _omega, true);\
+            _com = pos - _com; /* No longer COM, but offset between COM and comet position */ \
             for (bod_t &_b : retsys) {    \
                 loop_bit \
                 _b.rest_c = r_coeff; \
-                _b.curr_pos += pos - _com; \
-                _b.curr_vel = vel; \
+                _b.curr_pos += _com; \
+                _b.curr_vel += vel; \
             } \
             __VA_ARGS__
             RAND_COM_BODY(vec _com{};, _com += _bpos;, _com /= n_;, b_mass, b_rad, _bpos, vec{}, ev_r_coeff)
@@ -1842,11 +1853,20 @@ namespace gtd {
             retsys.evolve(integration_method);
             RAND_COM_END(EMPTY, return retsys;)
         }
-        static inline sys_t random_comet(const vector3D<T> &pos, const vector3D<T> &vel, long double sd, uint64_t _n,
-                                         const M &b_mass, const R &b_rad, long double r_coeff,
+        static inline sys_t random_comet(const vec_t &pos,
+                                         const vec_t &vel,
+                                         const vec_t &_omega,
+                                         long double sd, // sd cannot be after _n, else the method call would be ambig.
+                                         uint64_t _n,
+                                         const M &b_mass,
+                                         const R &b_rad,
+                                         long double r_coeff,
                                          int integration_method = sys_t::leapfrog_kdk,
-                                         long double ev_r_coeff = 0.5l, uint64_t ev_iters = 10'000,
-                                         long double ev_dt = 0.25, uint64_t iters = 1'000, long double dt = 1,
+                                         long double ev_r_coeff = 0.5l,
+                                         uint64_t ev_iters = 10'000,
+                                         long double ev_dt = 0.25,
+                                         uint64_t iters = 1'000,
+                                         long double dt = 1,
                                          const char *units_format = "M1:1,D1:1,T1:1")
         requires (std::convertible_to<T, long double>) {
             if (sd <= 0)
@@ -1860,13 +1880,24 @@ namespace gtd {
         }
         template <bool simple_rad = false>
         static inline std::tuple<sys_t, long double, T> // returns comet as system, packing fraction, effective radius
-                            random_comet(const vec_t &pos, const vec_t &vel, uint64_t _n, const T &bounding_rad,
-                                         const M &b_mass, const R &b_rad, long double r_coeff, long double n_exp,
-                                         long double d_scale = 0, int integration_method = sys_t::leapfrog_kdk,
-                                         long double min_cor = 0.5l, long double max_cor = 1.0l,
+                            random_comet(const vec_t &pos,
+                                         const vec_t &vel,
+                                         const vec_t &_omega,
+                                         uint64_t _n,
+                                         const T &bounding_rad,
+                                         const M &b_mass,
+                                         const R &b_rad,
+                                         long double r_coeff,
+                                         long double n_exp,
+                                         long double d_scale = 0,
+                                         int integration_method = sys_t::leapfrog_kdk,
+                                         long double min_cor = 0.5l,
+                                         long double max_cor = 1.0l,
                                          long double ev_dt = 0.25l,
-                                         uint64_t probing_iters = 1'000, long double dist_tol = 0,
-                                         uint64_t iters = 1'000, long double dt = 1,
+                                         uint64_t probing_iters = 1'000,
+                                         long double dist_tol = 0,
+                                         uint64_t iters = 1'000,
+                                         long double dt = 1,
                                          const char *units_format = "M1:1,D1:1,T1:1") {
             if (bounding_rad <= 0)
                 throw negative_radius_error{"Error: bounding radius must be larger than zero.\n"};
@@ -1955,8 +1986,8 @@ namespace gtd {
             min_max_cor = 1;
             long double pf;
             if constexpr (simple_rad) {
-                T s_rad = (furthest - _com).magnitude() + b_rad;
                 RAND_COM_END(if (_b.rest_c < min_max_cor) {min_max_cor = _b.rest_c; furthest = _b.curr_pos;},
+                             T s_rad = (furthest - _com).magnitude() + b_rad;
                              return {std::move(retsys), (small_vol*n_)/SPHERE_VOLUME(s_rad), s_rad};)
             } else {
                 for (const bod_t &_b : retsys.bods)
@@ -2023,13 +2054,24 @@ namespace gtd {
     public:
         template <bool simple_rad = false>
         static inline std::tuple<sys_t, long double, T>
-                            random_comet(const vec_t &pos, const vec_t &vel, long double sd, uint64_t _n,
-                                         const M &b_mass, const R &b_rad, long double r_coeff, long double n_exp,
-                                         long double d_scale, int integration_method = sys_t::leapfrog_kdk,
-                                         long double min_cor = 0.5l, long double max_cor = 1.0l,
+                            random_comet(const vec_t &pos,
+                                         const vec_t &vel,
+                                         const vec_t &_omega,
+                                         long double sd,
+                                         uint64_t _n,
+                                         const M &b_mass,
+                                         const R &b_rad,
+                                         long double r_coeff,
+                                         long double n_exp,
+                                         long double d_scale,
+                                         int integration_method = sys_t::leapfrog_kdk,
+                                         long double min_cor = 0.5l,
+                                         long double max_cor = 1.0l,
                                          long double ev_dt = 0.25l,
-                                         uint64_t probing_iters = 1'000, long double dist_tol = 0,
-                                         uint64_t iters = 1'000, long double dt = 1,
+                                         uint64_t probing_iters = 1'000,
+                                         long double dist_tol = 0,
+                                         uint64_t iters = 1'000,
+                                         long double dt = 1,
                                          const char *units_format = "M1:1,D1:1,T1:1") {
             if (sd <= 0)
                 throw std::invalid_argument{"Error: standard deviation must be positive.\n"};
@@ -2113,8 +2155,8 @@ namespace gtd {
             min_max_cor = 1;
             long double pf;
             if constexpr (simple_rad) {
-                T s_rad = (furthest - _com).magnitude() + b_rad;
                 RAND_COM_END(if (_b.rest_c < min_max_cor) {min_max_cor = _b.rest_c; furthest = _b.curr_pos;},
+                             T s_rad = (furthest - _com).magnitude() + b_rad;
                              return {std::move(retsys), (small_vol*n_)/SPHERE_VOLUME(s_rad), s_rad};)
             } else {
                 for (const bod_t &_b : retsys.bods)
@@ -2131,12 +2173,20 @@ namespace gtd {
         }
         template <bool strict_rad = false>
         static inline std::pair<sys_t, T>
-                            hcp_comet(const T &rad, const vector3D<T> &pos, const vector3D<T> &vel, const R &spacing,
-                                      const M &b_mass, const R &b_rad, long double r_coeff,
-                                      const vec_t &orientation = vec_t::zero, const vec_t &_omega = vec_t::zero,
-                                      bool force_central_body = true, bool adjust_to_com = true,
+                            hcp_comet(const T &rad,
+                                      const vector3D<T> &pos,
+                                      const vector3D<T> &vel,
+                                      const R &spacing,
+                                      const M &b_mass,
+                                      const R &b_rad,
+                                      long double r_coeff,
+                                      const vec_t &orientation = vec_t::zero,
+                                      const vec_t &_omega = vec_t::zero,
+                                      bool force_central_body = true,
+                                      bool adjust_to_com = true,
                                       long double timestep = 1,
-                                      uint64_t num_iterations = 1'000, const char *units_format = "M1:1,D1:1,T1:1") {
+                                      uint64_t num_iterations = 1'000,
+                                      const char *units_format = "M1:1,D1:1,T1:1") {
             using vec = vector3D<T>;
             if (rad <= 0)
                 throw negative_radius_error{"Error: comet radius must be larger than zero.\n"};
@@ -2276,6 +2326,65 @@ namespace gtd {
             /* If lbods is even, lbods/2 iterations will be performed for _h1 and _h2. If lbods is odd, lbods/2.0 - 0.5
              * iterations will be performed for _h1 and lbods/2.0 + 0.5 iterations for _h2 (1 more for _h2). */
             counter = 0;
+            typename std::vector<bod_t>::size_type n_bods;
+            if (!orientation && !_omega && !adjust_to_com) { // discard bodies outside sphere and displace comet
+                const vec offset = pos - centre;
+                for (std::vector<std::vector<vec>> &_plane: cube) {
+                    for (std::vector<vec> &_row: _plane) {
+                        _beg = _row.data(); // first vector3D in row
+                        _end = _beg + lbods; // past the last vector3D in row
+                        _h1 = _beg + half_lbods;
+                        _h2 = _h1--;
+                        if constexpr (strict_rad) {
+                            while (_h1 >= _beg && (vec_ops::distance(*_h1, centre) + b_rad) <= rad)
+                                bodies.emplace_back(b_mass, b_rad, *_h1-- + offset, vel, r_coeff);
+                            while (_h2 < _end && (vec_ops::distance(*_h2, centre) + b_rad) <= rad)
+                                bodies.emplace_back(b_mass, b_rad, *_h2++ + offset, vel, r_coeff);
+                        } else {
+                            while (_h1 >= _beg && vec_ops::distance(*_h1, centre) <= rad) {
+                                bodies.emplace_back(b_mass, b_rad, *_h1-- + offset, vel, r_coeff);
+                            }
+                            while (_h2 < _end && vec_ops::distance(*_h2, centre) <= rad) {
+                                bodies.emplace_back(b_mass, b_rad, *_h2++ + offset, vel, r_coeff);
+                            }
+                        }
+                    }
+                }
+                n_bods = bodies.size();
+                return {std::piecewise_construct,
+                        std::forward_as_tuple(std::move(bodies), timestep, num_iterations, units_format),
+                        std::forward_as_tuple(cbrtl((SPHERE_VOLUME(b_rad)*n_bods*9*_ROOT_2_)/(4*_PI_*_PI_))*
+                                              (1 + spacing/(2*b_rad)))};
+            }
+            for (std::vector<std::vector<vec>> &_plane: cube) { // discard bodies but do not displace comet
+                for (std::vector<vec> &_row: _plane) {
+                    _beg = _row.data();
+                    _end = _beg + lbods;
+                    _h1 = _beg + half_lbods;
+                    _h2 = _h1--;
+                    if constexpr (strict_rad) {
+                        while (_h1 >= _beg && (vec_ops::distance(*_h1, centre) + b_rad) <= rad)
+                            bodies.emplace_back(b_mass, b_rad, *_h1--, vel, r_coeff);
+                        while (_h2 < _end && (vec_ops::distance(*_h2, centre) + b_rad) <= rad)
+                            bodies.emplace_back(b_mass, b_rad, *_h2++, vel, r_coeff);
+                    } else {
+                        while (_h1 >= _beg && vec_ops::distance(*_h1, centre) <= rad)
+                            bodies.emplace_back(b_mass, b_rad, *_h1--, vel, r_coeff);
+                        while (_h2 < _end && vec_ops::distance(*_h2, centre) <= rad)
+                            bodies.emplace_back(b_mass, b_rad, *_h2++, vel, r_coeff);
+                    }
+                }
+            }
+            n_bods = bodies.size();
+            if (adjust_to_com) { // centre will now be made the centre-of-mass (COM)
+                centre.make_zero();
+                for (const bod_t &_b : bodies)
+                    centre += _b.curr_pos;
+                centre /= n_bods; // for bodies of equal mass, COM is simply the sum of positions div. by num. bodies
+            }
+            rotate_bodies(bodies, centre, vec::up, orientation); // these functions will simply return if nothing is to
+            spin_bodies(bodies, centre, _omega); // be performed
+            /*
             if (_omega) {
                 const vec omega_hat = _omega.unit_vector();
                 const auto omega_mag = _omega.magnitude();
@@ -2396,13 +2505,42 @@ namespace gtd {
                     }
                 }
             }
-            typename std::vector<bod_t>::size_type n_bods = bodies.size(); // since will be moved from below
+            */
+            centre = pos - centre; // displacement offset (re-using centre variable)
+            for (bod_t &_b : bodies)
+                _b.curr_pos = centre + _b.curr_pos;
             /* As of C++17, copy elision GUARANTEES that a returned prvalue is constructed directly in the memory
              * location of the return value, thus avoiding unnecessary copies. */
             return {std::piecewise_construct,
                     std::forward_as_tuple(std::move(bodies), timestep, num_iterations, units_format),
                     std::forward_as_tuple(cbrtl((SPHERE_VOLUME(b_rad)*n_bods*9*_ROOT_2_)/(4*_PI_*_PI_))*
                     (1 + spacing/(2*b_rad)))};
+        }
+        static void rotate_bodies(std::vector<bod_t> &bodies, const vec_t &about, const vec_t &_i_ornt,
+                                  const vec_t &_f_ornt) {
+            if (bodies.empty() || !_i_ornt || !_f_ornt || _i_ornt == _f_ornt)
+                return;
+            const vec_t rot_vec = vec_ops::cross(_i_ornt, _f_ornt);
+            const long double _theta = vec_ops::angle_between(_i_ornt, _f_ornt);
+            for (bod_t &_b : bodies)
+                _b.curr_pos = about + (_b.curr_pos - about).rodrigues_rotate(rot_vec, _theta);
+        }
+        static void spin_bodies(std::vector<bod_t> &bodies, const vec_t &about, const vec_t &_omega,bool assign=false) {
+            if (bodies.empty() || !_omega)
+                return;
+            const auto omega_mag = _omega.magnitude(); // magnitude of the angular velocity
+            const vec_t omega_hat = _omega / omega_mag; // ang.vel unit vec - more efficient than calling .unit_vector()
+            vec_t rel_pos; // position of a given body relative to about
+            if (assign) // discard previous velocity
+                for (bod_t &_b : bodies) {
+                    rel_pos = _b.curr_pos - about;
+                    _b.curr_vel = vec_ops::cross(_omega, rel_pos - (rel_pos*omega_hat)*omega_hat);
+                }
+            else // add to previous velocity
+                for (bod_t &_b : bodies) {
+                    rel_pos = _b.curr_pos - about;
+                    _b.curr_vel += vec_ops::cross(_omega, rel_pos - (rel_pos*omega_hat)*omega_hat);
+                }
         }
         void reset() requires (memFreq != 0) {
             // for (bod_t &bod : bods)
@@ -3429,6 +3567,24 @@ namespace gtd {
             if (_bods.empty())
                 return nullptr;
             return _bods.data() + _bods.size() - 1;
+        }
+        auto begin() {
+            return this->_bods.begin();
+        }
+        auto end() {
+            return this->_bods.end();
+        }
+        auto begin() const {
+            return this->_bods.cbegin();
+        }
+        auto end() const {
+            return this->_bods.cend();
+        }
+        bod_t *&operator[](typename std::vector<const bod_t*>::size_type index) { // no bounds-checking performed
+            return this->_bods[index];
+        }
+        const bod_t *const &operator[](typename std::vector<const bod_t*>::size_type index) const { // here neither
+            return this->_bods[index];
         }
     };
     // std::set<unsigned long long> body_counter::ids;

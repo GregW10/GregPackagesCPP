@@ -42,7 +42,7 @@ void func(FILE *fp, long double *pf_ptr, long double *rad_ptr, pid_t pid) {
     fflush(fp);
     auto [sys, pf, crad] =
             gtd::system<long double, long double, long double, false, false, 3, 0, 0, false>::
-            random_comet<false>(pos, vel, num, bounding_rad, b_starting_mass, b_rad, restc_f, n_exp, d_scale,
+            random_comet<false>(pos, vel, {}, num, bounding_rad, b_starting_mass, b_rad, restc_f, n_exp, d_scale,
                                gtd::sys::leapfrog_kdk, min_cor, max_cor, ev_dt, probing_iters, dist_tol);
     fprintf(fp, "Comet generation ended at: %s\n", ctime(&(_t = time(nullptr))));
     long double b_mass = gtd::adjust_bd(sys, b_rad, pf, bulk_density);
@@ -98,13 +98,13 @@ int main(int argc, char **argv) {
     }
     delete [] pids;
     unsigned int diff = (unsigned int) (pf - pf_ptr);
-    sleep(diff ? 2*diff + 10 : 0);
+    sleep(4*diff);
     pid_t pid = getpid();
     FILE *fp = fopen(gtd::String{}.append_back(pid).append_back(".txt").c_str(), "w");
     func(fp, pf, rad_ptr, pid);
+    while (wait(nullptr) > 0);
     if (pf != pf_ptr)
         return 0;
-    while (wait(nullptr) > 0);
     printf("Average packing fraction and effective radius between %d random comets: %.30Lf & %.30Lf m\n",
            NUM_PROCS, gtd::mean_avg(pf, NUM_PROCS), gtd::mean_avg(rad_ptr, NUM_PROCS));
     shmdt(pf_ptr);

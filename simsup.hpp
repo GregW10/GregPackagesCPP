@@ -140,19 +140,18 @@ namespace gtd {
             return retc;
         };
     }
-    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, bool prog, bool merge, int coll, uint64_t mF, 
-              uint64_t fF, bool binary>
+    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, uint64_t mF>
     std::map<uint64_t, color> col_dist(const body_tracker<M, R, T, mF> &btrk, const color &_h, const color &_c) {
-        if (!sys.num_bodies())
+        if (!btrk.num_bods())
 	    return {};
 	vector3D<T> _com = btrk.com();
         T _furthest_distance{};
         T _distance;
         std::vector<std::pair<uint64_t, T>> distances;
-	for (const body<M, R, T, mF>* &_btr : btrk) {
-            if ((_distance = vec_ops::distance((*_btr)->pos(), _com)) > _furthest_distance)
+	for (const body<M, R, T, mF> *const &_btr : btrk) {
+            if ((_distance = vec_ops::distance(_btr->pos(), _com)) > _furthest_distance)
                 _furthest_distance = _distance;
-            distances.emplace_back((*_btr)->get_id(), _distance);
+            distances.emplace_back(_btr->get_id(), _distance);
         }
         unsigned short b_range = _c.b - _h.b;
         unsigned short g_range = _c.g - _h.g;
