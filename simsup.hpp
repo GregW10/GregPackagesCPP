@@ -140,5 +140,34 @@ namespace gtd {
             return retc;
         };
     }
+    template <isNumWrapper M, isNumWrapper R, isNumWrapper T, bool prog, bool merge, int coll, uint64_t mF, 
+              uint64_t fF, bool binary>
+    std::map<uint64_t, color> col_dist(const body_tracker<M, R, T, mF> &btrk, const color &_h, const color &_c) {
+        if (!sys.num_bodies())
+	    return {};
+	vector3D<T> _com = btrk.com();
+        T _furthest_distance{};
+        T _distance;
+        std::vector<std::pair<uint64_t, T>> distances;
+	for (const body<M, R, T, mF>* &_btr : btrk) {
+            if ((_distance = vec_ops::distance((*_btr)->pos(), _com)) > _furthest_distance)
+                _furthest_distance = _distance;
+            distances.emplace_back((*_btr)->get_id(), _distance);
+        }
+        unsigned short b_range = _c.b - _h.b;
+        unsigned short g_range = _c.g - _h.g;
+        unsigned short r_range = _c.r - _h.r;
+        color _col;
+        T _frac;
+        std::map<uint64_t, color> _ret_map;
+        for (const auto &[_id, _dist] : distances) {
+            _frac = _dist/_furthest_distance;
+            _col.b = _h.b + b_range*(_frac);
+            _col.g = _h.g + g_range*(_frac);
+            _col.r = _h.r + r_range*(_frac);
+            _ret_map.emplace(_id, _col);
+        }
+        return _ret_map;
+    }
 }
 #endif
