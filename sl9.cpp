@@ -2,14 +2,14 @@
 
 gtd::bod_0f jupiter{189813*BILLION*BILLION*10*10*10*10, 69'911'000, {}, {}};
 
-unsigned int factor = 1;
+unsigned int factor = 8;
 long double dt = 1.0l/factor;
 uint64_t iterations = 100*factor;
 size_t num_reps = 2521;
 
 long double comet_rad = 750.0l;
-long double b_rad = 150.0l;
-long double b_mass = 10908307824.964559555l;
+long double b_rad = 75.0l;
+long double b_mass = 448361538.74348045969964005053l;
 long double b_sep = 0.1l;
 
 gtd::vector3D<long double> pos{-414139744.3484770l, 277323640.2236369l, -1231468367.968793l};
@@ -22,20 +22,22 @@ int main(int argc, char **argv) {
     std::chrono::time_point<std::chrono::high_resolution_clock> start = std::chrono::high_resolution_clock::now();
     time_t id = time(nullptr);
     gtd::String starting_time_str{gtd::get_date_and_time()};
-    gtd::vec3 orientation{1, 1, 1};//{pos};// = gtd::vec_ops::cross(pos, vel);
-    gtd::vec3 omega{0.0005, 0.0005, 0.0005};
+    gtd::vec3 orientation{0, 0, 1};//{1, 1, 1};//{pos};// = gtd::vec_ops::cross(pos, vel);
+    gtd::vec3 omega;//{0.0004, 0.0004, 0.0004};
     /*                              comet rad  comet pos comet vel.    sep   b.m.  b.rad.  r_coeff */
     auto [sys, crad] = gtd::system<long double, long double, long double, true, false, 3, 0, 0, false>::
                                     hcp_comet<false>(comet_rad, pos, vel, b_sep, b_mass, b_rad, 1,
-                                                     orientation, omega, true);
+                                                     orientation, omega, true, false);
     printf("Comet effective radius: %.30Lf\n", crad);
+    printf("Comet bulk density: %.30Lf kg/m^3\n", gtd::comet_bd(crad, sys.num_bodies()*b_mass));
+    std::cout << "Comet orientation: " << orientation << "\nComet angular velocity: " << omega << " rad/s" << std::endl;
     sys.add_body(jupiter);
     sys.set_iterations(iterations);
     sys.set_timestep(dt);
     gtd::String nsys_path;
     nsys_path.append_back(id).append_back(".nsys");
     sys.to_nsys(nsys_path.c_str());
-    gtd::image_dimensions dims = {1000, 1000};
+    gtd::image_dimensions dims = {2000, 2000};
     gtd::asc_0f asc{dims.x, dims.y};
     gtd::star_t star{1, 1, {0, 0, 2'000'000'000}, {}, 1, 1};
     gtd::star_t star2{1, 1, {-2'000'000'000, 0, 0}, {}, 1, 1};
@@ -54,15 +56,15 @@ int main(int argc, char **argv) {
     asc.add_system(sys);
     asc.set_body_clr(sys.back().get_id(), gtd::colors::aqua); // back() is Jupiter
     if (funky)
-        for (const auto &[bid, clr] : gtd::col_dist(btrk, gtd::colors::green, gtd::colors::blue)) {
-            std::cout << "Distance: " << (sys.get_body(bid).pos() - btrk.com()).magnitude() << std::endl;
-            std::cout << "Colour: " << clr << std::endl << std::endl;
+        for (const auto &[bid, clr] : gtd::col_dist(btrk, gtd::colors::red, gtd::colors::green, gtd::colors::blue)) {
+            // std::cout << "Distance: " << (sys.get_body(bid).pos() - btrk.com()).magnitude() << std::endl;
+            // std::cout << "Colour: " << clr << std::endl << std::endl;
             asc.set_body_clr(bid, clr);
         }
     std::cout << "Number of bodies: " << sys.num_bodies() << std::endl;
     std::cout << "Comet number of bodies: " << btrk.num_bods() << std::endl;
     gtd::String path;
-    std::cout << "Com vel: " << btrk.com_vel() << std::endl;
+    std::cout << "Com vel: " << btrk.com_vel() << " m/s" << std::endl;
     gtd::vec3 dir = gtd::vec_ops::cross(btrk.com(), btrk.com_vel());
     gtd::String npath;
     gtd::vec3 com;
@@ -121,9 +123,9 @@ int main(int argc, char **argv) {
         std::cout << "Image " << +i << '/' << num_reps << " written." << std::endl;
         path.clear();
         // asc.clear_bodies();
-        std::cout << "COM: " << com << "\nCOM vel.: " << comv << std::endl;
-        std::cout << "COM distance: " << (com - jupiter.pos()).magnitude() <<
-        "\nCOM vel. mag.: " << comv.magnitude() << std::endl;
+        std::cout << "COM: " << com << "\nCOM vel.: " << comv << " m/s" << std::endl;
+        std::cout << "COM distance: " << (com - jupiter.pos()).magnitude() << " m" <<
+        "\nCOM vel. mag.: " << comv.magnitude() << " m/s" << std::endl;
         std::cout << "Time: " << time_per_step*i << " seconds" << std::endl;
     }
     asc.render();
@@ -151,7 +153,7 @@ int main(int argc, char **argv) {
     std::system(nsys_path.append_front("gsutil cp ").append_back(" gs://nbod_bucket/").c_str());
     gtd::update_log("nbod_bucket", "logs.txt", 60, id, "nbodu", starting_time_str.c_str(), ending_time_str.c_str(),
                     sys.num_bodies(), dt, iterations, num_reps + 1, btrk.num_bods(), HCP_PACKING_FRACTION, crad, b_rad,
-                    b_mass, b_sep, pos, vel);
+                    b_mass, b_sep, pos, vel, false, orientation, omega);
 #endif
     return 0;
 }

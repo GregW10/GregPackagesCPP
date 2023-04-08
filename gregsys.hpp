@@ -2327,7 +2327,8 @@ namespace gtd {
              * iterations will be performed for _h1 and lbods/2.0 + 0.5 iterations for _h2 (1 more for _h2). */
             counter = 0;
             typename std::vector<bod_t>::size_type n_bods;
-            if (!orientation && !_omega && !adjust_to_com) { // discard bodies outside sphere and displace comet
+            // discard bodies outside sphere and displace comet:
+            if ((!orientation || orientation == vec::up) && !_omega && !adjust_to_com) {
                 const vec offset = pos - centre;
                 for (std::vector<std::vector<vec>> &_plane: cube) {
                     for (std::vector<vec> &_row: _plane) {
@@ -2508,7 +2509,7 @@ namespace gtd {
             */
             centre = pos - centre; // displacement offset (re-using centre variable)
             for (bod_t &_b : bodies)
-                _b.curr_pos = centre + _b.curr_pos;
+                _b.curr_pos += centre;
             /* As of C++17, copy elision GUARANTEES that a returned prvalue is constructed directly in the memory
              * location of the return value, thus avoiding unnecessary copies. */
             return {std::piecewise_construct,
@@ -3550,13 +3551,33 @@ namespace gtd {
                 _mv_sum += _ptr->mass_*_ptr->curr_vel;
             return _tmass == M{} ? vec{} : _mv_sum / _tmass;
         }
-        T avg_dist_to(const vec &point) const {
+        T mean_dist_to(const vec &point) const {
             if (_bods.empty())
                 return {};
             T sum{};
             for (const bod_t *const &_b : _bods)
                 sum += (_b->curr_pos - point).magnitude();
             return sum/_bods.size();
+        }
+        T mean_sep() const {
+            if (_bods.empty())
+                throw nbody_error{"Error: no bodies being tracked.\n"};
+            typename std::vector<bod_t*>::size_type _size = _bods.size();
+            if (_size == 1)
+                return {};
+            T _tot_dist{};
+            const bod_t *const *outer = _bods.data();
+            const bod_t *const *inner{};
+            const bod_t *const *const _end = outer + _size;
+            while (outer < _end) {
+                inner = outer + 1;
+                while (inner < _end) {
+                    _tot_dist += vec_ops::distance((*inner)->curr_pos, (*outer)->curr_pos);
+                    ++inner;
+                }
+                ++outer;
+            }
+            return _tot_dist/((_size*(_size - 1))/2);
         }
         const bod_t *const *front() const noexcept {
             if (_bods.empty())

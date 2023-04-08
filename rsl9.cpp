@@ -1,9 +1,6 @@
 #include "simsup.hpp"
 
 gtd::bod_0f jupiter{189813*BILLION*BILLION*10*10*10*10, 69'911'000, {}, {}};
-// gtd::bod_0f b2{500'000'000.0l, 10, {2970, 2222, 1111}, {}};
-// gtd::bod_0f b3{500'000'000.0l, 10, {3000, 2222, 1141}, {}};
-// gtd::bod_0f b4{500'000'000.0l, 10, {3000, 2222, 1101}, {}};
 
 unsigned int factor = 8;
 long double dt = 1.0l/factor;
@@ -13,7 +10,6 @@ size_t num_reps = 2521;
 long double comet_rad = 750.0l;
 long double b_rad = 75.0l;
 long double b_starting_mass = 4197481476.49696707306l;
-long double b_sep = 0.1l;
 
 long double bulk_density = 500; // kg / m^3
 
@@ -25,10 +21,8 @@ long double bounding_rad = 1600.0l;
 long double restc_f = 1.0l;
 long double min_cor = 0.5l;
 long double max_cor = 0.95l;
-// uint64_t ev_iters = 40'000;
 long double ev_dt = 0.0625l/8;
 
-// long double sd = 500;
 long double dist_tol = 0.0l;
 
 long double n_exp = 3;
@@ -40,9 +34,10 @@ int main(int argc, char **argv) {
     std::chrono::time_point<std::chrono::high_resolution_clock> start = std::chrono::high_resolution_clock::now();
     time_t id = time(nullptr);
     gtd::String starting_time_str{gtd::get_date_and_time()};
+    gtd::vec3 omega;
     auto [sys, pf, crad] =
             gtd::system<long double, long double, long double, true, false, 3, 0, 0, false>::
-            random_comet<true>(pos, vel, num, bounding_rad, b_starting_mass, b_rad, restc_f, n_exp, d_scale,
+            random_comet<true>(pos, vel, omega, num, bounding_rad, b_starting_mass, b_rad, restc_f, n_exp, d_scale,
                                gtd::sys::leapfrog_kdk, min_cor, max_cor, ev_dt, probing_iters, dist_tol);
     long double b_mass = gtd::adjust_bd(sys, b_rad, pf, bulk_density);
     printf("Comet effective radius: %.30Lf m\nBulk density: %.30Lf kg/m^3\nPacking fraction: %.30Lf\n",

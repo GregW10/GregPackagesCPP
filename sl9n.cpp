@@ -4,9 +4,6 @@
 #include <iomanip>
 
 gtd::bod_0f jupiter{189813*BILLION*BILLION*10*10*10*10, 69'911'000, {}, {}};
-// gtd::bod_0f b2{500'000'000.0l, 10, {2970, 2222, 1111}, {}};
-// gtd::bod_0f b3{500'000'000.0l, 10, {3000, 2222, 1141}, {}};
-// gtd::bod_0f b4{500'000'000.0l, 10, {3000, 2222, 1101}, {}};
 
 unsigned int factor = 8;
 long double dt = 1.0l/factor;
@@ -25,17 +22,18 @@ int main(int argc, char **argv) {
     std::chrono::time_point<std::chrono::high_resolution_clock> start = std::chrono::high_resolution_clock::now();
     time_t id = time(nullptr);
     gtd::String starting_time_str{gtd::get_date_and_time()};
+    gtd::vec3 orientation{0, 0, 1};//{1, 1, 1};//{pos};// = gtd::vec_ops::cross(pos, vel);
+    gtd::vec3 omega;//{0.0004, 0.0004, 0.0004};
     /*                              comet rad  comet pos comet vel.    sep   b.m.  b.rad.  r_coeff */
     auto [sys, crad] =
             gtd::system<long double, long double, long double, true, false, 3, 0, 0, false>::
-                    hcp_comet<false>(comet_rad, pos, vel, b_sep, b_mass, b_rad, 1, true);
+                    hcp_comet<false>(comet_rad, pos, vel, b_sep, b_mass, b_rad, 1, orientation, omega, true, false);
     printf("Comet effective radius: %.30Lf\n", crad);
-    sys.add_body(jupiter, false);
+    printf("Comet bulk density: %.30Lf kg/m^3\n", gtd::comet_bd(crad, sys.num_bodies()*b_mass));
+    std::cout << "Comet orientation: " << orientation << "\nComet angular velocity: " << omega << " rad/s" << std::endl;
+    sys.add_body(jupiter);
     sys.set_iterations(iterations);
     sys.set_timestep(dt);
-#ifdef GREGSYS_MERGERS
-    sys.set_min_tot_com_mom(BILLION*BILLION*BILLION*BILLION*BILLION*BILLION);
-#endif
     gtd::String nsys_path;
     nsys_path.append_back(id).append_back(".nsys");
     sys.to_nsys(nsys_path.c_str());
@@ -75,12 +73,12 @@ int main(int argc, char **argv) {
         }
         npath.append_back(i).append_back(".nsys");
         cpar_path.append_back(i).append_back(".cpar");
-        cam_pos1 = com - dir_hat1*distf*btrk.avg_dist_to(com);
+        cam_pos1 = com - dir_hat1*distf*btrk.mean_dist_to(com);
         dir_hat2 = (jupiter.pos() - com).unit_vector();
-        cam_pos2 = com - dir_hat2*distf*btrk.avg_dist_to(com);
+        cam_pos2 = com - dir_hat2*distf*btrk.mean_dist_to(com);
         dir_hat3 = gtd::vec_ops::cross(btrk.com(), btrk.com_vel()).unit_vector();
         dir_hat3.rodrigues_rotate(comv, -gtd::PI/2);
-        cam_pos3 = com - dir_hat3*distf*btrk.avg_dist_to(com);
+        cam_pos3 = com - dir_hat3*distf*btrk.mean_dist_to(com);
         cpar.open(cpar_path.c_str(), std::ios_base::out | std::ios_base::trunc);
         cpar << std::setprecision(prec) <<
         "Image dimensions = 4000 4000\n\n" << "Camera:\nPosition = " << cam_pos1.get_x() << ' ' <<

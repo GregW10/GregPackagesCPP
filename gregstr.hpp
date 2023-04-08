@@ -1,3 +1,6 @@
+// Copyright (c) 2023 Gregor Anton Randall Hartl Watters
+// This software is protected under the MIT license. Please see the LICENSE file for more information.
+
 #ifndef GREGSTRING_H
 #define GREGSTRING_H
 
@@ -1799,8 +1802,18 @@ namespace gtd {
         if (dest == nullptr || source == nullptr)
             return nullptr;
         char *ptr = dest;
-        while ((*(dest++) = *(source++)));
+        while ((*dest++ = *source++));
         return ptr;
+    }
+    char *strcat_c(char *_dest, const char *_src) {
+        if (_dest == nullptr || _src == nullptr)
+            return nullptr;
+        char *ptr = _dest;
+        if (!*ptr) goto after;
+        while (*++ptr);
+        after:
+        while ((*ptr++ = *_src++));
+        return _dest;
     }
     int strcmp_c(const char *str1, const char *str2) {
         if (str1 == nullptr || str2 == nullptr)
