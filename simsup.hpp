@@ -279,7 +279,7 @@ namespace gtd {
         gtd::comet_bd(crad, _sys.num_bodies()*_sys.front().mass()) << " kg/m^3"
 #endif
         << std::endl;
-        _sys.add_body(central_body);
+        _sys.add_body(central_body, false);
         _sys.set_iterations(iterations);
         _sys.set_timestep(dt);
         body_tracker<T, T, T, 0> _btrk{_sys, btrk_func};

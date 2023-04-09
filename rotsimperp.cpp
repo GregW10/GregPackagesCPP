@@ -77,9 +77,9 @@ int main(int argc, char **argv) {
     uint64_t counter = 0;
     std::vector<std::tuple<long double, gtd::vec3, std::string>> vals;//, long double, long double>> vals;
     vals.reserve(num_sims);
-    const gtd::vec3 perp = gtd::vec_ops::cross(comet_pos, comet_vel);
+    const gtd::vec3 par = gtd::vec_ops::cross(comet_pos, gtd::vec_ops::cross(comet_pos, comet_vel));
     while (counter < num_sims) {
-        vals.emplace_back(angle, comet_pos.copy().rodrigues_rotate(perp, angle),
+        vals.emplace_back(angle, comet_pos.unit_vector().rodrigues_rotate(par, angle),
                           std::to_string(angle).insert(0, "Angle"));//, 0, 0);
         angle = angle_step*(++counter);
     }
