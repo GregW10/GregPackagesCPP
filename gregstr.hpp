@@ -1895,6 +1895,28 @@ namespace gtd {
     inline bool isdigit_c(char ch) {
         return ch >= 48 && ch <= 57;
     }
+    template <typename T = uint64_t> requires (std::integral<T>)
+    T to_int(const char *str) {
+        if (!str || !*str)
+            throw std::invalid_argument{"Error: null or empty string encountered.\n"};
+        T retval{};
+        int mul_by;
+        if (*str == '-') {
+            mul_by = -1;
+            if (!*++str)
+                throw std::invalid_argument{"Error: a negative sign on its own is not a valid number.\n"};
+        } else
+            mul_by = 1;
+        goto start_loop;
+        while (*str) {
+            retval *= 10;
+            start_loop:
+            if (!isdigit_c(*str))
+                throw std::invalid_argument{"Error: non-numeric character encountered.\n"};
+            retval += *str++ - 48;
+        }
+        return mul_by*retval;
+    }
     bool is_numeric(const char *str) {
         if (str == nullptr || !*str)
             return false;

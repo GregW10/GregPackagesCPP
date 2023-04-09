@@ -98,14 +98,14 @@ int main(int argc, char **argv) {
         if (argc == 2) {
             dir_hat = (jupiter.pos() - com).unit_vector();
             cam.set_direction(dir_hat);
-            cam.set_position({com - dir_hat*distf*btrk.avg_dist_to(com)});
+            cam.set_position({com - dir_hat*distf*btrk.mean_dist_to(com)});
         } else if (argc == 3) {
             dir_hat = gtd::vec_ops::cross(btrk.com(), btrk.com_vel()).unit_vector();
             dir_hat.rodrigues_rotate(comv, -gtd::PI/2);
             cam.set_direction(dir_hat);
-            cam.set_position({com - dir_hat*distf*btrk.avg_dist_to(com)});
+            cam.set_position({com - dir_hat*distf*btrk.mean_dist_to(com)});
         } else {
-            cam.set_position({com - dir_hat*distf*btrk.avg_dist_to(com)});
+            cam.set_position({com - dir_hat*distf*btrk.mean_dist_to(com)});
         }
         // cam.set_direction({btrk.com() - cam.position()});
         asc.render();

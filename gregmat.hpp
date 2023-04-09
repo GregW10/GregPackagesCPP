@@ -102,18 +102,18 @@ namespace gtd {
             }
         }
     public:
-        static const size_t nopos = -1;
+        static constexpr uint64_t nopos = -1;
         matrix() { // constructs a 2x2 identity matrix
             mat.push_back(std::vector<T>{T{1}, T{0}});
             mat.push_back(std::vector<T>{T{0}, T{1}});
             next_row = 0;
             next_col = 0;
         }
-        matrix(size_t rows, size_t columns) { // constructs a zero matrix with specified size
+        matrix(uint64_t rows, uint64_t columns) { // constructs a zero matrix with specified size
             std::vector<T> row;
-            for (size_t i = 0; i < rows; ++i) {
+            for (uint64_t i = 0; i < rows; ++i) {
                 row.clear();
-                for (size_t j = 0; j < columns; ++j) {
+                for (uint64_t j = 0; j < columns; ++j) {
                     row.push_back(T{});
                 }
                 mat.push_back(row);

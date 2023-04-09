@@ -8,14 +8,14 @@ uint64_t iterations = 100*factor;
 size_t num_reps = 2521;
 
 long double comet_rad = 750.0l;
-long double b_rad = 75.0l;
+long double b_rad = 70.0l;
 long double b_mass = 448361538.74348045969964005053l;
 long double b_sep = 0.1l;
 
 gtd::vector3D<long double> pos{-414139744.3484770l, 277323640.2236369l, -1231468367.968793l};
 gtd::vector3D<long double> vel{3491.263406628809l, -6314.208154956334l, 11582.30048080498l};
 
-bool funky = true;
+bool funky = 0;
 
 int main(int argc, char **argv) {
     std::cout.precision(30);
@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
     /*                              comet rad  comet pos comet vel.    sep   b.m.  b.rad.  r_coeff */
     auto [sys, crad] = gtd::system<long double, long double, long double, true, false, 3, 0, 0, false>::
                                     hcp_comet<false>(comet_rad, pos, vel, b_sep, b_mass, b_rad, 1,
-                                                     orientation, omega, true, false);
+                                                     orientation, omega, true, true);
     printf("Comet effective radius: %.30Lf\n", crad);
     printf("Comet bulk density: %.30Lf kg/m^3\n", gtd::comet_bd(crad, sys.num_bodies()*b_mass));
     std::cout << "Comet orientation: " << orientation << "\nComet angular velocity: " << omega << " rad/s" << std::endl;
@@ -92,14 +92,14 @@ int main(int argc, char **argv) {
         if (argc == 2) {
             dir_hat = (jupiter.pos() - com).unit_vector();
             cam.set_direction(dir_hat);
-            cam.set_position({com - dir_hat*distf*btrk.avg_dist_to(com)});
+            cam.set_position({com - dir_hat*distf*btrk.mean_dist_to(com)});
         } else if (argc == 3) {
             dir_hat = gtd::vec_ops::cross(btrk.com(), btrk.com_vel()).unit_vector();
             dir_hat.rodrigues_rotate(comv, -gtd::PI/2);
             cam.set_direction(dir_hat);
-            cam.set_position({com - dir_hat*distf*btrk.avg_dist_to(com)});
+            cam.set_position({com - dir_hat*distf*btrk.mean_dist_to(com)});
         } else {
-            cam.set_position({com - dir_hat*distf*btrk.avg_dist_to(com)});
+            cam.set_position({com - dir_hat*distf*btrk.mean_dist_to(com)});
         }
         // cam.set_position({com + gtd::vec3{0, 0, 2000}});
         // cam.set_direction({0, 0, -1});

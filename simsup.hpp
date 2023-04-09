@@ -8,6 +8,7 @@
 #include "gregsys.hpp"
 #include "gregastro.hpp"
 #include <sstream>
+#include <filesystem>
 
 namespace gtd {
     gtd::String generation_id(const char *bucket, const char *fname) {
@@ -106,7 +107,7 @@ namespace gtd {
         ' ' << dist_units << "\nComet particle mass: " << c_pmass << ' ' << mass_units <<
         "\nComet particle separation: " << c_psep << ' ' << dist_units << "\nComet position: " << c_pos << ' ' <<
         dist_units << "\nComet velocity: " << c_vel << ' ' << dist_units << '/' << time_units <<
-        "\nComet orientation: " << orientation << "\nComet angular velocity: " << omega << "rad/s" <<
+        "\nComet orientation: " << orientation << "\nComet angular velocity: " << omega << " rad/s" <<
         "\n----------------------------------------\n";
         // } else {
         //     oss << "\nStart time: " << starting_time << "\nEnd time: " << ending_time << "\nNumber of bodies: " <<
@@ -128,7 +129,7 @@ namespace gtd {
     }
     template <isNumWrapper T>
     T comet_body_mass(const T& comet_radius, const T& bulk_density, uint64_t num_bods) {
-        if (comet_radius < 0 || bulk_density < 0)
+        if (comet_radius < 0 || bulk_density < 0 || !num_bods)
             throw std::invalid_argument{"Error: invalid parameter/s.\n"};
         return (SPHERE_VOLUME(comet_radius)*bulk_density)/num_bods;
     }
@@ -196,38 +197,88 @@ namespace gtd {
         }
         return _ret_map;
     }
-    template <typename T, typename btrkFuncT, typename funcT, typename ...Args> requires (std::is_fundamental<T>::value)
-    std::pair<T, T> run_sim(const char *target_dir,
-                            const char *log_path,
-                            const std::streamsize &prec,
-                            const body<T, T, T, 0>& central_body,
-                            long double dt,
-                            uint64_t iterations,
-                            uint64_t num_reps,
-                            const btrkFuncT &btrk_func,
-                            const funcT &func,
-                            Args ...args) {
+    template <typename T>
+    struct com_props {
+        T _bd;
+        T _effr;
+        T _b_mass;
+        long double _pf;
+        T _mu_sep;
+        T _mu_csep;
+    };
+#ifndef RANDOM_COMET
+    template <typename T, typename btrkFuncT, typename funcT, typename ...Args>
+#else
+    template <typename T, typename bdFuncT, typename btrkFuncT, typename funcT, typename ...Args>
+#endif
+    requires (std::is_fundamental<T>::value && sizeof(long double) >= 4)
+    void run_sim(
+#ifndef RANDOM_COMET
+            std::pair<T, T> *out,
+#else
+            com_props<T> *out,
+#endif
+                 const char *target_dir,
+                 const char *log_path,
+                 const std::streamsize &prec,
+                 const body<T, T, T, 0>& central_body,
+                 long double dt,
+                 uint64_t iterations,
+                 uint64_t num_reps,
+#ifdef RANDOM_COMET
+                 const bdFuncT &bd_func,
+#endif
+                 const btrkFuncT &btrk_func,
+                 const funcT &func,
+                 Args ...args) {
         if (!target_dir || !*target_dir)
             throw std::invalid_argument{"Error: target directory cannot be null or empty.\n"};
         // stat directory - delete contents if exists
-        if (mkdir(target_dir, S_IRWXU | S_IRWXG | S_IRWXO) == -1)
-            throw std::invalid_argument{"Error: directory could not be created.\n"};
-        std::ofstream log_file{log_path, std::ios_base::out | std::ios_base::trunc};
-        if (!log_file)
+        struct stat buff{};
+        if (stat(target_dir, &buff) == -1) {
+            if (mkdir(target_dir, S_IRWXU | S_IRWXG | S_IRWXO) == -1)
+                throw std::invalid_argument{"Error: directory could not be created.\n"};
+        } else if (S_ISDIR(buff.st_mode)) {
+            namespace fs = std::filesystem;
+            for (const fs::directory_entry &entry : fs::directory_iterator(std::string{target_dir}))
+                fs::remove_all(entry.path());
+        } else if (std::remove(target_dir) || mkdir(target_dir, S_IRWXU | S_IRWXG | S_IRWXO) == -1)
+                throw std::invalid_argument{"Error: directory could not be created.\n"};
+        size_t dir_len = strlen_c(target_dir);
+        bool add_file_sep;
+        char *log_file_path;
+        if (!(add_file_sep = *(target_dir + dir_len - 1) != '/')) {
+            log_file_path = new char[dir_len + strlen_c(log_path) + 1]{};
+            strcpy_c(log_file_path, target_dir);
+            strcat_c(log_file_path, log_path);
+        } else {
+            log_file_path = new char[dir_len + strlen_c(log_path) + 2]{};
+            strcpy_c(log_file_path, target_dir);
+            *(log_file_path + dir_len++) = '/';
+            strcat_c(log_file_path, log_path);
+        }
+        std::ofstream log_file{log_file_path, std::ios_base::out | std::ios_base::trunc};
+        delete [] log_file_path;
+        if (!log_file) {
             throw std::invalid_argument{"Error: log file could not be opened.\n"};
+        }
 #ifdef RANDOM_COMET
-        auto [_sys, pf, crad] =
+        auto [_sys, pf, crad] = func(args...);
+        out->_b_mass = bd_func(_sys, pf);
+        out->_effr = crad;
+        out->_pf = pf;
 #else
-        auto [_sys, crad] =
+        auto [_sys, crad] = func(args...);
 #endif
-        func(args...);
         log_file.precision(prec);
         log_file << "Effective radius: " << crad << " m" << "\nBulk density: " <<
-        gtd::comet_bd(crad, _sys.num_bodies()*_sys.front().mass()) << " kg/m^3" <<
 #ifdef RANDOM_COMET
-        "\nPacking fraction: " << pf <<
+        (out->_bd = gtd::comet_bd(crad, _sys.num_bodies()*out->_b_mass)) << " kg/m^3"
+        "\nPacking fraction: " << pf
+#else
+        gtd::comet_bd(crad, _sys.num_bodies()*_sys.front().mass()) << " kg/m^3"
 #endif
-        std::endl;
+        << std::endl;
         _sys.add_body(central_body);
         _sys.set_iterations(iterations);
         _sys.set_timestep(dt);
@@ -236,25 +287,14 @@ namespace gtd {
         _btrk.num_bods() << std::endl;
         long double base = log10l(num_reps);
         unsigned short num_digits = (unsigned short) ceill(base);
-        size_t dir_len = strlen_c(target_dir);
-        char *nsys_path;
-        char *_seps_path;
-        char *_cseps_path;
-        if (*(target_dir + dir_len - 1) == '/') {
-            nsys_path = new char[14 + num_digits + dir_len]{};
-            _seps_path = new char[16 + dir_len]{};
-            _cseps_path = new char[17 + dir_len]{};
-            strcpy_c(nsys_path, target_dir);
-            strcpy_c(_seps_path, target_dir);
-            strcpy_c(_cseps_path, target_dir);
-        } else {
-            std::ptrdiff_t offset = dir_len++;
-            nsys_path = new char[14 + num_digits + dir_len]{};
-            _seps_path = new char[16 + dir_len]{};
-            _cseps_path = new char[17 + dir_len]{};
-            strcpy_c(nsys_path, target_dir);
-            strcpy_c(_seps_path, target_dir);
-            strcpy_c(_cseps_path, target_dir);
+        char *nsys_path = new char[14 + num_digits + dir_len]{};
+        char *_seps_path = new char[16 + dir_len]{};
+        char *_cseps_path = new char[17 + dir_len]{};
+        strcpy_c(nsys_path, target_dir);
+        strcpy_c(_seps_path, target_dir);
+        strcpy_c(_cseps_path, target_dir);
+        if (add_file_sep) {
+            std::ptrdiff_t offset = dir_len - 1;
             *(nsys_path + offset) = '/';
             *(_seps_path + offset) = '/';
             *(_cseps_path + offset) = '/';
@@ -269,13 +309,16 @@ namespace gtd {
         strcpy_c(ptr, ".nsys");
         unsigned short num_zeros;
         uint64_t to_conv;
-        char *last_digit = nsys_path + dir_len + 7 + num_digits;
+        char *const last_digit = nsys_path + dir_len + 7 + num_digits;
         uint64_t _i = 0;
         long double time_per_step = iterations*dt;
         vector3D<T> _com;
         vector3D<T> _com_vel;
         std::vector<T> _seps;
         std::vector<T> _cseps;
+        uint64_t tot_frames = num_reps + 1;
+        _seps.reserve(tot_frames);
+        _cseps.reserve(tot_frames);
         goto start_loop;
         for (; _i <= num_reps; ++_i) {
             ptr = last_digit;
@@ -289,47 +332,62 @@ namespace gtd {
             _sys.to_nsys(nsys_path);
             _com = _btrk.com();
             _com_vel = _btrk.com_vel();
-            log_file << "Frame: " << _i << '/' << num_reps << "\nCOM: " << _com << " m" <<
-            "\nCOM velocity: " << _com_vel << " m/s\nCOM dist. to c.p.: " <<
-            vec_ops::distance(_com, central_body) << " m\n" << "\nCOM speed: " << _com_vel.magnitude() <<
+            log_file << "--------------------------------\nFrame: " << _i << '/' << num_reps << "\nCOM: " << _com <<
+            " m" << "\nCOM velocity: " << _com_vel << " m/s\nCOM dist. to c.p.: " <<
+            vec_ops::distance(_com, central_body.pos()) << " m\nCOM speed: " << _com_vel.magnitude() <<
             " m/s\nMean sep.: " << _seps.emplace_back(_btrk.mean_sep()) << " m\nMean dist. to COM: " <<
             _cseps.emplace_back(_btrk.mean_dist_to(_com)) << " m\n"
-            "Time: " << time_per_step*_i << " seconds" << std::endl;
+            "Time: " << time_per_step*_i << " seconds\n--------------------------------" << std::endl;
         }
-        unsigned short T_size = (unsigned short) sizeof(T);
-        uint64_t tot_frames = num_reps + 1;
+        delete [] nsys_path;
+        uint16_t T_size = (uint16_t) sizeof(T);
+        uint16_t ld_size = (uint16_t) sizeof(long double);
         if (FILE *fp = fopen(_seps_path, "wb"); fp != nullptr) {
             if constexpr (std::floating_point<T>)
                 fwrite("FP", sizeof(char), 2, fp);
             else {
                 if constexpr (std::signed_integral<T>)
-                    fwrite("UI", sizeof(char), 2, fp);
-                else
                     fwrite("SI", sizeof(char), 2, fp);
+                else
+                    fwrite("UI", sizeof(char), 2, fp);
             }
-            fwrite(&T_size, sizeof(unsigned short), 1, fp);
+            fwrite(&T_size, sizeof(uint16_t), 1, fp);
             fwrite(&tot_frames, sizeof(uint64_t), 1, fp);
+            fwrite(&ld_size, sizeof(uint16_t), 1, fp);
+            fputc(0, fp); fputc(0, fp); // padding bytes
+            fwrite(&time_per_step, sizeof(long double), 1, fp);
             fwrite(_seps.data(), sizeof(T), tot_frames, fp);
             fclose(fp);
         } else
             log_file << "Error writing mean separation data.\n";
+        delete [] _seps_path;
         if (FILE *fp = fopen(_cseps_path, "wb"); fp != nullptr) {
             if constexpr (std::floating_point<T>)
                 fwrite("FP", sizeof(char), 2, fp);
             else {
                 if constexpr (std::signed_integral<T>)
-                    fwrite("UI", sizeof(char), 2, fp);
-                else
                     fwrite("SI", sizeof(char), 2, fp);
+                else
+                    fwrite("UI", sizeof(char), 2, fp);
             }
-            fwrite(&T_size, sizeof(unsigned short), 1, fp);
+            fwrite(&T_size, sizeof(uint16_t), 1, fp);
             fwrite(&tot_frames, sizeof(uint64_t), 1, fp);
+            fwrite(&ld_size, sizeof(uint16_t), 1, fp);
+            fwrite("\0\0", sizeof(char), 2, fp);
+            fwrite(&time_per_step, sizeof(long double), 1, fp);
             fwrite(_cseps.data(), sizeof(T), tot_frames, fp);
             fclose(fp);
         } else
             log_file << "Error writing mean distance to COM data.\n";
+        delete [] _cseps_path;
         log_file.close();
-        return {_seps.back(), _cseps.back()}; // return final mean sep. and final mean dist. to COM of comet
+#ifndef RANDOM_COMET
+        out->first = _seps.back(); // final mean separation between bodies
+        out->second = _cseps.back(); // final mean distance between bodies and COM of comet
+#else
+        out->_mu_sep = _seps.back();
+        out->_mu_csep = _cseps.back();
+#endif
     }
 }
 #endif

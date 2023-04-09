@@ -628,9 +628,8 @@ namespace gtd {
             tot_ke.push_back(total_ke);
             tot_e.push_back(total_pe + total_ke);
         }
-        void bh_s_coll() {
-            static std::map<long double, std::tuple<bod_t*, decltype(M{}*T{}), decltype(M{}*T{}), vector3D<T>>>
-                    overlapping;
+        void bh_s_coll() { // removed static from map
+            std::map<long double, std::tuple<bod_t*, decltype(M{}*T{}), decltype(M{}*T{}), vector3D<T>>> overlapping;
             bod_t *bod_o;
             bod_t *bod_i;
             R rad_dist{};
@@ -689,9 +688,8 @@ namespace gtd {
         }
         // bool have_nan = false;
         template <bool mem, bool file>
-        void s_coll() { // "simple" (ahem, ahem) collision detection and evolution
-            static std::map<long double, std::tuple<bod_t*, decltype(M{}*T{}), decltype(M{}*T{}), vector3D<T>>>
-                    overlapping;
+        void s_coll() { // "simple" (ahem, ahem) collision detection and evolution | removed static from map
+            std::map<long double, std::tuple<bod_t*, decltype(M{}*T{}), decltype(M{}*T{}), vector3D<T>>> overlapping;
             outer = 0;
             num_bods = bods.size();
             bod_t *bod_o;
@@ -709,7 +707,7 @@ namespace gtd {
             bool first_merged;
             bod_t *merged;
             alignas(bod_t) char fake_body[sizeof(bod_t)];
-            static std::set<uint64_t> merged_ids;
+            std::set<uint64_t> merged_ids;
             merged_ids.clear();
 #else
             bod_o = bods.data();
@@ -949,7 +947,7 @@ namespace gtd {
         // path is guaranteed not to be nullptr here:
         void load_from_nsys(const char *path, bool alloc_chunks, bool check_nan_inf)
         requires (std::is_fundamental_v<M> && std::is_fundamental_v<R> && std::is_fundamental_v<T> && CHAR_BIT == 8) {
-            static auto final_handler = [this](uint64_t index, const char *str) {
+            auto final_handler = [this](uint64_t index, const char *str) { // removed static
                 this->istream->close();
                 delete this->istream;
                 char msg[128];
@@ -1067,7 +1065,7 @@ namespace gtd {
             else {
                 if (header.rest_coeff_size == sizeof(double)) {
                     rest_c_func = +[](long double *coeff, const char *ptr) {
-                        static double coeff_d;
+                        double coeff_d; // removed static
                         char *coeff_ptr = (char *) &coeff_d;
                         for (unsigned char counter = 0; counter < sizeof(double); ++counter)
                             *coeff_ptr++ = *ptr++;
@@ -1075,7 +1073,7 @@ namespace gtd {
                     };
                 } else if (header.rest_coeff_size == sizeof(float)) {
                     rest_c_func = +[](long double *coeff, const char *ptr) {
-                        static float coeff_f;
+                        float coeff_f; // removed static
                         char *coeff_ptr = (char *) &coeff_f;
                         for (unsigned char counter = 0; counter < sizeof(float); ++counter)
                             *coeff_ptr++ = *ptr++;
@@ -2600,12 +2598,12 @@ namespace gtd {
         }) && (std::same_as<bodsFuncT, std::nullptr_t> || requires (bodsFuncT f2, std::vector<bod_t> &_bodies) {
             {f2(_bodies)} -> std::same_as<void>;
         })
-        const std::chrono::nanoseconds &evolve(int integration_method = leapfrog_kdk,
+        const std::chrono::nanoseconds evolve(int integration_method = leapfrog_kdk,
                                                const evFuncT &continue_ev_if = nullptr,
                                                const bodFuncT &for_each_bod = nullptr,
                                                const bodsFuncT &for_all_bods = nullptr) {
-            static std::chrono::time_point<std::chrono::high_resolution_clock> start;
-            static std::chrono::nanoseconds total;
+            std::chrono::time_point<std::chrono::high_resolution_clock> start; // removed static
+            std::chrono::nanoseconds total; // removed static
             num_bods = bods.size();
             if (!num_bods || !check_option(integration_method))
                 return total = std::chrono::nanoseconds::zero();
@@ -3078,9 +3076,9 @@ namespace gtd {
                 throw empty_system_error("pe_diff() cannot be called on empty system objects (no bodies present).\n");
             if (!evolved)
                 throw no_evolution_error("pe_diff() can only be called after a system object has been evolved.\n");
-            static T minima[2]; // first the min. PE, then the difference between it and the starting PE
-            static T maxima[2]; // same but for max.
-            static std::pair<T*, long double> min_max[2] = {{minima, 0}, {maxima, 0}};
+            T minima[2]; // first the min. PE, then the difference between it and the starting PE | removed static
+            T maxima[2]; // same but for max. | removed static
+            std::pair<T*, long double> min_max[2] = {{minima, 0}, {maxima, 0}}; // removed static
             unsigned long long min_index{};
             unsigned long long max_index{};
             unsigned long long count{};
@@ -3112,9 +3110,9 @@ namespace gtd {
                 throw empty_system_error("pe_diff() cannot be called on empty system objects (no bodies present).\n");
             if (!evolved)
                 throw no_evolution_error("pe_diff() can only be called after a system object has been evolved.\n");
-            static T minima[2]; // first the min. PE, then the difference between it and the starting PE
-            static T maxima[2]; // same but for max.
-            static std::pair<T*, long double> min_max[2] = {{minima, 0}, {maxima, 0}};
+            T minima[2]; // first the min. PE, then the difference between it and the starting PE | removed static
+            T maxima[2]; // same but for max. | removed static
+            std::pair<T*, long double> min_max[2] = {{minima, 0}, {maxima, 0}}; // removed static
             unsigned long long min_index{};
             unsigned long long max_index{};
             unsigned long long count{};
@@ -3146,9 +3144,9 @@ namespace gtd {
                 throw empty_system_error("pe_diff() cannot be called on empty system objects (no bodies present).\n");
             if (!evolved)
                 throw no_evolution_error("pe_diff() can only be called after a system object has been evolved.\n");
-            static T minima[2]; // first the min. PE, then the difference between it and the starting PE
-            static T maxima[2]; // same but for max.
-            static std::pair<T*, long double> min_max[2] = {{minima, 0}, {maxima, 0}};
+            T minima[2]; // first the min. PE, then the difference between it and the starting PE | removed static
+            T maxima[2]; // same but for max. | removed static
+            std::pair<T*, long double> min_max[2] = {{minima, 0}, {maxima, 0}}; // removed static
             unsigned long long min_index{};
             unsigned long long max_index{};
             unsigned long long count{};
@@ -3213,9 +3211,9 @@ namespace gtd {
         std::streamoff to_nsys(const char *path) const requires (std::is_fundamental_v<M> &&
                                                                  std::is_fundamental_v<R> &&
                                                                  std::is_fundamental_v<T> && CHAR_BIT == 8) {
-            static nsys_header header;
-            static nsys_chunk chunk;
-            static std::ofstream::pos_type tell;
+            nsys_header header; // removed static
+            nsys_chunk chunk; // removed static
+            std::ofstream::pos_type tell; // removed static
             if (path == nullptr)
                 return 0;
             ostream = new std::ofstream{path, std::ios_base::trunc | std::ios_base::binary};

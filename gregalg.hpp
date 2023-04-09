@@ -20,6 +20,7 @@
 #include <cinttypes>
 #include <climits>
 #include <random>
+#include <mutex>
 
 #ifdef _PI_
 #undef _PI_
@@ -119,6 +120,7 @@ concept forwardIterator = requires (IT it, IT other) {
     {it != other} -> std::same_as<bool>;
 };
     constexpr long double PI = 3.14159265358979323846264338327950288419716939937510582097494459230l;
+    std::mutex g_mutex; // a global mutex which can be used in any function, in any thread, to avoid race conditions
     template<typename T>
     inline void swap(T &A, T &B) {
         T C{A};
@@ -389,6 +391,8 @@ concept forwardIterator = requires (IT it, IT other) {
     }
     uint64_t seed() {
         // static uint64_t never_val = ((uint64_t) -1) - time(nullptr);
+        static std::mutex seed_mutex;
+        std::lock_guard<std::mutex> seed_guard{seed_mutex};
         try {
             static std::random_device _r;
             return _r();
