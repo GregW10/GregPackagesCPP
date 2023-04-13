@@ -22,8 +22,9 @@ int main(int argc, char **argv) {
     std::chrono::time_point<std::chrono::high_resolution_clock> start = std::chrono::high_resolution_clock::now();
     time_t id = time(nullptr);
     gtd::String starting_time_str{gtd::get_date_and_time()};
-    gtd::vec3 orientation{0, 0, 1};//{1, 1, 1};//{pos};// = gtd::vec_ops::cross(pos, vel);
-    gtd::vec3 omega;//{0.0004, 0.0004, 0.0004};
+    gtd::vec3 orientation = gtd::vec_ops::cross(pos, vel).normalise();//{1, 1, 1};//{pos};// = gtd::vec_ops::cross(pos, vel);
+    long double mag = gtd::PI/1'000'000;
+    gtd::vec3 omega = mag*orientation;//{0.0004, 0.0004, 0.0004};
     /*                              comet rad  comet pos comet vel.    sep   b.m.  b.rad.  r_coeff */
     auto [sys, crad] = gtd::system<long double, long double, long double, true, false, 3, 0, 0, false>::
                                     hcp_comet<false>(comet_rad, pos, vel, b_sep, b_mass, b_rad, 1,

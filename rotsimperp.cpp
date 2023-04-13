@@ -11,9 +11,9 @@ long double dt = 1.0l/factor;
 uint64_t iterations = 100*factor;
 uint64_t num_frames = 2500;
 
-const long double starting_angle = 0.0l; // kg/m^3
+const long double starting_angle = 0.0l; // rad
 // const long double end_bd = 3'000.0l; // kg/m^3
-const long double angle_step = gtd::PI/32; // kg/m^3
+const long double angle_step = gtd::PI/32; // rad
 
 const long double bulk_density = 500;
 
