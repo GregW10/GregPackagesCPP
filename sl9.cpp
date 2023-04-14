@@ -9,13 +9,13 @@ size_t num_reps = 2521;
 
 long double comet_rad = 750.0l;
 long double b_rad = 70.0l;
-long double b_mass = 448361538.74348045969964005053l;
+long double b_mass = 972230883.00242549780523404479l;
 long double b_sep = 0.1l;
 
 gtd::vector3D<long double> pos{-414139744.3484770l, 277323640.2236369l, -1231468367.968793l};
 gtd::vector3D<long double> vel{3491.263406628809l, -6314.208154956334l, 11582.30048080498l};
 
-bool funky = 0;
+bool funky = 1;
 
 int main(int argc, char **argv) {
     std::cout.precision(30);
@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
     time_t id = time(nullptr);
     gtd::String starting_time_str{gtd::get_date_and_time()};
     gtd::vec3 orientation = gtd::vec_ops::cross(pos, vel).normalise();//{1, 1, 1};//{pos};// = gtd::vec_ops::cross(pos, vel);
-    long double mag = gtd::PI/1'000'000;
+    long double mag = gtd::PI/50'000;
     gtd::vec3 omega = mag*orientation;//{0.0004, 0.0004, 0.0004};
     /*                              comet rad  comet pos comet vel.    sep   b.m.  b.rad.  r_coeff */
     auto [sys, crad] = gtd::system<long double, long double, long double, true, false, 3, 0, 0, false>::
@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
     gtd::String nsys_path;
     nsys_path.append_back(id).append_back(".nsys");
     sys.to_nsys(nsys_path.c_str());
-    gtd::image_dimensions dims = {2000, 2000};
+    gtd::image_dimensions dims = {4000, 4000};
     gtd::asc_0f asc{dims.x, dims.y};
     gtd::star_t star{1, 1, {0, 0, 2'000'000'000}, {}, 1, 1};
     gtd::star_t star2{1, 1, {-2'000'000'000, 0, 0}, {}, 1, 1};

@@ -1,6 +1,5 @@
-//
-// Created by mario on 08/10/2022.
-//
+/* Copyright (c) 2023 Gregor Anton Randall Hartl Watters
+ * This software is protected under the MIT license. Please see the LICENSE file for more information. */
 
 #ifndef GREGBOD_H
 #define GREGBOD_H
@@ -842,6 +841,10 @@ namespace gtd {
         friend inline auto com(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&); \
         template <isNumWrapper m, isNumWrapper r, isNumWrapper t, uint64_t rF> \
         friend inline vector3D<t> com(const std::vector<body<m, r, t, rF>> &vec); \
+        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, uint64_t rF> \
+        friend inline vector3D<t> vel_com(const std::vector<body<m, r, t, rF>> &vec); \
+        template <isNumWrapper m, isNumWrapper r, isNumWrapper t, uint64_t rF> \
+        friend inline vector3D<t> acc_com(const std::vector<body<m, r, t, rF>> &vec); \
         template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, uint64_t rF1, \
                   isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, uint64_t rF2> \
         friend inline auto vel_com(const body<m1, r1, t1, rF1>&, const body<m2, r2, t2, rF2>&); \
@@ -1104,7 +1107,7 @@ namespace gtd {
             tot_mass += bod.mass_;
         }
         return tot_mr/tot_mass;
-    };
+    }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, uint64_t rF1,
               isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, uint64_t rF2>
     inline auto vel_com(const body<m1, r1, t1, rF1> &b1, const body<m2, r2, t2, rF2> &b2) {
@@ -1116,10 +1119,34 @@ namespace gtd {
     inline auto vel_com(const body<m1, r1, t1, rF1> *b1, const body<m2, r2, t2, rF2> *b2) {
         return (b1->momentum() + b2->momentum())/(b1->mass_ + b2->mass_);
     }
+    template <isNumWrapper m, isNumWrapper r, isNumWrapper t, uint64_t rF>
+    inline vector3D<t> vel_com(const std::vector<body<m, r, t, rF>> &vec) {
+        if (vec.empty())
+            return {};
+        vector3D<t> tot_mv;
+        m tot_mass{};
+        for (const body<m, r, t, rF> &bod : vec) {
+            tot_mv += bod.mass_*bod.curr_vel;
+            tot_mass += bod.mass_;
+        }
+        return tot_mv/tot_mass;
+    }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, uint64_t rF1,
               isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, uint64_t rF2>
     inline auto acc_com(const body<m1, r1, t1, rF1> &b1, const body<m2, r2, t2, rF2> &b2) {
         return (b1.mass_*b1.acc + b2.mass_*b2.acc)/(b1.mass_ + b2.mass_);
+    }
+    template <isNumWrapper m, isNumWrapper r, isNumWrapper t, uint64_t rF>
+    inline vector3D<t> acc_com(const std::vector<body<m, r, t, rF>> &vec) {
+        if (vec.empty())
+            return {};
+        vector3D<t> tot_ma;
+        m tot_mass{};
+        for (const body<m, r, t, rF> &bod : vec) {
+            tot_ma += bod.mass_*bod.acc;
+            tot_mass += bod.mass_;
+        }
+        return tot_ma/tot_mass;
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, uint64_t rF1,
               isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, uint64_t rF2>
@@ -1128,10 +1155,17 @@ namespace gtd {
          * centre-of-mass of both bodies, having a volume equal to the sum of both volumes (using the radii), and a new
          * velocity & acceleration such that momentum is conserved (i.e., COM velocity and acceleration) */
         /* self-addition is not considered here as the returned body is new (body has not been added onto itself) */
-        return body<decltype(b1.mass_ + b2.mass_), long double, decltype(m1{}*t2{}/m2{}),
-                    MEAN_AVG(rF1, rF2)>(b1.mass_ + b2.mass_,
-        cbrtl(b1.radius*b1.radius*b1.radius + b2.radius*b2.radius*b2.radius), com(b1, b2), vel_com(b1, b2),
-        acc_com(b1, b2), MEAN_AVG(b1.rest_c, b2.rest_c));
+        auto tot_mass = b1.mass_ + b2.mass_;
+        return body<decltype(tot_mass),
+                    long double,
+                    decltype(m1{}*t2{}/m2{}),
+                    MEAN_AVG(rF1, rF2)>
+                    (tot_mass,
+                    cbrtl(b1.radius*b1.radius*b1.radius + b2.radius*b2.radius*b2.radius),
+                    (b1.mass_*b1.curr_pos + b2.mass_*b2.curr_pos)/tot_mass,
+                    (b1.mass_*b1.curr_vel + b2.mass_*b2.curr_vel)/tot_mass,
+                    (b1.mass_*b1.acc + b2.mass_*b2.acc)/tot_mass,
+                    (b1.mass_*b1.rest_c + b2.mass_*b2.rest_c)/tot_mass);
     }
     template <isNumWrapper m1, isNumWrapper r1, isNumWrapper t1, uint64_t rF1,
               isNumWrapper m2, isNumWrapper r2, isNumWrapper t2, uint64_t rF2>

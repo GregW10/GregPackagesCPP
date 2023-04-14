@@ -47,7 +47,7 @@ void output_data(std::ostream& os,
     os << "time_elapsed,target_comet_radius,actual_comet_radius,bulk_density,body_mass,body_spacing,body_cor,or_x,or_y,"
           "or_z\n" << dt*iterations*num_frames << ',' << comet_rad << ',' << real_rad << ',' << bulk_density << ',' <<
           body_mass << ',' << spacing << ',' << cor << ',' << orientation.get_x() << ',' << orientation.get_y() << ','<<
-          orientation.get_z() << '\n' << "angle,w_x,w_y,w_z,mean_sep,mean_com_dist,,,,\n";
+          orientation.get_z() << '\n' << "w_mag,w_x,w_y,w_z,mean_sep,mean_com_dist,,,,\n";
     for (const auto &[_om_mag, _omega, _] : tups)
         os << _om_mag << ',' << _omega.get_x() << ',' << _omega.get_y() << ',' << _omega.get_z() << ',' <<
         seps->first << ',' << seps++->second << ",,,," << '\n';
@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
     while (counter < num_sims) {
         vals.emplace_back(omega_mag, omega_mag*orientation,
                           std::to_string(omega_mag).insert(0, "Omega"));//, 0, 0);
-        omega_mag = omega_mag_step*(++counter);
+        omega_mag = starting_omega_mag + omega_mag_step*(++counter);
     }
     ld_pair *seps = new ld_pair[num_sims]{};
     ld_pair *sptr = seps;

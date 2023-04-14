@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
     while (counter < num_sims) {
         vals.emplace_back(angle, comet_pos.unit_vector().rodrigues_rotate(par, angle),
                           std::to_string(angle).insert(0, "Angle"));//, 0, 0);
-        angle = angle_step*(++counter);
+        angle = starting_angle + angle_step*(++counter);
     }
     ld_pair *seps = new ld_pair[num_sims]{};
     ld_pair *sptr = seps;
