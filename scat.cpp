@@ -39,7 +39,7 @@ void print_info(const gtd::body_tracker<T, T, T, rF>& btrk) {
     std::cout << "Number of bodies: " << num_bods << "\nTotal mass: " << btrk.mass() << '\n' <<
     "COM pos.: " << com << "\nCOM vel.: " << comv << '\n' <<
     "COM pos. mag.: " << com.magnitude() << "\nCOM vel. mag.: " << comv.magnitude() << "\nAverage distance to COM: " <<
-    btrk.avg_dist_to(com) << "\nMean sep. between bodies: " << mean_sep << std::endl;
+    btrk.mean_dist_to(com) << "\nMean sep. between bodies: " << mean_sep << std::endl;
 }
 
 int main(int argc, char **argv) {

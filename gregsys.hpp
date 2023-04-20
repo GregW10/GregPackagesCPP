@@ -1794,7 +1794,7 @@ namespace gtd {
                 throw std::invalid_argument{"Error: coefficients of restitution must be between 0 and 1.\n"}; \
             check_option(integration_method);
             RAND_COM_CHECKS(ev_r_coeff)
-            std::uniform_real_distribution<long double> _r{0.0l, bounding_rad};
+            std::uniform_real_distribution<long double> _r{0.0l, 1.0l};
 #define RAND_COM_BODY(com1, com2, com3, ...) \
             const uint64_t n_ = _n; \
             std::uniform_real_distribution<long double> _phi{0, 2*PI}; \
@@ -1815,7 +1815,7 @@ namespace gtd {
             com1 \
             while (_n --> 0) { \
                 loop_start: \
-                r_val = _r(_mtw); \
+                r_val = bounding_rad*cbrtl(_r(_mtw)); \
                 phi_val = _phi(_mtw); \
                 theta_val = acosl(1 - 2*_theta(_mtw)); \
                 sin_theta = sinl(theta_val); \
@@ -1851,6 +1851,8 @@ namespace gtd {
             retsys.evolve(integration_method);
             RAND_COM_END(EMPTY, return retsys;)
         }
+        // GAUSSIAN COMETS ARE DOWN FOR MAINTENANCE AT THE MOMENT
+        /*
         static inline sys_t random_comet(const vec_t &pos,
                                          const vec_t &vel,
                                          const vec_t &_omega,
@@ -1875,7 +1877,7 @@ namespace gtd {
             sys_t retsys{std::move(_bods), ev_dt, ev_iters, units_format, true};
             retsys.evolve(integration_method);
             RAND_COM_END(EMPTY, return retsys;)
-        }
+        } */
         template <bool simple_rad = false>
         static inline std::tuple<sys_t, long double, T> // returns comet as system, packing fraction, effective radius
                             random_comet(const vec_t &pos,
@@ -1907,7 +1909,7 @@ namespace gtd {
             if (max_cor > 1 || max_cor <= min_cor)
                 throw std::invalid_argument{"Error: maximum COR must be greater than minimum COR.\n"};
             RAND_COM_CHECKS(min_cor)
-            std::uniform_real_distribution<long double> _r{0, bounding_rad};
+            std::uniform_real_distribution<long double> _r{0.0l, 1.0l};
             RAND_COM_BODY(vec _com{};, _com += _bpos;, _com /= n_;, b_mass, b_rad, _bpos, vec{})
             long double max_dist = cbrtl(((small_vol*n_)/SCP_PACKING_FRACTION)*(3/(4*_PI_)));
             if (d_scale <= 0) d_scale = max_dist;
@@ -2050,6 +2052,7 @@ namespace gtd {
             uint64_t count2;
         } */
     public:
+        /*
         template <bool simple_rad = false>
         static inline std::tuple<sys_t, long double, T>
                             random_comet(const vec_t &pos,
@@ -2078,7 +2081,7 @@ namespace gtd {
             RAND_COM_BODY(vec _com{};, _com += _bpos;, _com /= n_;, b_mass, b_rad, _bpos, vec{})
             R small_vol = SPHERE_VOLUME(b_rad); // is only a redundant variable if simple_rad == true
             long double max_dist = cbrtl(((small_vol*n_)/SCP_PACKING_FRACTION)*(3/(4*_PI_)));
-            /* MUST EVENTUALLY MOVE THE DUPLICATED CODE INTO A FUNCTION!!! */
+            // MUST EVENTUALLY MOVE THE DUPLICATED CODE INTO A FUNCTION!!!
             if (d_scale <= 0) d_scale = max_dist;
             long double scale_factor = powl(d_scale, n_exp);
             max_dist += dist_tol*max_dist;
@@ -2163,7 +2166,7 @@ namespace gtd {
                 RAND_COM_END(EMPTY, EMPTY)
                 return {std::move(retsys), pf, cbrtl((3*n_*small_vol)/(4*_PI_*pf))};
             }
-        }
+        } */
 #undef RAND_COM_BODY
 #undef RAND_COM_CHECKS
         static inline sys_t hcp_comet(const R &radius, long double bulk_density) {

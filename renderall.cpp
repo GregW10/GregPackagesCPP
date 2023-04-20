@@ -3,16 +3,17 @@
 bool funky = 1;
 
 int main(int argc, char **argv) {
-    if (argc != 6) {
+    if (argc != 7) {
         std::cerr << "Invalid number of command-line arguments."
-                     "\nUsage: ./renderall <nsys_prefix> <nsys_freq> <width> <height> <cam_option>\n";
+                     "\nUsage: ./renderall <nsys_prefix> <nsys_start> <nsys_freq> <width> <height> <cam_option>\n";
         return 1;
     }
     const char *prefix = *(argv + 1);
-    unsigned long long freq = std::stoull(*(argv + 2)); // will throw if cannot convert
-    unsigned long width = std::stoul(*(argv + 3));
-    unsigned long height = std::stoul(*(argv + 4));
-    unsigned char cam_option = std::stoull(*(argv + 5));
+    unsigned long long n_start = std::stoull(*(argv + 2));
+    unsigned long long freq = std::stoull(*(argv + 3)); // will throw if cannot convert
+    unsigned long width = std::stoul(*(argv + 4));
+    unsigned long height = std::stoul(*(argv + 5));
+    unsigned char cam_option = std::stoull(*(argv + 6));
     long int size;
     if ((size = pathconf(".", _PC_PATH_MAX)) == -1)
         size = 4095;
@@ -81,7 +82,7 @@ int main(int argc, char **argv) {
     // }
     gtd::bod_0f *ptr;
     for (const std::string &_path : paths) {
-        if (counter % freq) {
+        if (counter % freq || counter < n_start) {
             ++counter;
             continue;
         }
